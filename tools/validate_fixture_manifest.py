@@ -61,10 +61,23 @@ def enum(value: Any, allowed: set[str], where: str) -> str:
 def relative_path(value: Any, prefix: str, where: str) -> str:
     path = nonempty_string(value, where)
     pure = PurePosixPath(path)
-    if pure.is_absolute() or ".." in pure.parts or "\\" in path:
+    parts = path.split("/")
+    if pure.is_absolute() or any(part in {"", ".", ".."} for part in parts) or "\\" in path:
         raise ValidationError(f"{where} must be a safe project-relative POSIX path")
     if not path.startswith(prefix):
         raise ValidationError(f"{where} must start with {prefix!r}")
+
+    candidate = ROOT
+    for part in parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise ValidationError(f"{where} contains symbolic-link component {part!r}")
+
+    containment_root = ROOT / prefix.rstrip("/") if prefix else ROOT
+    try:
+        candidate.resolve(strict=False).relative_to(containment_root.resolve(strict=False))
+    except ValueError as exc:
+        raise ValidationError(f"{where} resolves outside {containment_root}") from exc
     return path
 
 
@@ -434,10 +447,18 @@ def validate(manifest: dict[str, Any], check_local_files: bool) -> tuple[int, in
         raise ValidationError(f"generated fixture scripts are not tracked: {untracked_generators}")
 
     public_root = ROOT / "fixtures" / "public"
+    if public_root.is_symlink():
+        raise ValidationError("fixtures/public must not be a symbolic link")
     if public_root.exists():
+        public_items = list(public_root.rglob("*"))
+        public_symlinks = sorted(
+            item.relative_to(ROOT).as_posix() for item in public_items if item.is_symlink()
+        )
+        if public_symlinks:
+            raise ValidationError(f"symbolic links are forbidden under fixtures/public: {public_symlinks}")
         undeclared_public = sorted(
             item.relative_to(ROOT).as_posix()
-            for item in public_root.rglob("*")
+            for item in public_items
             if item.is_file() and item.relative_to(ROOT).as_posix() not in repository_paths
         )
         if undeclared_public:

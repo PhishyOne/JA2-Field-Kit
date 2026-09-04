@@ -25,6 +25,8 @@ JA2/JA2 Reborn implementation text, or a project license.
    contents of a local-only save.
 6. Do not derive test bytes by copying source implementation text, tables, or
    code-shaped logic into this repository.
+7. Fixture and generator paths must remain inside their declared repository
+   area. Absolute paths, traversal segments, and symbolic links are forbidden.
 
 Small byte arrays generated directly inside a unit test are exempt from the
 manifest only when their construction and assertions are adjacent, they contain

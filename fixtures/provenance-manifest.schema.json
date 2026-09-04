@@ -179,7 +179,7 @@
                 "properties": {
                   "path": {
                     "type": "string",
-                    "pattern": "^fixtures/public/.+"
+                    "pattern": "^fixtures/public/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
                   },
                   "generator": {
                     "type": "null"
@@ -235,7 +235,7 @@
                 "properties": {
                   "path": {
                     "type": "string",
-                    "pattern": "^fixtures/private/.+"
+                    "pattern": "^fixtures/private/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
                   },
                   "generator": {
                     "type": "null"
@@ -440,7 +440,7 @@
         },
         "location": {
           "type": "string",
-          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+\\.py$"
+          "pattern": "^(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+\\.py$"
         },
         "recipe": {
           "type": "string",

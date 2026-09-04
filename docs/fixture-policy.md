@@ -41,6 +41,11 @@ not be a slice of a real save, a transcription of protected implementation
 data, or a disguised derived fixture. Its manifest entry identifies the recipe
 and the exact generated-byte digest.
 
+A manifested generated fixture uses a side-effect-free Python script whose
+standard output is exactly the fixture bytes. The validator executes that
+tracked script and checks its output size and SHA-256 before admission. Small
+inline vectors remain covered only by the narrow exemption above.
+
 Synthetic vectors are the default for public CI: boundary lengths, malformed
 inputs, sentinel values, and independently written structures once the relevant
 format facts have been reviewed.

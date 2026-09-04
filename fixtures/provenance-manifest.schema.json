@@ -361,13 +361,15 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "minLength": 1
         },
         "platform": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "minLength": 1
         },
         "origin": {
           "enum": [
@@ -434,14 +436,11 @@
       ],
       "properties": {
         "kind": {
-          "enum": [
-            "inline-test",
-            "project-script"
-          ]
+          "const": "python-stdout"
         },
         "location": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+\\.py$"
         },
         "recipe": {
           "type": "string",
@@ -582,7 +581,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "minLength": 1
         }
       }
     },

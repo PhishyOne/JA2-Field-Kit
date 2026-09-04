@@ -4,7 +4,9 @@ This document records current evidence without treating every observation as a u
 
 ## Confirmed from prior source study + real save decoding
 
-A real JA2 Reborn Build `04.12.02` save was successfully decoded before this repository was created. That work established the parser concept and produced an 18-merc roster with stats.
+A real JA2 Reborn Build `04.12.02` save reporting saved-game version `103`
+was successfully decoded before this repository was created. That work
+established the parser concept and produced an 18-merc roster with stats.
 
 For the examined normal Windows/Stracciatella-style layout used by that save:
 
@@ -36,7 +38,10 @@ Do not assume two formats are different merely because their product names diffe
 
 ## Fixture policy
 
-Real save fixtures are the ground truth for parser behavior.
+Real save fixtures are the ground truth for parser behavior, but they are not
+automatically safe to publish. The authoritative admission, provenance,
+hashing, and CI rules are in [`fixture-policy.md`](fixture-policy.md). The
+machine-readable registry and contract live under [`fixtures/`](../fixtures/).
 
 At minimum, each supported family/version needs:
 

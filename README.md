@@ -25,8 +25,10 @@ No save-writing API exists yet. Editing will only be added after reliable parse/
 See:
 
 - `docs/architecture.md`
+- `docs/fixture-policy.md`
 - `docs/save-format.md`
 - `docs/v0.1-scope.md`
+- `fixtures/README.md`
 
 ## Build
 
@@ -34,6 +36,7 @@ Requires JDK 21. CI pins Gradle 9.5.0 and Kotlin 2.4.10.
 
 ```bash
 gradle :core:test --no-daemon
+python3 tools/validate_fixture_manifest.py
 ```
 
 A Gradle wrapper will be added once the initial build is validated, rather than committing an unverified generated wrapper binary.

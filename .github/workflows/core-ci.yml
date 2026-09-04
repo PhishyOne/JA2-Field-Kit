@@ -6,6 +6,15 @@ on:
   pull_request:
 
 jobs:
+  fixture-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate fixture manifest and repository guardrails
+        run: python3 tools/validate_fixture_manifest.py
+
   test:
     runs-on: ubuntu-latest
     steps:

@@ -6,3 +6,11 @@ build/
 *.iml
 local.properties
 .DS_Store
+
+# Save fixtures are deny-by-default. A reviewed public fixture must be listed in
+# fixtures/provenance-manifest.json and deliberately force-added.
+*.[sS][aA][vV]
+fixtures/private/
+fixtures/**/*.local.json
+__pycache__/
+*.py[cod]

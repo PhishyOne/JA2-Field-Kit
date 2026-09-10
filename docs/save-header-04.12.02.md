@@ -76,8 +76,12 @@ family or an encryption table.
 
 Public unit tests use a project-authored synthetic 432-byte sentinel vector.
 Its field writes use literal documented offsets, so moving a parser offset
-breaks the assertions. The vector is defined adjacent to its assertions under
-the fixture-policy exemption and contains no bytes or campaign values from a
+breaks the assertions. The vector is registered as `synthetic-build-04.12.02-header-v1` in
+`fixtures/provenance-manifest.json`. The side-effect-free Python generator
+`tools/generate_build041202_header.py` preserves the original sentinel recipe.
+Core test resource preparation validates the manifest and verifies the generated
+size and SHA-256 before parser tests consume the bytes. Python 3 is therefore
+required for core tests. The vector contains no bytes or campaign values from a
 real save.
 
 The known real save remains cataloged as

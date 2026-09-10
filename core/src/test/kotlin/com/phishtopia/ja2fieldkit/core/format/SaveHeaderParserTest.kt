@@ -117,41 +117,12 @@ class SaveHeaderParserTest {
         assertNull(header.initialGameOptions.gunNut.value)
     }
 
-    /**
-     * Inline project-authored bytes under the fixture-policy exemption. Campaign
-     * values are sentinels, not values copied from or claimed for a real save.
-     * Literal offsets intentionally do not reuse production constants so drift
-     * in the parser breaks this test.
-     */
+    // processTestResources generates and verifies this manifested fixture before use.
+    // Each read gives mutation tests their own copy of the admitted bytes.
     private fun syntheticBuild041202Header(): ByteArray =
-        ByteArray(432).apply {
-            putU32Le(0, 103)
-            putSingleByteString(4, 16, "Build 04.12.02")
-            putUtf16LeString(20, 128, "Synthetic ✓")
-            putBytes(276, 0xde, 0xad, 0xbe, 0xef)
-            putU32Le(280, 0x1020_3040)
-            this[284] = 0x12
-            this[285] = 0x34
-            putU16Le(286, 0x1234)
-            putU16Le(288, -0x1234)
-            this[290] = (-2).toByte()
-            this[291] = 0x5a
-            putU32Le(292, -123_456_789)
-            putU32Le(296, 0x89ab_cdefL)
-            this[300] = 1
-            this[301] = 0
-            this[302] = 0xbc.toByte()
-            this[303] = 1
-            this[304] = 0
-            this[305] = 2
-            this[306] = 1
-            this[307] = 2
-            for (offset in 308..314) this[offset] = (0xa0 + offset - 308).toByte()
-            this[315] = 0x7f
-            putU32Le(316, 0xfedc_ba98L)
-            putU32Le(320, 0x7654_3210)
-            for (offset in 324 until 432) this[offset] = ((offset * 37 + 11) and 0xff).toByte()
-        }
+        checkNotNull(javaClass.getResourceAsStream("/fixtures/synthetic-build-04.12.02-header-v1.bin")) {
+            "Manifested synthetic header resource is missing"
+        }.use { it.readBytes() }
 
     private fun ByteArray.putSingleByteString(offset: Int, length: Int, value: String) {
         require(value.length < length)
@@ -159,24 +130,9 @@ class SaveHeaderParserTest {
         this[offset + value.length] = 0
     }
 
-    private fun ByteArray.putUtf16LeString(offset: Int, codeUnits: Int, value: String) {
-        require(value.length < codeUnits)
-        value.forEachIndexed { index, char -> putU16Le(offset + index * 2, char.code) }
-        putU16Le(offset + value.length * 2, 0)
-    }
-
-    private fun ByteArray.putU16Le(offset: Int, value: Int) {
-        this[offset] = value.toByte()
-        this[offset + 1] = (value ushr 8).toByte()
-    }
-
     private fun ByteArray.putU32Le(offset: Int, value: Int) = putU32Le(offset, value.toLong())
 
     private fun ByteArray.putU32Le(offset: Int, value: Long) {
         for (index in 0 until 4) this[offset + index] = (value ushr (index * 8)).toByte()
-    }
-
-    private fun ByteArray.putBytes(offset: Int, vararg values: Int) {
-        values.forEachIndexed { index, value -> this[offset + index] = value.toByte() }
     }
 }

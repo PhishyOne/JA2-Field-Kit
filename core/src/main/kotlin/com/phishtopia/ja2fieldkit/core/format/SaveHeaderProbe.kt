@@ -41,7 +41,7 @@ object SaveHeaderProbe {
             notes = listOf(
                 "A complete 432-byte candidate header is present.",
                 "File size alone does not identify JA2 Reborn, Stracciatella, or classic JA2.",
-                "Exact header field offsets and encryption selection must be fixture-backed before format detection is enabled.",
+                "The Build 04.12.02 parser is layout-only; format detection and encryption selection remain disabled.",
             ),
         )
     }

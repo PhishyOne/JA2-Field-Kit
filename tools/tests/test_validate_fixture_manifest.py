@@ -231,6 +231,60 @@ class SchemaTests(unittest.TestCase):
         with self.assertRaises(policy.ValidationError):
             policy.validate(manifest, False, schema=copy.deepcopy(SCHEMA_TEMPLATE))
 
+    def test_path_patterns_accept_valid_paths(self) -> None:
+        manifest = empty_manifest()
+        manifest["fixtures"] = [
+            repository_fixture("fixtures/public/nested/vector.bin", b"synthetic"),
+            local_fixture("valid-local-path"),
+            generated_fixture(b"synthetic"),
+        ]
+        policy.apply_schema(copy.deepcopy(SCHEMA_TEMPLATE), manifest)
+
+    def test_path_patterns_reject_escaped_control_characters(self) -> None:
+        controls = {
+            "nul": "\u0000",
+            "newline": "\u000a",
+            "unit-separator": "\u001f",
+            "del": "\u007f",
+        }
+        for surface in ("repository", "local-only", "generator"):
+            for name, character in controls.items():
+                with self.subTest(surface=surface, control=name):
+                    if surface == "repository":
+                        fixture = repository_fixture(
+                            f"fixtures/public/vector.bin{character}",
+                            b"synthetic",
+                        )
+                    elif surface == "local-only":
+                        fixture = local_fixture("unsafe-local-path")
+                        fixture["artifact"]["path"] = (
+                            f"fixtures/private/vector.bin{character}"
+                        )
+                    else:
+                        fixture = generated_fixture(b"synthetic")
+                        fixture["artifact"]["generator"]["location"] = (
+                            f"tools/unsafe{character}/generate.py"
+                        )
+                    manifest = empty_manifest()
+                    manifest["fixtures"] = [fixture]
+                    document = json.dumps(manifest).replace(
+                        json.dumps(character)[1:-1],
+                        f"\\u{ord(character):04x}",
+                    ).encode()
+                    self.assertIn(f"\\u{ord(character):04x}".encode(), document)
+                    decoded = policy.load_json_bytes(document, "manifest")
+                    with mock.patch.object(policy, "relative_path") as semantic_path:
+                        with self.assertRaisesRegex(
+                            policy.ValidationError,
+                            r"\((?:pattern|oneOf)\)",
+                        ):
+                            policy.validate(
+                                decoded,
+                                False,
+                                schema=copy.deepcopy(SCHEMA_TEMPLATE),
+                            )
+                        semantic_path.assert_not_called()
+
     def test_missing_dependency_fails_with_setup_direction(self) -> None:
         with mock.patch.object(policy, "DEPENDENCY_ERROR", ModuleNotFoundError("jsonschema")):
             with self.assertRaisesRegex(policy.ValidationError, "requirements/fixture-validation.lock"):

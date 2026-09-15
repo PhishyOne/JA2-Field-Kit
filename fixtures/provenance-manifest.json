@@ -66,6 +66,85 @@
         "reason": "The real save is absent from the public repository and must not be supplied to hosted CI."
       },
       "input_policy": "read-only"
+    },
+    {
+      "id": "synthetic-build-04.12.02-header-v1",
+      "category": "synthetic",
+      "description": "Project-authored 432-byte Build 04.12.02/version-103 header with sentinel field values; not a real save or evidence of family detection.",
+      "source": {
+        "family": "JA2_REBORN",
+        "save_version": 103,
+        "product": "JA2 Reborn header layout (synthetic vector)",
+        "build": "04.12.02",
+        "platform": "normal Windows/Stracciatella-style header layout",
+        "origin": "project-generated",
+        "evidence": [
+          "docs/save-header-04.12.02.md",
+          "SaveHeaderParserTest.kt sentinel recipe at PR #19 head b95d5e01a7116024c3080be47ecdcee7b879b7ae; no real-save bytes or copied implementation text."
+        ]
+      },
+      "artifact": {
+        "storage": "generated",
+        "path": null,
+        "generator": {
+          "kind": "python-stdout",
+          "location": "tools/generate_build041202_header.py",
+          "recipe": "v1: start with 432 zero bytes; write the original SaveHeaderParserTest sentinel values at literal documented offsets in little-endian order, ASCII build and UTF-16LE description with zero terminators; opaque bytes at 276 are de ad be ef, at 308 are a0 through a6, at 315 are 7f, and at 324..431 are (offset * 37 + 11) & 255. The generator is the complete deterministic recipe."
+        },
+        "identity": {
+          "status": "verified",
+          "size_bytes": 432,
+          "sha256": "11197fd30eee5aaea7f7689549fb0a757a0e765d5245739bb24fd175cf35d4c8"
+        }
+      },
+      "derivation": null,
+      "redistribution": {
+        "status": "approved-for-repository",
+        "basis": "Project-authored deterministic test sentinels moved from the existing PR #19 test helper under the requested fixture-policy repair. No real/private save bytes or copied JA2/Reborn implementation text. Operational fixture admission only; the repository still has no license.",
+        "review_reference": "PR #19 synthetic-header fixture-policy review repair"
+      },
+      "expected": {
+        "outcome": "success",
+        "completeness": "partial",
+        "basis": "Header-only sentinel expectations; SaveHeaderParserTest asserts every mapped header field and opaque range. These logical SaveInspection targets cover only mapped fields; this fixture does not validate full inspection, family detection, or a real campaign.",
+        "assertions": [
+          {
+            "json_pointer": "/format/saveVersion",
+            "operator": "equals",
+            "value": 103
+          },
+          {
+            "json_pointer": "/format/buildLabel",
+            "operator": "equals",
+            "value": "04.12.02"
+          },
+          {
+            "json_pointer": "/campaign/day",
+            "operator": "equals",
+            "value": 270544960
+          },
+          {
+            "json_pointer": "/campaign/clockMinutes",
+            "operator": "equals",
+            "value": 1132
+          },
+          {
+            "json_pointer": "/campaign/playerMercCount",
+            "operator": "equals",
+            "value": 90
+          },
+          {
+            "json_pointer": "/campaign/balance",
+            "operator": "equals",
+            "value": -123456789
+          }
+        ]
+      },
+      "ci": {
+        "mode": "public",
+        "reason": "Only deterministic project-authored bytes; core test resources are generated and identity-verified against this manifest before parser tests consume them."
+      },
+      "input_policy": "read-only"
     }
   ]
 }

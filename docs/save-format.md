@@ -21,9 +21,19 @@ For the examined normal Windows/Stracciatella-style layout used by that save:
 
 ## Not yet encoded in Field Kit
 
-The exact offsets of header fields, encryption-selector rules, encrypted block locations, string encoding rules, and merc-profile field offsets must be transferred into this project from evidence and revalidated against fixtures before they are treated as parser contracts.
+The exact Build `04.12.02` normal-header offsets and a narrow structural parser
+are recorded in [`save-header-04.12.02.md`](save-header-04.12.02.md). Its public
+tests are synthetic because the cataloged real save is not currently an
+admissible test fixture; the document records the exact remaining evidence
+gate.
 
-That is intentional. The initial scaffold records only facts we can state confidently without inventing offsets.
+Encryption-selector rules, encrypted block locations, and merc-profile field
+offsets are not yet encoded. They must be transferred into this project from
+evidence and revalidated against eligible fixtures before they are treated as
+parser contracts.
+
+That remains intentional: each later format slice must record only facts that
+can be stated confidently without inventing offsets.
 
 ## Compatibility strategy
 

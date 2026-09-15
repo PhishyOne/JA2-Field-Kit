@@ -80,7 +80,8 @@ result remains local-only.
 ## Provenance manifest
 
 `fixtures/provenance-manifest.json` is the public registry.
-`fixtures/provenance-manifest.schema.json` is its schema. Each entry records:
+`fixtures/provenance-manifest.schema.json` is its JSON Schema Draft 2020-12
+schema. Each entry records:
 
 - stable fixture ID, category, and description;
 - source family, save version, product/build, platform context, origin, and
@@ -101,6 +102,28 @@ offsets or decryption internals. `equals` compares an exact value;
 
 Do not put personal names, campaign names, custom merc names, device paths,
 original filenames, credentials, or save contents in the public manifest.
+
+### Authority and validation boundary
+
+The schema is authoritative for document structure and declarative constraints.
+The shared Python validation path strictly decodes both JSON documents, checks
+the complete schema against the Draft 2020-12 metaschema, resolves every
+fragment reference (including references in unused definitions or conditional
+branches) from one offline registry, applies the schema to the manifest, and
+then enforces repository-specific cross-entry, derivation, path, file-mode,
+identity, byte, and history rules. External reference retrieval and handwritten
+schema fallbacks are not supported.
+
+Passing the validator does not establish that provenance statements are true or
+that redistribution is justified. A maintainer's substantive review establishes
+those facts and records the artifact-specific approval. The merge gate combines
+that review of an exact head with successful validation of the exact reviewed
+head, the proposed integration tree, and all history reachable from both.
+
+The validator is a fixture-admission gate, not a detector for arbitrary private
+or hidden data elsewhere in a repository. Maintainers remain responsible for
+reviewing the complete change and for keeping all real saves local-only unless a
+specific later review establishes otherwise.
 
 ## Redistribution status is not a license
 
@@ -143,8 +166,9 @@ staged copy, not the only original save.
    staged bytes.
 5. Decide redistribution separately. Default to `not-permitted` for a real save
    and `pending-review` for a derived artifact.
-6. Run the manifest validator. Run private fixture tests locally only when such
-   tests exist.
+6. Install the pinned validator environment, run its regression tests, and run
+   the manifest/history validator with the proposed head named explicitly. Run
+   private fixture tests locally only when such tests exist.
 7. For proposed public bytes, review the artifact and provenance in a Draft PR;
    use an explicit force-add only after the manifest says
    `approved-for-repository`.
@@ -173,6 +197,33 @@ fall back to scanning arbitrary user directories. A future secure private runner
 requires a separate privacy, retention, logging, and authorization decision; it
 is not created by this policy.
 
-`tools/validate_fixture_manifest.py` enforces the public repository guardrails
-without opening local saves in hosted CI. Pass `--check-local-files` only on a
-trusted local machine when all local entries are present and verified.
+CI checks out complete history and installs the exact hashed dependency closure
+in every job that directly or indirectly imports the validator. On pull
+requests, it passes both the reviewed PR head and GitHub's proposed integration
+commit; on pushes, it passes the pushed commit. Shallow repositories, wrong
+requested revisions, missing reachable objects, and incomplete histories fail
+closed.
+
+For every reachable commit, the validator reads trees and blobs through Git
+without checking out that revision or following historical symlinks. Every
+case-insensitive `.sav` path and every item under `fixtures/public/` must be an
+ordinary file admitted by that same commit's manifest with matching byte size,
+SHA-256, and repository approval metadata. `fixtures/private/` is forbidden in
+every tree. Approval added at a later head never authorizes earlier bytes.
+Historical validators and generators are never executed; only a generator in
+the current trusted worktree may run for its deterministic identity check.
+
+The validator uses `jsonschema` rather than a dependency-free substitute. Its
+supported runtime is CPython 3.12 on Linux x86-64, matching hosted CI. Install
+and run it locally with:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements/fixture-validation.lock
+.venv/bin/python -m unittest discover -s tools/tests -v
+.venv/bin/python tools/validate_fixture_manifest.py --head HEAD
+```
+
+Pass `--check-local-files` only on a trusted local machine when all local
+entries are present and verified. Public CI never enables it and never opens the
+pending local real save.

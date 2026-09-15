@@ -32,11 +32,16 @@ See:
 
 ## Build
 
-Requires JDK 21. CI pins Gradle 9.5.0 and Kotlin 2.4.10.
+The core build requires JDK 21. CI pins Gradle 9.5.0 and Kotlin 2.4.10.
+Fixture-policy validation additionally supports CPython 3.12 on Linux x86-64
+and uses a fully pinned, hashed dependency lock.
 
 ```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements/fixture-validation.lock
 gradle :core:test --no-daemon
-python3 tools/validate_fixture_manifest.py
+.venv/bin/python -m unittest discover -s tools/tests -v
+.venv/bin/python tools/validate_fixture_manifest.py --head HEAD
 ```
 
 A Gradle wrapper will be added once the initial build is validated, rather than committing an unverified generated wrapper binary.

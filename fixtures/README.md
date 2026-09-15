@@ -11,17 +11,24 @@ This directory stores fixture metadata, not a public dump of JA2 saves.
 Read [`docs/fixture-policy.md`](../docs/fixture-policy.md) before adding or using
 a fixture.
 
-Validate the public registry with:
+The supported validator runtime is CPython 3.12 on Linux x86-64. Create an
+isolated environment and install the complete pinned closure before validation:
 
 ```bash
-python3 tools/validate_fixture_manifest.py
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements/fixture-validation.lock
+.venv/bin/python -m unittest discover -s tools/tests -v
+.venv/bin/python tools/validate_fixture_manifest.py --head HEAD
 ```
+
+`--head` is mandatory and repeatable. Each requested commit and every commit
+reachable through all of its parents is inspected directly from Git objects.
 
 On a trusted machine, require all cataloged local files to be present and match
 their recorded size/digest with:
 
 ```bash
-python3 tools/validate_fixture_manifest.py --check-local-files
+.venv/bin/python tools/validate_fixture_manifest.py --head HEAD --check-local-files
 ```
 
 The known JA2 Reborn Build `04.12.02` entry is intentionally cataloged with a

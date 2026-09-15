@@ -41,8 +41,7 @@
       ],
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?$"
+          "$ref": "#/$defs/fixture-id"
         },
         "category": {
           "enum": [
@@ -178,8 +177,7 @@
               "artifact": {
                 "properties": {
                   "path": {
-                    "type": "string",
-                    "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])fixtures/public/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
+                    "$ref": "#/$defs/repository-path"
                   },
                   "generator": {
                     "type": "null"
@@ -234,8 +232,7 @@
               "artifact": {
                 "properties": {
                   "path": {
-                    "type": "string",
-                    "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])fixtures/private/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
+                    "$ref": "#/$defs/local-path"
                   },
                   "generator": {
                     "type": "null"
@@ -347,11 +344,14 @@
           ]
         },
         "save_version": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonnegative-integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "product": {
           "type": "string",
@@ -439,8 +439,7 @@
           "const": "python-stdout"
         },
         "location": {
-          "type": "string",
-          "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+\\.py$"
+          "$ref": "#/$defs/generator-path"
         },
         "recipe": {
           "type": "string",
@@ -464,18 +463,24 @@
           ]
         },
         "size_bytes": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
+          "oneOf": [
+            {
+              "$ref": "#/$defs/fixture-size"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "sha256": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "pattern": "^[0-9a-f]{64}$"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "allOf": [
@@ -500,12 +505,10 @@
           "else": {
             "properties": {
               "size_bytes": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/$defs/fixture-size"
               },
               "sha256": {
-                "type": "string",
-                "pattern": "^[0-9a-f]{64}$"
+                "$ref": "#/$defs/sha256"
               }
             }
           }
@@ -548,12 +551,10 @@
       ],
       "properties": {
         "fixture_id": {
-          "type": "string",
-          "pattern": "^[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?$"
+          "$ref": "#/$defs/fixture-id"
         },
         "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "$ref": "#/$defs/sha256"
         }
       }
     },
@@ -632,7 +633,7 @@
       "properties": {
         "json_pointer": {
           "type": "string",
-          "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*$"
+          "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*(?![\\s\\S])"
         },
         "operator": {
           "enum": [
@@ -654,13 +655,46 @@
           "then": {
             "properties": {
               "value": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/$defs/nonnegative-integer"
               }
             }
           }
         }
       ]
+    },
+    "fixture-id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?(?![\\s\\S])"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "nonnegative-integer": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "fixture-size": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/nonnegative-integer"
+        },
+        {
+          "maximum": 1073741824
+        }
+      ]
+    },
+    "repository-path": {
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])fixtures/public/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
+    },
+    "local-path": {
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])fixtures/private/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
+    },
+    "generator-path": {
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+\\.py$"
     },
     "ci": {
       "type": "object",

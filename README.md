@@ -41,8 +41,19 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements/fixture-validation.lock
 gradle :core:test --no-daemon
 .venv/bin/python -m unittest discover -s tools/tests -v
-.venv/bin/python tools/validate_fixture_manifest.py --head HEAD
+head_oid=$(git rev-parse HEAD)
+.venv/bin/python tools/validate_fixture_manifest.py \
+  --subject "local-head=$head_oid"
 ```
+
+Generated-fixture admission also requires a working unprivileged Bubblewrap on
+Linux x86-64 so each explicit head can run in its own read-only,
+network-denied snapshot. On the pinned Ubuntu 24.04 runner, CI performs a real
+sandbox smoke test. If AppArmor's host-wide user-namespace restriction blocks
+an otherwise stock host, setup installs `apparmor-profiles`, verifies and adds
+only Ubuntu's packaged `bwrap-userns-restrict` policy, and smokes the sandbox
+again. It never disables the host-wide restriction and refuses ambiguous or
+conflicting bwrap policy.
 
 A Gradle wrapper will be added once the initial build is validated, rather than committing an unverified generated wrapper binary.
 

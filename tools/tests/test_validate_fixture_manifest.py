@@ -4,14 +4,17 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
+from tools import setup_bwrap_sandbox as sandbox_setup
 from tools import validate_fixture_manifest as policy
 
 
@@ -173,7 +176,52 @@ def generated_fixture(data: bytes) -> dict[str, object]:
     return fixture
 
 
-def validate_in(repository: SyntheticRepository, manifest: dict[str, object], *, local: bool = False) -> tuple[int, int, int]:
+GOOD_GENERATOR = "import sys\nsys.stdout.buffer.write(b'synthetic')\n"
+BAD_GENERATOR = "import sys\nsys.stdout.buffer.write(b'wrong')\n"
+
+
+def create_pull_request_case(
+    pr_generator: str,
+    integration_generator: str,
+) -> tuple[SyntheticRepository, str, str, str]:
+    repository = SyntheticRepository()
+    repository.write_text("base-marker.txt", "base\n")
+    base = repository.commit("base subject")
+    run_git(repository.root, "checkout", "-b", "candidate")
+    repository.write_text("tools/generate_synthetic.py", pr_generator)
+    manifest = empty_manifest()
+    manifest["fixtures"] = [generated_fixture(b"synthetic")]
+    repository.write_json(policy.MANIFEST_PATH, manifest)
+    pr_head = repository.commit("candidate generator")
+    run_git(repository.root, "checkout", "main")
+    run_git(repository.root, "merge", "--no-ff", "--no-commit", "candidate")
+    repository.write_text("tools/generate_synthetic.py", integration_generator)
+    integration_head = repository.commit("integration subject")
+    return repository, base, pr_head, integration_head
+
+
+def admit_pull_request(
+    repository: SyntheticRepository,
+    base: str,
+    pr_head: str,
+    integration_head: str,
+) -> policy.FixtureAdmissionResult:
+    return policy.admit_explicit_heads(
+        [
+            policy.AdmissionRequest("pr-head", pr_head),
+            policy.AdmissionRequest("integration-head", integration_head),
+        ],
+        root=repository.root,
+        base_oid=base,
+    )
+
+
+def validate_in(
+    repository: SyntheticRepository,
+    manifest: dict[str, object],
+    *,
+    local: bool = False,
+) -> policy.WorktreeValidationResult:
     repository.write_json(policy.MANIFEST_PATH, manifest)
     run_git(repository.root, "add", policy.MANIFEST_PATH)
     return policy.validate(
@@ -202,6 +250,71 @@ class StrictJsonTests(unittest.TestCase):
         for constant in (b"NaN", b"Infinity", b"-Infinity"):
             self.assert_rejected(b'{"number":' + constant + b"}")
 
+    def test_large_small_and_high_precision_numbers_are_preserved_exactly(self) -> None:
+        document = policy.load_json_bytes(
+            b'{"overflow":1e400,"underflow":1e-4000,"precision":9007199254740993.0}',
+            "numeric probe",
+        )
+        self.assertEqual(Decimal("1e400"), document["overflow"])
+        self.assertEqual(Decimal("1e-4000"), document["underflow"])
+        self.assertEqual(Decimal("9007199254740993.0"), document["precision"])
+
+        manifest = empty_manifest()
+        fixture = local_fixture("exact-numbers", pending=True)
+        fixture["expected"]["assertions"] = [
+            {"json_pointer": "/overflow", "operator": "equals", "value": "OVERFLOW"},
+            {"json_pointer": "/underflow", "operator": "equals", "value": "UNDERFLOW"},
+            {"json_pointer": "/precision", "operator": "equals", "value": "PRECISION"},
+        ]
+        manifest["fixtures"] = [fixture]
+        raw = json.dumps(manifest)
+        raw = raw.replace('"OVERFLOW"', "1e400")
+        raw = raw.replace('"UNDERFLOW"', "1e-4000")
+        raw = raw.replace('"PRECISION"', "9007199254740993.0")
+        decoded = policy.load_json_bytes(raw.encode(), "manifest")
+        policy.validate_document(decoded, schema=copy.deepcopy(SCHEMA_TEMPLATE))
+        values = [item["value"] for item in decoded["fixtures"][0]["expected"]["assertions"]]
+        self.assertEqual(
+            [Decimal("1e400"), Decimal("1e-4000"), Decimal("9007199254740993.0")],
+            values,
+        )
+
+    def test_unsupported_numeric_resource_domain_is_rejected(self) -> None:
+        self.assert_rejected(b'{"number":1e100001}')
+        self.assert_rejected(b'{"number":' + b"1" * 257 + b"}")
+
+    def test_rounded_schema_constant_cannot_be_admitted(self) -> None:
+        raw = json.dumps(empty_manifest()).replace(
+            '"schema_version": 1',
+            '"schema_version": 1.00000000000000001',
+        ).encode()
+        manifest = policy.load_json_bytes(raw, "manifest")
+        self.assertEqual(Decimal("1.00000000000000001"), manifest["schema_version"])
+        with self.assertRaisesRegex(policy.ValidationError, r"\(const\)"):
+            policy.validate_document(manifest, schema=copy.deepcopy(SCHEMA_TEMPLATE))
+
+    def test_mathematical_integer_spellings_agree_and_bool_does_not(self) -> None:
+        manifest = empty_manifest()
+        fixture = local_fixture("integer-spellings")
+        fixture["source"]["save_version"] = 103
+        fixture["expected"]["assertions"] = [
+            {"json_pointer": "/roster", "operator": "length-equals", "value": 18}
+        ]
+        manifest["fixtures"] = [fixture]
+        raw = json.dumps(manifest)
+        raw = raw.replace('"save_version": 103', '"save_version": 103.0')
+        raw = raw.replace('"size_bytes": 4', '"size_bytes": 4.0')
+        raw = raw.replace('"value": 18', '"value": 18.0')
+        decoded = policy.load_json_bytes(raw.encode(), "manifest")
+        result = policy.validate_document(decoded, schema=copy.deepcopy(SCHEMA_TEMPLATE))
+        self.assertEqual(4, result.local_artifacts[0].identity.size_bytes)
+
+        fixture["source"]["save_version"] = True
+        with self.assertRaises(policy.ValidationError):
+            policy.validate_document(manifest, schema=copy.deepcopy(SCHEMA_TEMPLATE))
+        with self.assertRaises(policy.ValidationError):
+            policy.mathematical_integer(True, "probe")
+
 
 class SchemaTests(unittest.TestCase):
     def test_invalid_nested_schema_type_fails_metaschema(self) -> None:
@@ -218,6 +331,32 @@ class SchemaTests(unittest.TestCase):
         for schema in (exercised, unused):
             with self.subTest(), self.assertRaises(policy.ValidationError):
                 policy.validate_schema(schema)
+
+    def test_used_and_unused_non_schema_reference_targets_fail_cleanly(self) -> None:
+        unused = copy.deepcopy(SCHEMA_TEMPLATE)
+        unused["$defs"]["never-used"] = {"$ref": "#/title"}
+        used = copy.deepcopy(SCHEMA_TEMPLATE)
+        used["$defs"]["fixture"]["properties"]["source"] = {
+            "$ref": "#/$defs/fixture/required"
+        }
+        for schema in (unused, used):
+            with self.subTest(), self.assertRaisesRegex(
+                policy.ValidationError,
+                "does not target a supported subschema",
+            ):
+                policy.validate_schema(schema)
+
+    def test_local_refs_pass_and_literal_annotation_refs_are_not_operative(self) -> None:
+        schema = copy.deepcopy(SCHEMA_TEMPLATE)
+        schema["$defs"]["annotation-holder"] = {
+            "type": "object",
+            "examples": [
+                {"$ref": "https://example.invalid/literal-instance-data"},
+                {"nested": {"$ref": "#/$defs/not-present"}},
+            ],
+        }
+        policy.validate_schema(schema)
+        policy.apply_schema(schema, empty_manifest())
 
     def test_external_ref_is_rejected_without_retrieval(self) -> None:
         schema = copy.deepcopy(SCHEMA_TEMPLATE)
@@ -241,12 +380,7 @@ class SchemaTests(unittest.TestCase):
         policy.apply_schema(copy.deepcopy(SCHEMA_TEMPLATE), manifest)
 
     def test_path_patterns_reject_escaped_control_characters(self) -> None:
-        controls = {
-            "nul": "\u0000",
-            "newline": "\u000a",
-            "unit-separator": "\u001f",
-            "del": "\u007f",
-        }
+        controls = {f"u+{code:04x}": chr(code) for code in (*range(32), 127)}
         for surface in ("repository", "local-only", "generator"):
             for name, character in controls.items():
                 with self.subTest(surface=surface, control=name):
@@ -273,17 +407,83 @@ class SchemaTests(unittest.TestCase):
                     ).encode()
                     self.assertIn(f"\\u{ord(character):04x}".encode(), document)
                     decoded = policy.load_json_bytes(document, "manifest")
-                    with mock.patch.object(policy, "relative_path") as semantic_path:
+                    with mock.patch.object(policy, "check_source") as semantic_check:
                         with self.assertRaisesRegex(
                             policy.ValidationError,
                             r"\((?:pattern|oneOf)\)",
                         ):
-                            policy.validate(
+                            policy.validate_document(
                                 decoded,
-                                False,
                                 schema=copy.deepcopy(SCHEMA_TEMPLATE),
                             )
-                        semantic_path.assert_not_called()
+                        semantic_check.assert_not_called()
+
+    def test_shared_id_digest_and_path_declarations_have_semantic_parity(self) -> None:
+        valid_digest = hashlib.sha256(b"synthetic").hexdigest()
+        valid_values = (
+            ("fixture-id", "valid.fixture-01", policy.FIXTURE_ID),
+            ("sha256", valid_digest, policy.SHA256),
+        )
+        for definition, value, semantic_pattern in valid_values:
+            with self.subTest(definition=definition):
+                probe_schema = copy.deepcopy(SCHEMA_TEMPLATE)
+                probe_schema["properties"] = {"value": {"$ref": f"#/$defs/{definition}"}}
+                probe_schema["required"] = ["value"]
+                policy.apply_schema(probe_schema, {"value": value})
+                self.assertIsNotNone(semantic_pattern.fullmatch(value))
+
+        for code in (*range(32), 127):
+            character = chr(code)
+            for surface in ("id", "digest"):
+                with self.subTest(surface=surface, code=code):
+                    manifest = empty_manifest()
+                    fixture = local_fixture("parity-id")
+                    if surface == "id":
+                        fixture["id"] = f"valid-id{character}"
+                    else:
+                        fixture["artifact"]["identity"]["sha256"] = valid_digest + character
+                    manifest["fixtures"] = [fixture]
+                    with mock.patch.object(policy, "check_source") as semantic_check:
+                        with self.assertRaises(policy.ValidationError):
+                            policy.validate_document(manifest, schema=copy.deepcopy(SCHEMA_TEMPLATE))
+                        semantic_check.assert_not_called()
+                    pattern = policy.FIXTURE_ID if surface == "id" else policy.SHA256
+                    candidate = fixture["id"] if surface == "id" else fixture["artifact"]["identity"]["sha256"]
+                    self.assertIsNone(pattern.fullmatch(candidate))
+
+        for value in (
+            "fixtures/public/nested/vector.bin",
+            "fixtures/private/nested/vector.bin",
+            "tools/generate.py",
+        ):
+            with self.subTest(path=value):
+                self.assertEqual(value, policy.relative_path(value, "", "path"))
+
+    def test_shared_integer_schema_and_semantics_have_positive_and_negative_parity(self) -> None:
+        schema = copy.deepcopy(SCHEMA_TEMPLATE)
+        schema["properties"] = {"value": {"$ref": "#/$defs/nonnegative-integer"}}
+        schema["required"] = ["value"]
+        for value in (0, 103, Decimal("103.0"), Decimal("1e4")):
+            with self.subTest(value=value):
+                policy.apply_schema(schema, {"value": value})
+                self.assertGreaterEqual(policy.nonnegative_integer(value, "value"), 0)
+        for value in (True, False, -1, Decimal("1.5")):
+            with self.subTest(value=value):
+                with self.assertRaises(policy.ValidationError):
+                    policy.apply_schema(schema, {"value": value})
+                with self.assertRaises(policy.ValidationError):
+                    policy.nonnegative_integer(value, "value")
+
+        manifest = empty_manifest()
+        fixture = local_fixture("oversize-identity")
+        fixture["artifact"]["identity"]["size_bytes"] = policy.MAX_FIXTURE_SIZE_BYTES + 1
+        manifest["fixtures"] = [fixture]
+        with mock.patch.object(policy, "check_source") as semantic_check:
+            with self.assertRaisesRegex(policy.ValidationError, r"\((?:maximum|oneOf)\)"):
+                policy.validate_document(manifest, schema=copy.deepcopy(SCHEMA_TEMPLATE))
+            semantic_check.assert_not_called()
+        with self.assertRaisesRegex(policy.ValidationError, "one-GiB"):
+            policy.check_identity(fixture["artifact"]["identity"], "identity")
 
     def test_missing_dependency_fails_with_setup_direction(self) -> None:
         with mock.patch.object(policy, "DEPENDENCY_ERROR", ModuleNotFoundError("jsonschema")):
@@ -301,15 +501,39 @@ class SemanticGuardrailTests(unittest.TestCase):
     def test_current_manifest_and_absent_pending_private_fixture_are_valid(self) -> None:
         manifest = empty_manifest()
         manifest["fixtures"] = [local_fixture("pending-private", pending=True)]
-        self.assertEqual((1, 0, 1), validate_in(self.repository, manifest))
+        result = validate_in(self.repository, manifest)
+        self.assertEqual(1, result.document.fixture_count)
+        self.assertEqual(1, len(result.document.local_artifacts))
         with self.assertRaises(policy.ValidationError):
             validate_in(self.repository, manifest, local=True)
+
+    def test_opt_in_local_missing_and_mismatched_identity_are_hard_failures(self) -> None:
+        manifest = empty_manifest()
+        fixture = local_fixture("verified-private")
+        manifest["fixtures"] = [fixture]
+        with self.assertRaises(policy.ValidationError):
+            validate_in(self.repository, manifest, local=True)
+        self.repository.write_bytes(fixture["artifact"]["path"], b"nope")
+        with self.assertRaises(policy.ValidationError):
+            validate_in(self.repository, manifest, local=True)
+        self.repository.write_bytes(fixture["artifact"]["path"], b"test")
+        result = validate_in(self.repository, manifest, local=True)
+        self.assertEqual(1, result.repository_checks.local_bytes_verified)
+
+    def test_pure_document_contract_does_not_open_repository(self) -> None:
+        manifest = empty_manifest()
+        manifest["fixtures"] = [local_fixture("pure-document", pending=True)]
+        with mock.patch.object(policy, "worktree_view") as repository_probe:
+            result = policy.validate_document(manifest, schema=copy.deepcopy(SCHEMA_TEMPLATE))
+        repository_probe.assert_not_called()
+        self.assertIsInstance(result, policy.DocumentValidationResult)
 
     def test_pr19_compatible_imported_entrypoint(self) -> None:
         manifest = policy.load_json(policy.DEFAULT_MANIFEST)
         result = policy.validate(manifest, check_local_files=False)
-        self.assertEqual(len(manifest["fixtures"]), result[0])
-        self.assertEqual(1, result[2])
+        self.assertIsInstance(result, policy.WorktreeValidationResult)
+        self.assertEqual(len(manifest["fixtures"]), result.document.fixture_count)
+        self.assertEqual(1, len(result.document.local_artifacts))
 
     def test_valid_synthetic_generator_and_identity_mismatch(self) -> None:
         data = b"synthetic"
@@ -320,7 +544,9 @@ class SemanticGuardrailTests(unittest.TestCase):
         run_git(self.repository.root, "add", "tools/generate_synthetic.py")
         manifest = empty_manifest()
         manifest["fixtures"] = [generated_fixture(data)]
-        self.assertEqual((1, 0, 0), validate_in(self.repository, manifest))
+        result = validate_in(self.repository, manifest)
+        self.assertEqual(1, result.document.fixture_count)
+        self.assertEqual(1, len(result.generator_measurements))
         manifest["fixtures"][0]["artifact"]["identity"]["sha256"] = "0" * 64
         with self.assertRaises(policy.ValidationError):
             validate_in(self.repository, manifest)
@@ -351,7 +577,9 @@ class SemanticGuardrailTests(unittest.TestCase):
         }
         manifest = empty_manifest()
         manifest["fixtures"] = [parent, child]
-        self.assertEqual((2, 0, 2), validate_in(self.repository, manifest))
+        result = validate_in(self.repository, manifest)
+        self.assertEqual(2, result.document.fixture_count)
+        self.assertEqual(2, len(result.document.local_artifacts))
         child["derivation"]["parents"][0]["sha256"] = "0" * 64
         with self.assertRaises(policy.ValidationError):
             validate_in(self.repository, manifest)
@@ -416,6 +644,24 @@ class HistoryAdmissionTests(unittest.TestCase):
         with self.assertRaises(policy.ValidationError):
             policy.validate_history([repository.head()], repository.root)
 
+    def test_historical_public_gitlink_mode_is_rejected(self) -> None:
+        repository = self.new_repository()
+        path = "fixtures/public/vector.bin"
+        manifest = empty_manifest()
+        manifest["fixtures"] = [repository_fixture(path, b"synthetic")]
+        repository.write_json(policy.MANIFEST_PATH, manifest)
+        run_git(repository.root, "add", policy.MANIFEST_PATH)
+        run_git(
+            repository.root,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{repository.head()},{path}",
+        )
+        run_git(repository.root, "commit", "-m", "public gitlink")
+        with self.assertRaises(policy.ValidationError):
+            policy.validate_history([repository.head()], repository.root)
+
     def test_secondary_merge_parent_is_scanned(self) -> None:
         repository = self.new_repository()
         run_git(repository.root, "checkout", "-b", "side")
@@ -473,7 +719,10 @@ class HistoryAdmissionTests(unittest.TestCase):
         repository.remove(path)
         repository.write_json(policy.MANIFEST_PATH, empty_manifest())
         repository.commit("remove admitted artifact")
-        self.assertGreaterEqual(policy.validate_history([repository.head()], repository.root), 3)
+        self.assertGreaterEqual(
+            policy.validate_history([repository.head()], repository.root).commit_count,
+            3,
+        )
 
     def test_historical_generator_is_never_executed(self) -> None:
         repository = self.new_repository()
@@ -489,6 +738,25 @@ class HistoryAdmissionTests(unittest.TestCase):
         policy.validate_history([repository.head()], repository.root)
         self.assertFalse(marker.exists())
 
+    def test_static_history_returns_subject_bound_result(self) -> None:
+        repository = self.new_repository()
+        head = repository.head()
+        result = policy.validate_history([head], repository.root)
+        self.assertIsInstance(result, policy.StaticHistoryAdmissionResult)
+        self.assertEqual(head, result.requested_subjects[0].commit_oid)
+        self.assertRegex(result.requested_subjects[0].tree_oid, r"^[0-9a-f]{40}$")
+        self.assertEqual(result.commit_count, len(result.trees))
+        self.assertTrue(all(tree.evaluator == result.evaluator for tree in result.trees))
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", tree.subject.tree_oid) for tree in result.trees))
+
+    def test_ambient_git_repository_variables_cannot_substitute_subject(self) -> None:
+        repository = self.new_repository()
+        other = self.new_repository()
+        head = repository.head()
+        with mock.patch.dict(os.environ, {"GIT_DIR": str(other.root / ".git")}):
+            result = policy.validate_history([head], repository.root)
+        self.assertEqual(head, result.requested_subjects[0].commit_oid)
+
     def test_historical_duplicate_manifest_member_fails(self) -> None:
         repository = self.new_repository()
         repository.write_text(
@@ -497,6 +765,17 @@ class HistoryAdmissionTests(unittest.TestCase):
         )
         repository.commit("duplicate manifest member")
         with self.assertRaises(policy.ValidationError):
+            policy.validate_history([repository.head()], repository.root)
+
+    def test_historical_rounded_schema_constant_fails(self) -> None:
+        repository = self.new_repository()
+        repository.write_text(
+            policy.MANIFEST_PATH,
+            '{"$schema":"./provenance-manifest.schema.json",'
+            '"schema_version":1.00000000000000001,"fixtures":[]}\n',
+        )
+        repository.commit("rounded schema version")
+        with self.assertRaisesRegex(policy.ValidationError, r"\(const\)"):
             policy.validate_history([repository.head()], repository.root)
 
     def test_shallow_clone_missing_object_and_wrong_revision_fail(self) -> None:
@@ -522,28 +801,433 @@ class HistoryAdmissionTests(unittest.TestCase):
             policy.validate_history([missing.head()], missing.root)
 
 
+class HeadAdmissionTests(unittest.TestCase):
+    def new_case(
+        self,
+        pr_generator: str,
+        integration_generator: str,
+    ) -> tuple[SyntheticRepository, str, str, str]:
+        case = create_pull_request_case(pr_generator, integration_generator)
+        self.addCleanup(case[0].close)
+        return case
+
+    def test_bad_pr_head_good_integration_generator_fails(self) -> None:
+        repository, base, pr_head, integration_head = self.new_case(
+            BAD_GENERATOR,
+            GOOD_GENERATOR,
+        )
+        with self.assertRaisesRegex(policy.ValidationError, "generator"):
+            admit_pull_request(repository, base, pr_head, integration_head)
+
+    def test_good_pr_head_bad_integration_generator_fails(self) -> None:
+        repository, base, pr_head, integration_head = self.new_case(
+            GOOD_GENERATOR,
+            BAD_GENERATOR,
+        )
+        with self.assertRaisesRegex(policy.ValidationError, "generator"):
+            admit_pull_request(repository, base, pr_head, integration_head)
+
+    def test_independent_valid_pr_and_integration_snapshots_pass(self) -> None:
+        repository, base, pr_head, integration_head = self.new_case(
+            GOOD_GENERATOR,
+            GOOD_GENERATOR,
+        )
+        result = admit_pull_request(repository, base, pr_head, integration_head)
+        self.assertIsInstance(result, policy.FixtureAdmissionResult)
+        self.assertEqual(["pr-head", "integration-head"], [head.subject.role for head in result.heads])
+        self.assertEqual([pr_head, integration_head], [head.subject.commit_oid for head in result.heads])
+        self.assertEqual([1, 1], [len(head.generator_measurements) for head in result.heads])
+        self.assertEqual(base, result.base.commit_oid)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", head.subject.tree_oid) for head in result.heads))
+        self.assertTrue(
+            all(re.fullmatch(r"[0-9a-f]{64}", head.snapshot_sha256 or "") for head in result.heads)
+        )
+        self.assertTrue(all(head.evaluator == result.evaluator for head in result.heads))
+        self.assertNotEqual(result.evaluator.repository, result.heads[0].subject.repository)
+
+    def test_untracked_dirty_and_other_head_content_cannot_substitute(self) -> None:
+        conditional_bad = (
+            "from pathlib import Path\n"
+            "import sys\n"
+            "value = b'synthetic' if Path('ambient-override').exists() else b'wrong'\n"
+            "sys.stdout.buffer.write(value)\n"
+        )
+        repository, _base, pr_head, _integration_head = self.new_case(
+            conditional_bad,
+            GOOD_GENERATOR,
+        )
+        run_git(repository.root, "checkout", "--detach", pr_head)
+        repository.write_text("ambient-override", "untracked substitution\n")
+        ambient = subprocess.run(
+            [sys.executable, "tools/generate_synthetic.py"],
+            cwd=repository.root,
+            check=True,
+            capture_output=True,
+        )
+        self.assertEqual(b"synthetic", ambient.stdout)
+        with self.assertRaises(policy.ValidationError):
+            policy.admit_explicit_heads(
+                [policy.AdmissionRequest("local-head", pr_head)],
+                root=repository.root,
+            )
+        with self.assertRaisesRegex(policy.ValidationError, "must be clean"):
+            policy.admit_explicit_heads(
+                [policy.AdmissionRequest("local-head", pr_head)],
+                root=repository.root,
+                require_clean_worktree=True,
+            )
+
+        repository.write_text("tools/generate_synthetic.py", GOOD_GENERATOR)
+        with self.assertRaises(policy.ValidationError):
+            policy.admit_explicit_heads(
+                [policy.AdmissionRequest("local-head", pr_head)],
+                root=repository.root,
+            )
+
+    def test_base_change_invalidates_integration_identity(self) -> None:
+        repository, base, pr_head, integration_head = self.new_case(
+            GOOD_GENERATOR,
+            GOOD_GENERATOR,
+        )
+        wrong_base = run_git(repository.root, "rev-parse", f"{base}^").stdout.decode().strip()
+        with self.assertRaisesRegex(policy.ValidationError, "exact two-parent merge"):
+            admit_pull_request(repository, wrong_base, pr_head, integration_head)
+
+    def test_full_commit_ids_and_exact_roles_are_required(self) -> None:
+        repository, base, pr_head, integration_head = self.new_case(
+            GOOD_GENERATOR,
+            GOOD_GENERATOR,
+        )
+        with self.assertRaises(policy.ValidationError):
+            policy.admit_explicit_heads(
+                [policy.AdmissionRequest("local-head", pr_head[:12])],
+                root=repository.root,
+            )
+        with self.assertRaises(policy.ValidationError):
+            policy.admit_explicit_heads(
+                [policy.AdmissionRequest("pr-head", pr_head)],
+                root=repository.root,
+                base_oid=base,
+            )
+        with self.assertRaises(policy.ValidationError):
+            policy.admit_explicit_heads(
+                [
+                    policy.AdmissionRequest("pr-head", pr_head),
+                    policy.AdmissionRequest("integration-head", integration_head),
+                ],
+                root=repository.root,
+                base_oid=integration_head,
+            )
+
+    def test_generator_network_access_is_denied(self) -> None:
+        network_generator = (
+            "import socket, sys\n"
+            "try:\n"
+            "    socket.socket()\n"
+            "except OSError:\n"
+            "    sys.stdout.buffer.write(b'wrong')\n"
+            "else:\n"
+            "    sys.stdout.buffer.write(b'synthetic')\n"
+        )
+        repository = SyntheticRepository()
+        self.addCleanup(repository.close)
+        repository.write_text("tools/generate_synthetic.py", network_generator)
+        manifest = empty_manifest()
+        manifest["fixtures"] = [generated_fixture(b"synthetic")]
+        repository.write_json(policy.MANIFEST_PATH, manifest)
+        head = repository.commit("network generator")
+        with self.assertRaises(policy.ValidationError):
+            policy.admit_explicit_heads(
+                [policy.AdmissionRequest("local-head", head)],
+                root=repository.root,
+            )
+
+    def test_generator_does_not_inherit_ambient_credentials(self) -> None:
+        environment_generator = (
+            "import os, sys\n"
+            "value = b'synthetic' if os.environ.get('FIXTURE_TEST_CREDENTIAL') else b'wrong'\n"
+            "sys.stdout.buffer.write(value)\n"
+        )
+        repository = SyntheticRepository()
+        self.addCleanup(repository.close)
+        repository.write_text("tools/generate_synthetic.py", environment_generator)
+        manifest = empty_manifest()
+        manifest["fixtures"] = [generated_fixture(b"synthetic")]
+        repository.write_json(policy.MANIFEST_PATH, manifest)
+        head = repository.commit("environment generator")
+        with mock.patch.dict(os.environ, {"FIXTURE_TEST_CREDENTIAL": "synthetic-secret"}):
+            with self.assertRaises(policy.ValidationError):
+                policy.admit_explicit_heads(
+                    [policy.AdmissionRequest("local-head", head)],
+                    root=repository.root,
+                )
+
+
 class CliAndWorkflowTests(unittest.TestCase):
     def test_cli_validates_worktree_and_explicit_history(self) -> None:
         repository = SyntheticRepository()
         self.addCleanup(repository.close)
         result = subprocess.run(
-            [sys.executable, str(VALIDATOR), "--repository-root", str(repository.root), "--head", "HEAD"],
+            [
+                sys.executable,
+                str(VALIDATOR),
+                "--repository-root",
+                str(repository.root),
+                "--subject",
+                f"local-head={repository.head()}",
+            ],
             cwd=REPOSITORY_ROOT,
             check=False,
             capture_output=True,
             text=True,
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("reachable commit trees inspected", result.stdout)
+        self.assertIn("reachable commit trees statically inspected", result.stdout)
+
+    def test_cli_opt_in_pending_local_fixture_fails_closed(self) -> None:
+        repository = SyntheticRepository()
+        self.addCleanup(repository.close)
+        manifest = empty_manifest()
+        manifest["fixtures"] = [local_fixture("pending-private", pending=True)]
+        repository.write_json(policy.MANIFEST_PATH, manifest)
+        head = repository.commit("pending local fixture")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(VALIDATOR),
+                "--repository-root",
+                str(repository.root),
+                "--subject",
+                f"local-head={head}",
+                "--check-local-files",
+            ],
+            cwd=REPOSITORY_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(1, result.returncode)
+        self.assertIn("local check requires verified identity", result.stderr)
+
+    def test_cli_executes_actual_pr_and_integration_subject_roles(self) -> None:
+        repository, base, pr_head, integration_head = create_pull_request_case(
+            GOOD_GENERATOR,
+            GOOD_GENERATOR,
+        )
+        self.addCleanup(repository.close)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(VALIDATOR),
+                "--repository-root",
+                str(repository.root),
+                "--subject",
+                f"pr-head={pr_head}",
+                "--subject",
+                f"integration-head={integration_head}",
+                "--base",
+                base,
+            ],
+            cwd=REPOSITORY_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn(f"pr-head={pr_head}", result.stdout)
+        self.assertIn(f"integration-head={integration_head}", result.stdout)
+        self.assertIn(f"base={base}", result.stdout)
 
     def test_workflow_has_complete_checkout_dependencies_tests_and_all_heads(self) -> None:
         workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "core-ci.yml").read_text()
         self.assertGreaterEqual(workflow.count("fetch-depth: 0"), 2)
         self.assertGreaterEqual(workflow.count("actions/setup-python@v5"), 2)
         self.assertGreaterEqual(workflow.count("--require-hashes"), 2)
-        self.assertIn("python3 -m unittest discover", workflow)
-        self.assertIn("github.event.pull_request.head.sha", workflow)
-        self.assertIn('GITHUB_SHA', workflow)
+        self.assertEqual(2, workflow.count("runs-on: ubuntu-24.04"))
+        self.assertEqual(2, workflow.count("python3 -B tools/setup_bwrap_sandbox.py"))
+        self.assertNotIn("bwrap --version", workflow)
+        self.assertNotIn("sysctl", workflow)
+        self.assertNotIn("apparmor_restrict_unprivileged_userns", workflow)
+        self.assertIn("python3 -B -m unittest discover", workflow)
+        self.assertIn("ready_for_review", workflow)
+        self.assertIn('pr-head=${{ github.event.pull_request.head.sha }}', workflow)
+        self.assertIn('integration-head=$GITHUB_SHA', workflow)
+        self.assertIn('--base "${{ github.event.pull_request.base.sha }}"', workflow)
+        self.assertIn('push-head=$GITHUB_SHA', workflow)
+        self.assertIn("github.event.pull_request.base.sha || 'push'", workflow)
+
+
+class FakeSandboxSetupHost:
+    def __init__(
+        self,
+        *,
+        smokes: list[bool],
+        active: list[dict[str, str]] | None = None,
+        staged: list[bool] | None = None,
+        package_installed: bool = False,
+        profile_exists: bool = False,
+    ) -> None:
+        self.smokes = iter(smokes)
+        self.active = iter(active or [])
+        self.staged = iter(staged or [])
+        self.package_installed = package_installed
+        self.profile_exists = profile_exists
+        self.calls: list[str] = []
+
+    def install_bubblewrap(self) -> None:
+        self.calls.append("install-bubblewrap")
+
+    def sandbox_smoke_passes(self) -> bool:
+        self.calls.append("smoke")
+        return next(self.smokes)
+
+    def active_bwrap_profiles(self) -> dict[str, str]:
+        self.calls.append("active")
+        return next(self.active)
+
+    def staged_bwrap_policy_exists(self) -> bool:
+        self.calls.append("staged")
+        return next(self.staged)
+
+    def profile_package_installed(self) -> bool:
+        self.calls.append("package-installed")
+        return self.package_installed
+
+    def packaged_profile_exists(self) -> bool:
+        self.calls.append("profile-exists")
+        return self.profile_exists
+
+    def install_profile_package(self) -> None:
+        self.calls.append("install-profile-package")
+        self.package_installed = True
+        self.profile_exists = True
+
+    def verify_packaged_profile(self) -> None:
+        self.calls.append("verify-profile")
+
+    def add_packaged_profile(self) -> None:
+        self.calls.append("add-profile")
+
+
+class SandboxSetupTests(unittest.TestCase):
+    NOBLE_PROFILE_SHAPE = """\
+profile bwrap /usr/bin/bwrap flags=(attach_disconnected) {
+  allow capability,
+  allow userns,
+  allow px /** -> bwrap//&unpriv_bwrap,
+}
+profile unpriv_bwrap flags=(attach_disconnected) {
+  allow userns,
+  allow pix /** -> &unpriv_bwrap,
+  audit deny capability,
+}
+"""
+
+    def test_existing_working_bwrap_policy_is_left_untouched(self) -> None:
+        host = FakeSandboxSetupHost(smokes=[True])
+        result = sandbox_setup.establish_generator_sandbox(host)
+        self.assertEqual("existing host policy", result)
+        self.assertEqual(["install-bubblewrap", "smoke"], host.calls)
+
+    def test_failed_smoke_with_existing_policy_fails_without_mutation(self) -> None:
+        host = FakeSandboxSetupHost(
+            smokes=[False],
+            active=[{"vendor-bwrap": "enforce"}],
+        )
+        with self.assertRaises(sandbox_setup.SetupError):
+            sandbox_setup.establish_generator_sandbox(host)
+        self.assertEqual(["install-bubblewrap", "smoke", "active"], host.calls)
+
+    def test_failed_smoke_with_staged_policy_fails_without_mutation(self) -> None:
+        host = FakeSandboxSetupHost(
+            smokes=[False],
+            active=[{}],
+            staged=[True],
+        )
+        with self.assertRaises(sandbox_setup.SetupError):
+            sandbox_setup.establish_generator_sandbox(host)
+        self.assertEqual(
+            ["install-bubblewrap", "smoke", "active", "staged"],
+            host.calls,
+        )
+
+    def test_inconsistent_packaged_profile_state_fails_without_repair(self) -> None:
+        host = FakeSandboxSetupHost(
+            smokes=[False],
+            active=[{}],
+            staged=[False],
+            package_installed=True,
+            profile_exists=False,
+        )
+        with self.assertRaises(sandbox_setup.SetupError):
+            sandbox_setup.establish_generator_sandbox(host)
+        self.assertNotIn("install-profile-package", host.calls)
+
+    def test_packaged_profile_is_verified_added_and_really_smoked(self) -> None:
+        host = FakeSandboxSetupHost(
+            smokes=[False, False, True],
+            active=[{}, {}, dict(sandbox_setup.EXPECTED_ACTIVE_PROFILES)],
+            staged=[False, False],
+        )
+        result = sandbox_setup.establish_generator_sandbox(host)
+        self.assertEqual("Ubuntu packaged bwrap-userns-restrict profile", result)
+        self.assertEqual(
+            [
+                "install-bubblewrap", "smoke", "active", "staged",
+                "package-installed", "profile-exists", "install-profile-package",
+                "smoke", "active", "staged", "verify-profile", "add-profile",
+                "active", "smoke",
+            ],
+            host.calls,
+        )
+
+    def test_packaged_profile_that_does_not_enable_bwrap_fails_closed(self) -> None:
+        host = FakeSandboxSetupHost(
+            smokes=[False, False, False],
+            active=[{}, {}, dict(sandbox_setup.EXPECTED_ACTIVE_PROFILES)],
+            staged=[False, False],
+            package_installed=True,
+            profile_exists=True,
+        )
+        with self.assertRaises(sandbox_setup.SetupError):
+            sandbox_setup.establish_generator_sandbox(host)
+        self.assertEqual("smoke", host.calls[-1])
+
+    def test_authentic_noble_profile_transition_shape_is_accepted(self) -> None:
+        sandbox_setup.verify_noble_profile_shape(self.NOBLE_PROFILE_SHAPE)
+
+    def test_wrong_noble_profile_transition_shapes_are_rejected(self) -> None:
+        wrong_outer_pix = self.NOBLE_PROFILE_SHAPE.replace(
+            "allow px /** -> bwrap//&unpriv_bwrap,",
+            "allow pix /** -> bwrap//&unpriv_bwrap,",
+        )
+        wrong_outer = self.NOBLE_PROFILE_SHAPE.replace(
+            "allow px /** -> bwrap//&unpriv_bwrap,",
+            "allow pix /** -> &bwrap//&unpriv_bwrap,",
+        )
+        wrong_child = self.NOBLE_PROFILE_SHAPE.replace(
+            "allow pix /** -> &unpriv_bwrap,",
+            "allow px /** -> unpriv_bwrap,",
+        )
+        for profile in (wrong_outer_pix, wrong_outer, wrong_child):
+            with self.subTest(profile=profile), self.assertRaises(sandbox_setup.SetupError):
+                sandbox_setup.verify_noble_profile_shape(profile)
+
+    def test_setup_source_forbids_global_weakening_and_policy_replacement(self) -> None:
+        source = (REPOSITORY_ROOT / "tools" / "setup_bwrap_sandbox.py").read_text()
+        self.assertNotIn("apparmor_restrict_unprivileged_userns=0", source)
+        self.assertNotIn("unprivileged_userns_clone=", source)
+        self.assertNotIn("sysctl", source)
+        self.assertNotIn("--replace", source)
+        self.assertNotIn("apparmor-utils", source)
+        self.assertIn('"--add"', source)
+        self.assertIn('"apparmor-profiles"', source)
+        self.assertIn('"--verify"', source)
+        self.assertIn('"--unshare-all"', source)
+        self.assertIn('"--share-net"', source)
+        self.assertIn('"--clearenv"', source)
+        self.assertIn('"/usr/bin/true"', source)
+        self.assertIn("timeout=15", source)
 
 
 if __name__ == "__main__":

@@ -106,13 +106,41 @@ original filenames, credentials, or save contents in the public manifest.
 ### Authority and validation boundary
 
 The schema is authoritative for document structure and declarative constraints.
-The shared Python validation path strictly decodes both JSON documents, checks
-the complete schema against the Draft 2020-12 metaschema, resolves every
-fragment reference (including references in unused definitions or conditional
-branches) from one offline registry, applies the schema to the manifest, and
-then enforces repository-specific cross-entry, derivation, path, file-mode,
-identity, byte, and history rules. External reference retrieval and handwritten
-schema fallbacks are not supported.
+The validator exposes separate typed results for three different contracts:
+
+- `validate_document` is pure schema and semantic validation and reads no
+  repository files;
+- `validate_static_history` inspects every reachable commit's own tree,
+  manifest, schema, artifact bytes, and approval metadata without executing
+  historical code; and
+- `admit_explicit_heads` independently executes generated fixtures for each
+  named immutable admission role after static history succeeds.
+
+The compatibility function `validate` is retained for local and imported
+consumers, including the downstream Gradle importer. It validates a precisely
+fingerprinted copy of the tracked worktree, but its `WorktreeValidationResult`
+is deliberately not an immutable admission result. Static history and generator
+execution cannot be requested by a generic flag or inferred from a count tuple.
+
+Both JSON documents use the same strict decoder. Integers are arbitrary-precision
+Python integers; non-integer JSON numbers are exact decimal values rather than
+binary floats. The supported resource domain is at most 512 characters and 256
+significant digits per number, with an absolute written exponent no greater
+than 100,000. Values inside that domain, including `1e400`, `1e-4000`, and
+`9007199254740993.0`, keep their mathematical value. Values outside it fail.
+Mathematical integers such as `103` and `103.0` have identical schema and
+semantic meaning, while booleans are never integers. Fixture byte identities
+are additionally capped at one GiB so execution and hashing stay inside a
+deterministic supported resource boundary.
+
+The Draft 2020-12 schema is checked against its metaschema and evaluated by
+`jsonschema`. The supported offline reference profile permits local `#` JSON
+Pointer references only. It traverses actual schema-bearing keyword locations,
+validates used and unused references, and requires every target to be a schema.
+Annotation and instance data such as `examples`, `default`, `const`, and `enum`
+may contain literal `$ref` members; those are data, not operative references.
+External retrieval, nested schema identifiers, unsupported reference forms, and
+handwritten schema-evaluation fallbacks are not supported.
 
 Passing the validator does not establish that provenance statements are true or
 that redistribution is justified. A maintainer's substantive review establishes
@@ -167,7 +195,7 @@ staged copy, not the only original save.
 5. Decide redistribution separately. Default to `not-permitted` for a real save
    and `pending-review` for a derived artifact.
 6. Install the pinned validator environment, run its regression tests, and run
-   the manifest/history validator with the proposed head named explicitly. Run
+   immutable admission with a full commit object ID and explicit role. Run
    private fixture tests locally only when such tests exist.
 7. For proposed public bytes, review the artifact and provenance in a Draft PR;
    use an explicit force-add only after the manifest says
@@ -198,11 +226,19 @@ requires a separate privacy, retention, logging, and authorization decision; it
 is not created by this policy.
 
 CI checks out complete history and installs the exact hashed dependency closure
-in every job that directly or indirectly imports the validator. On pull
-requests, it passes both the reviewed PR head and GitHub's proposed integration
-commit; on pushes, it passes the pushed commit. Shallow repositories, wrong
-requested revisions, missing reachable objects, and incomplete histories fail
-closed.
+in every job that directly or indirectly imports the validator. A
+`pull_request` checkout is GitHub's proposed integration commit, not the PR
+head. The workflow therefore passes separate `pr-head` and `integration-head`
+roles plus the exact base SHA. Admission requires the integration commit to be
+the exact two-parent merge of that base and PR head, then independently
+materializes and measures both heads. A changed base produces a different bound
+integration identity, so old evidence is inapplicable. Pushes use one exact
+`push-head` role.
+
+The workflow explicitly subscribes to `ready_for_review` as well as opened,
+synchronize, and reopened activity. Moving an unchanged candidate from Draft to
+Ready therefore creates fresh applicable CI without a synthetic source change.
+The workflow does not itself mark a PR Ready or change any other PR state.
 
 For every reachable commit, the validator reads trees and blobs through Git
 without checking out that revision or following historical symlinks. Every
@@ -210,8 +246,14 @@ case-insensitive `.sav` path and every item under `fixtures/public/` must be an
 ordinary file admitted by that same commit's manifest with matching byte size,
 SHA-256, and repository approval metadata. `fixtures/private/` is forbidden in
 every tree. Approval added at a later head never authorizes earlier bytes.
-Historical validators and generators are never executed; only a generator in
-the current trusted worktree may run for its deterministic identity check.
+Historical validators and generators are never executed. For each explicit
+admission head, the current evaluator reads that head's blobs into a separate
+snapshot, rejects non-regular snapshot entries, mounts the snapshot read-only
+with Bubblewrap, clears the environment, denies network socket syscalls, limits
+resources and output, and executes only that head's declared generator. An
+ambient worktree, dirty or untracked file, other head, symlink, or private file
+is not mounted into the generator snapshot. If that isolation cannot be
+established, admission fails closed.
 
 The validator uses `jsonschema` rather than a dependency-free substitute. Its
 supported runtime is CPython 3.12 on Linux x86-64, matching hosted CI. Install
@@ -221,9 +263,36 @@ and run it locally with:
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements/fixture-validation.lock
 .venv/bin/python -m unittest discover -s tools/tests -v
-.venv/bin/python tools/validate_fixture_manifest.py --head HEAD
+head_oid=$(git rev-parse HEAD)
+.venv/bin/python tools/validate_fixture_manifest.py \
+  --subject "local-head=$head_oid"
 ```
 
+The executable-generator sandbox additionally requires a working unprivileged
+Bubblewrap on the supported Linux x86-64 host. Merely finding the executable or
+printing its version is insufficient. On the pinned Ubuntu 24.04 runner,
+`tools/setup_bwrap_sandbox.py` installs `bubblewrap` and runs a real namespace,
+mount, process, device, environment, and read-only-runtime smoke test as the
+unprivileged workflow user. If that passes, any adequate existing host policy
+is left untouched.
+
+If the smoke fails, setup first refuses any active bwrap profile, staged policy
+attached to `/usr/bin/bwrap`, or local bwrap override. On an otherwise stock
+host it installs Ubuntu's signed `apparmor-profiles` package, verifies the
+package-owned `/usr/share/apparmor/extra-profiles/bwrap-userns-restrict` file
+and its expected capability-stripping child policy, then uses
+`apparmor_parser --add` to load it without replacing another profile. The
+`apparmor` dependency supplies `apparmor_parser`; `apparmor-utils` is not
+required. Both profiles must appear in enforce mode and the same unprivileged
+smoke must then pass. Setup never disables AppArmor or the system-wide
+unprivileged-user-namespace restriction. An unavailable policy view, package
+integrity problem, collision, unexpected profile state, or failed final smoke
+is a hard CI failure. The profile step is specific to the ephemeral hosted
+Ubuntu runner; local administrators remain responsible for providing a working
+equivalent without weakening host security.
+
 Pass `--check-local-files` only on a trusted local machine when all local
-entries are present and verified. Public CI never enables it and never opens the
-pending local real save.
+entries are present and verified. The immutable checks run first; the opt-in
+then applies the same imported worktree contract to the local artifacts.
+Missing, pending, or mismatched local identity is a hard failure. Public CI
+never enables this option and never opens the pending local real save.

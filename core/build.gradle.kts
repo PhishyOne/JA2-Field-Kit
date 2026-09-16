@@ -53,3 +53,40 @@ sourceSets.test {
 tasks.processTestResources {
     dependsOn(materializeHeaderTestFixture)
 }
+
+val generatedProfileResources = layout.buildDirectory.dir("generated/profileTestResources")
+val materializeProfileRecoveryTestFixture by tasks.registering(Exec::class) {
+    workingDir(rootProject.projectDir)
+    val resource = generatedProfileResources.map {
+        it.file("fixtures/synthetic-build-04.12.02-profile-recovery-v1.bin")
+    }
+    outputs.file(resource)
+    outputs.upToDateWhen { false }
+    doFirst {
+        commandLine(
+            fixtureValidatorPython.get(),
+            "-B",
+            "-c",
+            """
+            import pathlib, sys
+            from tools import validate_fixture_manifest as policy
+
+            data = policy.materialize_public_generated_fixture(
+                "synthetic-build-04.12.02-profile-recovery-v1",
+            )
+            output = pathlib.Path(sys.argv[1])
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(data)
+            """.trimIndent(),
+            resource.get().asFile.absolutePath,
+        )
+    }
+}
+
+sourceSets.test {
+    resources.srcDir(generatedProfileResources)
+}
+
+tasks.processTestResources {
+    dependsOn(materializeProfileRecoveryTestFixture)
+}

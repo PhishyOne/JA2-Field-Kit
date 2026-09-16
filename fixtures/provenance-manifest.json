@@ -207,6 +207,60 @@
         "reason": "Only deterministic project-authored bytes; the current validator sandbox materializes and identity-checks them before core tests consume them."
       },
       "input_policy": "read-only"
+    },
+    {
+      "id": "synthetic-build-04.12.02-profile-recovery-v1",
+      "category": "synthetic",
+      "description": "Project-authored exact-layout profile recovery vector and signed-field ambiguity witness; not a real save, campaign, roster, or family-detection fixture.",
+      "source": {
+        "family": "UNKNOWN",
+        "save_version": 103,
+        "product": "Synthetic canonical normal profile recovery layout vector",
+        "build": "04.12.02",
+        "platform": "170 separately encrypted 716-byte normal profile records",
+        "origin": "project-generated",
+        "evidence": [
+          "docs/profile-rotation-recovery.md",
+          "Independent project-authored mathematical checksum/encryption recipe in tools/generate_build041202_profile_recovery.py; reads no save, upstream key, or external input."
+        ]
+      },
+      "artifact": {
+        "storage": "generated",
+        "path": null,
+        "generator": {
+          "kind": "python-stdout",
+          "location": "tools/generate_build041202_profile_recovery.py",
+          "recipe": "v1: concatenate key[i]=(73*i+19)%256 for 49 bytes; 170 plaintext records; their separately encrypted ciphertexts; one 716-byte ambiguity plaintext and its ciphertext. Record r starts with byte i=(31*r+17*i+3)%256, then canonical reserved ranges are zeroed and the mathematical checksum is stored little-endian. The zero-initialized ambiguity record sets 405=252,335=127,296=128,451=1 before checksum. Total planned length 244921 bytes. Generator source is the complete deterministic recipe; execute only with the established sandbox and verify the recorded identity."
+        },
+        "identity": {
+          "status": "verified",
+          "size_bytes": 244921,
+          "sha256": "0962938b53f4e54976b2d5f8a4b380f32e8b57155d89dd5fe3e002f301832f80"
+        }
+      },
+      "derivation": null,
+      "redistribution": {
+        "status": "approved-for-repository",
+        "basis": "Independently project-authored synthetic arithmetic experiments, containing no real-game bytes, names, campaign values, upstream arrays, or copied source text. The banked decision authorizes this bounded synthetic construction; exact artifact identity and immutable review remain gates. Operational review is not a license grant or legal clearance.",
+        "review_reference": "https://github.com/PhishyOne/JA2-Field-Kit/issues/5#issuecomment-5702806657"
+      },
+      "expected": {
+        "outcome": "success",
+        "completeness": "partial",
+        "basis": "Synthetic layout-only expectations: tests compare the recovered key and all plaintext bytes to independently generated data, and require AMBIGUOUS with 129 candidates for the repeated witness. No complete SaveInspection exists for this vector and no family or roster is inferred. Public materialization requires sandbox execution and recorded identity verification.",
+        "assertions": [
+          {
+            "json_pointer": "/format/family",
+            "operator": "equals",
+            "value": "UNKNOWN"
+          }
+        ]
+      },
+      "ci": {
+        "mode": "public",
+        "reason": "Project-authored synthetic test resource; materialize_public_generated_fixture must execute it in the unchanged sandbox and verify the recorded identity before admitting it."
+      },
+      "input_policy": "read-only"
     }
   ]
 }

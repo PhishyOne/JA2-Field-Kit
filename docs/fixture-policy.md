@@ -235,10 +235,11 @@ materializes and measures both heads. A changed base produces a different bound
 integration identity, so old evidence is inapplicable. Pushes use one exact
 `push-head` role.
 
-The workflow explicitly subscribes to `ready_for_review` as well as opened,
-synchronize, and reopened activity. Moving an unchanged candidate from Draft to
-Ready therefore creates fresh applicable CI without a synthetic source change.
-The workflow does not itself mark a PR Ready or change any other PR state.
+The workflow explicitly subscribes to `ready_for_review` and `edited` as well as
+opened, synchronize, and reopened activity. Moving an unchanged candidate from
+Draft to Ready or changing its base branch therefore creates fresh applicable
+CI without a synthetic source change. The workflow does not itself mark a PR
+Ready or change any other PR state.
 
 For every reachable commit, the validator reads trees and blobs through Git
 without checking out that revision or following historical symlinks. Every

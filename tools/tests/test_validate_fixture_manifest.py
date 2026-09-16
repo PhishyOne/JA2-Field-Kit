@@ -1086,6 +1086,18 @@ class CliAndWorkflowTests(unittest.TestCase):
 
     def test_workflow_has_complete_checkout_dependencies_tests_and_all_heads(self) -> None:
         workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "core-ci.yml").read_text()
+        pull_request_types_match = re.search(
+            r"(?m)^  pull_request:\n    types: \[([^\]]+)\]$",
+            workflow,
+        )
+        self.assertIsNotNone(pull_request_types_match)
+        pull_request_types = {
+            event.strip() for event in pull_request_types_match.group(1).split(",")
+        }
+        self.assertEqual(
+            {"opened", "synchronize", "reopened", "ready_for_review", "edited"},
+            pull_request_types,
+        )
         self.assertGreaterEqual(workflow.count("fetch-depth: 0"), 2)
         self.assertGreaterEqual(workflow.count("actions/setup-python@v5"), 2)
         self.assertGreaterEqual(workflow.count("--require-hashes"), 2)
@@ -1095,7 +1107,6 @@ class CliAndWorkflowTests(unittest.TestCase):
         self.assertNotIn("sysctl", workflow)
         self.assertNotIn("apparmor_restrict_unprivileged_userns", workflow)
         self.assertIn("python3 -B -m unittest discover", workflow)
-        self.assertIn("ready_for_review", workflow)
         self.assertIn('pr-head=${{ github.event.pull_request.head.sha }}', workflow)
         self.assertIn('integration-head=$GITHUB_SHA', workflow)
         self.assertIn('--base "${{ github.event.pull_request.base.sha }}"', workflow)

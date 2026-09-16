@@ -24,9 +24,10 @@ For the examined normal Windows/Stracciatella-style layout used by that save:
 The exact v103 / `Build 04.12.02` normal-header offsets and the narrow,
 layout-only parser are recorded in
 [`save-header-04.12.02.md`](save-header-04.12.02.md). Public tests use an
-admitted synthetic vector because the cataloged real save is not currently an
-eligible test fixture. The parser does not identify a save family or select an
-encryption scheme.
+admitted synthetic vector because real-save evidence remains local-only. A
+separate authorized Android Stracciatella save now backs structural header
+validation; the historical JA2 Reborn entry remains pending independently. The
+parser does not identify a save family or select an encryption scheme.
 
 Encryption-selector rules, encrypted block locations, and merc-profile field
 offsets remain deliberately unimplemented. Each later slice must be

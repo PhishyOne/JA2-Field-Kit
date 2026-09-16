@@ -73,7 +73,7 @@ bytes, rejects every shorter input, and rejects any version/build identity
 other than `103` / `Build 04.12.02`. Successful parsing does not select a save
 family, infer that later blocks exist, or choose an encryption table.
 
-## Synthetic coverage and remaining evidence blocker
+## Synthetic and authorized real-save coverage
 
 Public unit tests use the project-authored deterministic 432-byte sentinel
 `synthetic-build-04.12.02-header-v1`, registered in
@@ -88,8 +88,20 @@ generator through the existing exact-snapshot, read-only Bubblewrap authority,
 including network-namespace, seccomp, resource, size, and SHA-256 checks. A host
 that cannot establish that authority fails closed.
 
-The cataloged real save `ja2-reborn-04.12.02-known-save-01` remains local-only,
-non-redistributable, and pending exact identity. Full real-save validation is
-blocked until authorized bytes exist locally and evidence supplies their exact
-size, SHA-256, and expected non-sensitive header results. None of those values
-is guessed by this change.
+Real-save structural header validation is separately backed by the authorized
+Android Stracciatella save
+`stracciatella-04.12.02-android-save-01`, registered as a verified, local-only,
+non-redistributable fixture. Independent raw-header inspection and read-only
+execution of the Kotlin parser built from PR head
+`2c883237c34fdff7bbd1764cc585a429c93f602f` agreed on save version `103`, game
+version `Build 04.12.02`, player merc count `18`, and four opaque ranges. The
+manifest limits its logical assertions to save version, build label, and player
+merc count.
+
+This evidence validates the structural 432-byte header parser against that
+Stracciatella save. It does not identify a save family through parsing or
+validate encrypted blocks, full roster parsing, or other private campaign
+values. The distinct historical fixture
+`ja2-reborn-04.12.02-known-save-01` remains local-only, non-redistributable, and
+pending exact identity; it has not been relabeled or assigned the Stracciatella
+save's identity.

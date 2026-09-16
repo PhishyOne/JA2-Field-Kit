@@ -69,6 +69,67 @@
       "input_policy": "read-only"
     },
     {
+      "id": "stracciatella-04.12.02-android-save-01",
+      "category": "real-local",
+      "description": "Authorized Android Stracciatella save used for real-save structural validation of the normal 432-byte v103 / Build 04.12.02 header.",
+      "source": {
+        "family": "STRACCIATELLA",
+        "save_version": 103,
+        "product": "JA2 Stracciatella",
+        "build": "04.12.02",
+        "platform": "Android Stracciatella / normal 432-byte layout",
+        "origin": "locally-supplied",
+        "evidence": [
+          "Authorized source and forge-copy byte identity measurements matched exactly.",
+          "Independent raw-header inspection and the exact-head Kotlin parser agreed on the recorded non-sensitive header results.",
+          "docs/save-header-04.12.02.md"
+        ]
+      },
+      "artifact": {
+        "storage": "local-only",
+        "path": "fixtures/private/stracciatella/04.12.02/android-save-01.sav",
+        "generator": null,
+        "identity": {
+          "status": "verified",
+          "size_bytes": 2563321,
+          "sha256": "b7c87e67a41d9f346c52b0282e31f6e0f0fa09c3cc4596db130717743f106b3a"
+        }
+      },
+      "derivation": null,
+      "redistribution": {
+        "status": "not-permitted",
+        "basis": "The authorized real save remains private, local-only, and non-redistributable.",
+        "review_reference": null
+      },
+      "expected": {
+        "outcome": "success",
+        "completeness": "partial",
+        "basis": "Independent raw-header inspection and read-only execution of the exact-head Kotlin parser agreed on these non-sensitive structural header results; no campaign or roster details are asserted.",
+        "assertions": [
+          {
+            "json_pointer": "/format/saveVersion",
+            "operator": "equals",
+            "value": 103
+          },
+          {
+            "json_pointer": "/format/buildLabel",
+            "operator": "equals",
+            "value": "04.12.02"
+          },
+          {
+            "json_pointer": "/campaign/playerMercCount",
+            "operator": "equals",
+            "value": 18
+          }
+        ]
+      },
+      "ci": {
+        "mode": "local-only",
+        "reason": "The verified real save remains outside Git and must not be supplied to hosted CI."
+      },
+      "input_policy": "read-only"
+    },
+    {
       "id": "synthetic-build-04.12.02-header-v1",
       "category": "synthetic",
       "description": "Project-authored 432-byte v103 / Build 04.12.02 normal-header sentinel; not a real save or evidence of save-family detection.",

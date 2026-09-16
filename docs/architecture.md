@@ -19,9 +19,13 @@ save bytes
 ```
 
 The current core implements the non-destructive structural probe, general
-little-endian primitives, and a narrow parser for the evidenced v103 /
-`Build 04.12.02` normal header. That parser is layout-specific and intentionally
+little-endian primitives, a narrow parser for the evidenced v103 /
+`Build 04.12.02` normal header, and the source-derived normal encryption
+selector and block transform. The parser is layout-specific and intentionally
 does not pretend that file length or header identity identifies a save family.
+Rotation-table data stays behind a provider boundary: production tables are not
+bundled, and the transform is currently tested only with project-authored
+synthetic data rather than an admitted real encrypted block.
 
 ## Planned boundaries
 

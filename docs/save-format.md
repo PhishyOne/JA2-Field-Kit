@@ -27,12 +27,26 @@ layout-only parser are recorded in
 admitted synthetic vector because real-save evidence remains local-only. A
 separate authorized Android Stracciatella save now backs structural header
 validation; the historical JA2 Reborn entry remains pending independently. The
-parser does not identify a save family or select an encryption scheme.
+parser does not identify a save family by itself.
 
-Encryption-selector rules, encrypted block locations, and merc-profile field
-offsets remain deliberately unimplemented. Each later slice must be
-independently evidenced and tested rather than inferred from the structural
-header result.
+The normal, non-German encryption selector and byte-wise block transform are
+now implemented from source-derived format facts rechecked at immutable JA2
+Reborn commit `743f38a6ca86c81893376c2576277db660320170`. The selector uses explicit
+32-bit unsigned wrapping, the evidenced nested random branches, and the 19-entry
+option/difficulty banks. Header-to-selector conversion rejects non-`0`/`1`
+selector booleans, unsupported difficulty identities, and unsupported header
+identities instead of guessing. This conversion remains separate from save
+family detection.
+
+The transform accepts an exact expected block size, including a zero-byte
+no-op; zero is an API-valid block length, not a claim about a real serialized
+block. Tests use project-authored synthetic selector and decryption vectors.
+The repository does **not** contain the production 49-byte rotation-table
+contents or an independently admissible real encrypted-block vector, so this
+slice does not yet prove production decryption or fully satisfy issue #5.
+Encrypted block locations and merc-profile field offsets also remain
+unimplemented. Each later slice must be independently evidenced and tested
+rather than inferred from the structural header result.
 
 ## Compatibility strategy
 

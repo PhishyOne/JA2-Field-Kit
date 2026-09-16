@@ -1,0 +1,721 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ja2-field-kit:fixture-provenance-manifest:1",
+  "title": "JA2 Field Kit fixture provenance manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "fixtures"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./provenance-manifest.schema.json"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fixture"
+      }
+    }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "description",
+        "source",
+        "artifact",
+        "derivation",
+        "redistribution",
+        "expected",
+        "ci",
+        "input_policy"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/fixture-id"
+        },
+        "category": {
+          "enum": [
+            "synthetic",
+            "real-local",
+            "derived-sanitized"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "derivation": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/derivation"
+            }
+          ]
+        },
+        "redistribution": {
+          "$ref": "#/$defs/redistribution"
+        },
+        "expected": {
+          "$ref": "#/$defs/expected"
+        },
+        "ci": {
+          "$ref": "#/$defs/ci"
+        },
+        "input_policy": {
+          "const": "read-only"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "synthetic"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "properties": {
+                  "origin": {
+                    "const": "project-generated"
+                  }
+                }
+              },
+              "derivation": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "real-local"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "properties": {
+                  "origin": {
+                    "const": "locally-supplied"
+                  }
+                }
+              },
+              "artifact": {
+                "properties": {
+                  "storage": {
+                    "const": "local-only"
+                  }
+                }
+              },
+              "derivation": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "derived-sanitized"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "properties": {
+                  "origin": {
+                    "const": "derived"
+                  }
+                }
+              },
+              "derivation": {
+                "$ref": "#/$defs/derivation"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "artifact": {
+                "properties": {
+                  "storage": {
+                    "const": "repository"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "artifact": {
+                "properties": {
+                  "path": {
+                    "$ref": "#/$defs/repository-path"
+                  },
+                  "generator": {
+                    "type": "null"
+                  },
+                  "identity": {
+                    "properties": {
+                      "status": {
+                        "const": "verified"
+                      }
+                    }
+                  }
+                }
+              },
+              "redistribution": {
+                "properties": {
+                  "status": {
+                    "const": "approved-for-repository"
+                  },
+                  "review_reference": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "ci": {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "public",
+                      "excluded"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "artifact": {
+                "properties": {
+                  "storage": {
+                    "const": "local-only"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "artifact": {
+                "properties": {
+                  "path": {
+                    "$ref": "#/$defs/local-path"
+                  },
+                  "generator": {
+                    "type": "null"
+                  }
+                }
+              },
+              "redistribution": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "not-permitted",
+                      "pending-review"
+                    ]
+                  }
+                }
+              },
+              "ci": {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "local-only",
+                      "excluded"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "artifact": {
+                "properties": {
+                  "storage": {
+                    "const": "generated"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "synthetic"
+              },
+              "artifact": {
+                "properties": {
+                  "path": {
+                    "type": "null"
+                  },
+                  "generator": {
+                    "$ref": "#/$defs/generator"
+                  },
+                  "identity": {
+                    "properties": {
+                      "status": {
+                        "const": "verified"
+                      }
+                    }
+                  }
+                }
+              },
+              "redistribution": {
+                "properties": {
+                  "status": {
+                    "const": "approved-for-repository"
+                  },
+                  "review_reference": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "ci": {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "public",
+                      "excluded"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "save_version",
+        "product",
+        "build",
+        "platform",
+        "origin",
+        "evidence"
+      ],
+      "properties": {
+        "family": {
+          "enum": [
+            "JA2_REBORN",
+            "STRACCIATELLA",
+            "CLASSIC",
+            "UNKNOWN"
+          ]
+        },
+        "save_version": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonnegative-integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1
+        },
+        "build": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "origin": {
+          "enum": [
+            "project-generated",
+            "locally-supplied",
+            "derived"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storage",
+        "path",
+        "generator",
+        "identity"
+      ],
+      "properties": {
+        "storage": {
+          "enum": [
+            "repository",
+            "local-only",
+            "generated"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generator": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/generator"
+            }
+          ]
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "location",
+        "recipe"
+      ],
+      "properties": {
+        "kind": {
+          "const": "python-stdout"
+        },
+        "location": {
+          "$ref": "#/$defs/generator-path"
+        },
+        "recipe": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pending",
+            "verified"
+          ]
+        },
+        "size_bytes": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/fixture-size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pending"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "size_bytes": {
+                "type": "null"
+              },
+              "sha256": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "size_bytes": {
+                "$ref": "#/$defs/fixture-size"
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parents",
+        "method",
+        "sanitization"
+      ],
+      "properties": {
+        "parents": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/parent"
+          }
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sanitization": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "parent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture_id",
+        "sha256"
+      ],
+      "properties": {
+        "fixture_id": {
+          "$ref": "#/$defs/fixture-id"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "redistribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "basis",
+        "review_reference"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "approved-for-repository",
+            "not-permitted",
+            "pending-review"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_reference": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "completeness",
+        "basis",
+        "assertions"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "success",
+            "failure"
+          ]
+        },
+        "completeness": {
+          "enum": [
+            "partial",
+            "complete"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        }
+      }
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "json_pointer",
+        "operator",
+        "value"
+      ],
+      "properties": {
+        "json_pointer": {
+          "type": "string",
+          "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*(?![\\s\\S])"
+        },
+        "operator": {
+          "enum": [
+            "equals",
+            "length-equals"
+          ]
+        },
+        "value": {}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "const": "length-equals"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/nonnegative-integer"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "fixture-id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?(?![\\s\\S])"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "nonnegative-integer": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "fixture-size": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/nonnegative-integer"
+        },
+        {
+          "maximum": 1073741824
+        }
+      ]
+    },
+    "repository-path": {
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])fixtures/public/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
+    },
+    "local-path": {
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])fixtures/private/(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$"
+    },
+    "generator-path": {
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])(?:(?!\\.\\.?/)[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+\\.py$"
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "reason"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "public",
+            "local-only",
+            "excluded"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

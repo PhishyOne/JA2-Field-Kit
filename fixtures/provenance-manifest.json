@@ -1,0 +1,71 @@
+{
+  "$schema": "./provenance-manifest.schema.json",
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "ja2-reborn-04.12.02-known-save-01",
+      "category": "real-local",
+      "description": "Previously decoded JA2 Reborn save used to establish the initial 18-merc acceptance target.",
+      "source": {
+        "family": "JA2_REBORN",
+        "save_version": 103,
+        "product": "JA2 Reborn",
+        "build": "04.12.02",
+        "platform": "normal Windows/Stracciatella-style save layout",
+        "origin": "locally-supplied",
+        "evidence": [
+          "docs/save-format.md",
+          "docs/v0.1-scope.md"
+        ]
+      },
+      "artifact": {
+        "storage": "local-only",
+        "path": "fixtures/private/ja2-reborn/04.12.02/known-save-01.sav",
+        "generator": null,
+        "identity": {
+          "status": "pending",
+          "size_bytes": null,
+          "sha256": null
+        }
+      },
+      "derivation": null,
+      "redistribution": {
+        "status": "not-permitted",
+        "basis": "Treat the personal real save as non-redistributable unless a later provenance, privacy, and rights review explicitly decides otherwise.",
+        "review_reference": null
+      },
+      "expected": {
+        "outcome": "success",
+        "completeness": "partial",
+        "basis": "Prior successful manual decode recorded in the repository documentation; campaign fields and per-merc assertions remain to be registered from evidence.",
+        "assertions": [
+          {
+            "json_pointer": "/format/family",
+            "operator": "equals",
+            "value": "JA2_REBORN"
+          },
+          {
+            "json_pointer": "/format/buildLabel",
+            "operator": "equals",
+            "value": "04.12.02"
+          },
+          {
+            "json_pointer": "/format/saveVersion",
+            "operator": "equals",
+            "value": 103
+          },
+          {
+            "json_pointer": "/roster",
+            "operator": "length-equals",
+            "value": 18
+          }
+        ]
+      },
+      "ci": {
+        "mode": "local-only",
+        "reason": "The real save is absent from the public repository and must not be supplied to hosted CI."
+      },
+      "input_policy": "read-only"
+    }
+  ]
+}

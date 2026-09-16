@@ -249,8 +249,9 @@ every tree. Approval added at a later head never authorizes earlier bytes.
 Historical validators and generators are never executed. For each explicit
 admission head, the current evaluator reads that head's blobs into a separate
 snapshot, rejects non-regular snapshot entries, mounts the snapshot read-only
-with Bubblewrap, clears the environment, denies network socket syscalls, limits
-resources and output, and executes only that head's declared generator. An
+with Bubblewrap, isolates it in a new network namespace, clears the environment,
+denies both network socket and io_uring syscalls, limits resources and output,
+and executes only that head's declared generator. An
 ambient worktree, dirty or untracked file, other head, symlink, or private file
 is not mounted into the generator snapshot. If that isolation cannot be
 established, admission fails closed.

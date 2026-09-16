@@ -48,7 +48,8 @@ head_oid=$(git rev-parse HEAD)
 
 Generated-fixture admission also requires a working unprivileged Bubblewrap on
 Linux x86-64 so each explicit head can run in its own read-only,
-network-denied snapshot. On the pinned Ubuntu 24.04 runner, CI performs a real
+network-namespace-isolated snapshot with socket and io_uring syscalls denied as
+a second layer. On the pinned Ubuntu 24.04 runner, CI performs a real
 sandbox smoke test. If AppArmor's host-wide user-namespace restriction blocks
 an otherwise stock host, setup installs `apparmor-profiles`, verifies and adds
 only Ubuntu's packaged `bwrap-userns-restrict` policy, and smokes the sandbox

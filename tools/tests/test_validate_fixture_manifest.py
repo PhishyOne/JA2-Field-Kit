@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import copy
+import errno
 import hashlib
 import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -942,6 +944,50 @@ class HeadAdmissionTests(unittest.TestCase):
                 root=repository.root,
             )
 
+    def test_generator_direct_io_uring_setup_is_denied(self) -> None:
+        io_uring_generator = (
+            "import ctypes, errno, os, sys\n"
+            "parameters = ctypes.create_string_buffer(256)\n"
+            "libc = ctypes.CDLL(None, use_errno=True)\n"
+            "result = libc.syscall(425, 2, ctypes.byref(parameters))\n"
+            "error = ctypes.get_errno()\n"
+            "if result >= 0:\n"
+            "    os.close(result)\n"
+            "blocked = result == -1 and error == errno.EPERM\n"
+            "sys.stdout.buffer.write(b'synthetic' if blocked else b'wrong')\n"
+        )
+        repository = SyntheticRepository()
+        self.addCleanup(repository.close)
+        repository.write_text("tools/generate_synthetic.py", io_uring_generator)
+        manifest = empty_manifest()
+        manifest["fixtures"] = [generated_fixture(b"synthetic")]
+        repository.write_json(policy.MANIFEST_PATH, manifest)
+        head = repository.commit("io_uring generator")
+        result = policy.admit_explicit_heads(
+            [policy.AdmissionRequest("local-head", head)],
+            root=repository.root,
+        )
+        self.assertEqual(1, len(result.heads[0].generator_measurements))
+
+    def test_generator_sandbox_keeps_network_namespace_and_blocks_io_uring(
+        self,
+    ) -> None:
+        command = policy._sandbox_command(Path("/exact-snapshot"), "generator.py", 17)
+        self.assertIn("--unshare-all", command)
+        self.assertNotIn("--share-net", command)
+
+        instructions = list(
+            struct.iter_unpack("=HBBI", policy._seccomp_network_filter())
+        )
+        denied_syscalls = {
+            instruction[3]
+            for instruction, following in zip(instructions, instructions[1:])
+            if instruction[:3] == (0x15, 0, 1)
+            and following == (0x06, 0, 0, 0x00050000 | errno.EPERM)
+        }
+        self.assertTrue(policy.NETWORK_SYSCALLS_X86_64 <= denied_syscalls)
+        self.assertTrue(policy.IO_URING_SYSCALLS_X86_64 <= denied_syscalls)
+
     def test_generator_does_not_inherit_ambient_credentials(self) -> None:
         environment_generator = (
             "import os, sys\n"
@@ -1224,7 +1270,7 @@ profile unpriv_bwrap flags=(attach_disconnected) {
         self.assertIn('"apparmor-profiles"', source)
         self.assertIn('"--verify"', source)
         self.assertIn('"--unshare-all"', source)
-        self.assertIn('"--share-net"', source)
+        self.assertNotIn('"--share-net"', source)
         self.assertIn('"--clearenv"', source)
         self.assertIn('"/usr/bin/true"', source)
         self.assertIn("timeout=15", source)

@@ -180,7 +180,6 @@ class UbuntuHost:
         command = [
             str(BWRAP),
             "--unshare-all",
-            "--share-net",
             "--die-with-parent",
             "--new-session",
         ]

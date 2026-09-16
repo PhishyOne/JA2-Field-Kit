@@ -71,12 +71,21 @@ SCHEMA_SINGLE_KEYWORDS = (
 )
 SCHEMA_ARRAY_KEYWORDS = ("allOf", "anyOf", "oneOf", "prefixItems")
 
-# Linux x86-64 syscall numbers. Generator subprocesses inherit no descriptors
-# except stdio and the seccomp program, so denying socket creation closes their
-# network boundary without requiring a network namespace from the host.
+# Linux x86-64 syscall numbers. Bubblewrap supplies the primary network boundary
+# with a fresh network namespace. The syscall filter independently denies both
+# traditional socket operations and io_uring, whose operations can otherwise
+# create and connect sockets without using the traditional socket syscalls.
 NETWORK_SYSCALLS_X86_64 = {
     41, 42, 43, 44, 45, 46, 47, 49, 50, 51, 52, 53, 54, 55, 288, 299, 307,
 }
+IO_URING_SYSCALLS_X86_64 = {
+    425,  # io_uring_setup
+    426,  # io_uring_enter
+    427,  # io_uring_register
+}
+GENERATOR_DENIED_SYSCALLS_X86_64 = (
+    NETWORK_SYSCALLS_X86_64 | IO_URING_SYSCALLS_X86_64
+)
 
 
 class ValidationError(Exception):
@@ -1241,7 +1250,7 @@ def _seccomp_network_filter() -> bytes:
         (0x45, 0, 1, 0x40000000),        # reject the x32 ABI syscall bit
         (0x06, 0, 0, 0x00050000 | errno.EPERM),
     ]
-    for syscall_number in sorted(NETWORK_SYSCALLS_X86_64):
+    for syscall_number in sorted(GENERATOR_DENIED_SYSCALLS_X86_64):
         instructions.extend(
             [
                 (0x15, 0, 1, syscall_number),
@@ -1291,7 +1300,6 @@ def _sandbox_command(snapshot: Path, generator_path: str, seccomp_fd: int) -> li
     command = [
         str(bwrap),
         "--unshare-all",
-        "--share-net",
         "--die-with-parent",
         "--new-session",
     ]

@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.io.LittleEndianReader
+import java.util.Collections
 
 /** An on-disk one-byte BOOLEAN, retaining unsupported encodings for diagnostics. */
 data class EncodedBoolean(val rawValue: Int) {
@@ -133,12 +134,15 @@ object SaveHeaderParser {
             ),
             perSaveRandom = reader.u32(316),
             saveStateSize = reader.u32(320),
-            opaqueRanges = listOf(
-                reader.opaqueRange(offset = 276, length = 4),
-                reader.opaqueRange(offset = 308, length = 7),
-                reader.opaqueRange(offset = 315, length = 1),
-                reader.opaqueRange(offset = 324, length = 108),
-            ),
+            opaqueRanges =
+                unmodifiableCopyOf(
+                    listOf(
+                        reader.opaqueRange(offset = 276, length = 4),
+                        reader.opaqueRange(offset = 308, length = 7),
+                        reader.opaqueRange(offset = 315, length = 1),
+                        reader.opaqueRange(offset = 324, length = 108),
+                    ),
+                ),
         )
     }
 
@@ -172,6 +176,9 @@ object SaveHeaderParser {
     private fun LittleEndianReader.opaqueRange(offset: Int, length: Int): OpaqueHeaderRange =
         OpaqueHeaderRange(
             offset = offset,
-            bytes = bytes(offset, length).map { it.toInt() and 0xff },
+            bytes = unmodifiableCopyOf(bytes(offset, length).map { it.toInt() and 0xff }),
         )
+
+    private fun <T> unmodifiableCopyOf(values: Collection<T>): List<T> =
+        Collections.unmodifiableList(ArrayList(values))
 }

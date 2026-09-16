@@ -73,6 +73,18 @@ class SaveHeaderParserTest {
     }
 
     @Test
+    fun parsedOpaqueRangesAndBytesRejectRuntimeMutation() {
+        val header = SaveHeaderParser.parseBuild041202(syntheticBuild041202Header())
+
+        assertFailsWith<UnsupportedOperationException> {
+            (header.opaqueRanges as MutableList<OpaqueHeaderRange>).removeAt(0)
+        }
+        assertFailsWith<UnsupportedOperationException> {
+            (header.opaqueRanges.first().bytes as MutableList<Int>)[0] = 0
+        }
+    }
+
+    @Test
     fun rejectsEveryTruncatedHeaderLength() {
         for (size in 0 until SaveLayoutFacts.NORMAL_HEADER_SIZE) {
             val error = assertFailsWith<TruncatedSaveHeaderException> {

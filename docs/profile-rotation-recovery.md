@@ -142,37 +142,25 @@ experiments only, never real-save evidence or a public encryption-for-write API.
 
 ## Current verification and successor gates
 
-Construction is not yet admission-ready: the worker installed the exact hashed
-Python dependency lock, but even the existing header generator fails in the
-unchanged sandbox. A direct equivalent smoke reports
-`Failed to create NETLINK_ROUTE socket: Operation not permitted` when Bubblewrap
-sets up its isolated network namespace. Java, Gradle and kotlinc are absent from
-PATH. The new generator has not been executed outside the sandbox (or at all),
-and its manifest identity intentionally remains pending, which the existing
-validator rejects for generated fixtures. No digest or green test status is
-invented. The orchestrator must measure the recipe through the established
-sandbox and record its exact size/digest before public materialization and
-Kotlin tests can run. The worktree's read-only Git metadata also prevents adding
-the new generator to the tracked snapshot in this worker.
+Current verification evidence is:
 
-The pinned validator regression suite ran 65 tests: 59 passed, one failed and
-five errored. In the final worktree, five unsuccessful cases encounter sandbox
-execution failure and the imported-worktree case rejects the pending generated
-identity at the schema gate. Before adding that entry, the same six cases all
-failed at sandbox execution. `gradle :core:test` could not start because Gradle
-is unavailable. The admission CLI rejected the dirty evaluator worktree; there
-is no new immutable head to admit. `git diff --check` passed, and static parsing
-of the generator (without execution) confirmed 82 reserved positions covering
-exactly the 48 expected residues. Existing manifest entries and PR20 source files
-were checked unchanged. None of these static checks substitutes for running the
-Kotlin tests or admitting the synthetic artifact.
+- The synthetic fixture identity is verified at 244921 bytes with SHA-256
+  `0962938b53f4e54976b2d5f8a4b380f32e8b57155d89dd5fe3e002f301832f80`.
+  The identity was reproduced by validator-controlled, exact-snapshot Bubblewrap
+  materialization.
+- All 65 fixture-policy regressions passed on host authority.
+- Kotlin/JVM `:core:test` passed with JDK 21.0.12.1 and Gradle 9.5.0 after both
+  resources were materialized through the validator.
+- Immutable admission passed on
+  `05cc93ae477a86651041077d4e55201e9b7ed08e`: 18 reachable commit trees were
+  inspected, and two exact-head generator outputs were independently measured.
+- Hosted Core CI #30 passed both the fixture-policy and test jobs on that exact
+  head, and a fresh immutable-head Codex review returned `CLEAN`.
 
-Before integration: establish the unchanged sandbox and tracked generator,
-measure and review its artifact identity, run all Kotlin and validator checks,
-then obtain independent immutable-head review under the orchestrator's lifecycle.
-The returned key must remain bound to the inspection that supplied this block.
-A later bounded framing tranche must evidence platform-specific layouts and
-dynamic laptop tails with explicit bounds; it must not hardcode an observed
-private profile offset or guess unsupported tails. Real-save Kotlin validation,
-historical Reborn evidence, semantic profiles/roster, and full inspection remain
-separate gates. This construction does not complete issue #5.
+The PR remains Draft. These checks do not establish checksum authenticity or
+family detection, and this work does not complete issue #5. Full-save
+framing/locator work, historical Reborn evidence, real-save Kotlin end-to-end
+validation, semantic profiles/roster, and full inspection remain separate gates.
+Later framing work must not hardcode an observed private profile offset or guess
+unsupported tails. The recovered key must remain bound to the inspection that
+supplied the block.

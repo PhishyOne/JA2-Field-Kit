@@ -535,7 +535,13 @@ class SemanticGuardrailTests(unittest.TestCase):
         result = policy.validate(manifest, check_local_files=False)
         self.assertIsInstance(result, policy.WorktreeValidationResult)
         self.assertEqual(len(manifest["fixtures"]), result.document.fixture_count)
-        self.assertEqual(1, len(result.document.local_artifacts))
+        self.assertEqual(
+            {
+                "ja2-reborn-04.12.02-known-save-01",
+                "stracciatella-04.12.02-android-save-01",
+            },
+            {artifact.fixture_id for artifact in result.document.local_artifacts},
+        )
 
     def test_valid_synthetic_generator_and_identity_mismatch(self) -> None:
         data = b"synthetic"

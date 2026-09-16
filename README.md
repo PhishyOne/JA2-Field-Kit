@@ -27,6 +27,7 @@ See:
 - `docs/architecture.md`
 - `docs/fixture-policy.md`
 - `docs/save-format.md`
+- `docs/save-header-04.12.02.md`
 - `docs/v0.1-scope.md`
 - `fixtures/README.md`
 
@@ -39,7 +40,7 @@ and uses a fully pinned, hashed dependency lock.
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements/fixture-validation.lock
-gradle :core:test --no-daemon
+FIXTURE_VALIDATOR_PYTHON=.venv/bin/python gradle :core:test --no-daemon
 .venv/bin/python -m unittest discover -s tools/tests -v
 head_oid=$(git rev-parse HEAD)
 .venv/bin/python tools/validate_fixture_manifest.py \

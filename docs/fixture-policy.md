@@ -121,6 +121,10 @@ consumers, including the downstream Gradle importer. It validates a precisely
 fingerprinted copy of the tracked worktree, but its `WorktreeValidationResult`
 is deliberately not an immutable admission result. Static history and generator
 execution cannot be requested by a generic flag or inferred from a count tuple.
+The narrower `materialize_public_generated_fixture` function exists only for
+test-resource consumers: after the same worktree, schema, repository, sandbox,
+and identity checks, it returns one named `public` generated fixture. It neither
+opens local-only artifacts nor turns worktree validation into admission.
 
 Both JSON documents use the same strict decoder. Integers are arbitrary-precision
 Python integers; non-integer JSON numbers are exact decimal values rather than

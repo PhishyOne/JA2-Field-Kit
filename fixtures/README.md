@@ -46,6 +46,14 @@ head_oid=$(git rev-parse HEAD)
   --check-local-files
 ```
 
-The known JA2 Reborn Build `04.12.02` entry is intentionally cataloged with a
-pending identity. Its source save is not in the repository, and it cannot be
-used by a test until its real size and SHA-256 are recorded and verified.
+Two distinct local-only Build `04.12.02` records are cataloged. The historical
+JA2 Reborn entry intentionally retains its pending identity and cannot be used
+by a test until its own size and SHA-256 are recorded and verified. The Android
+Stracciatella entry has a separately verified identity and partial
+non-sensitive header expectations. Neither private save is stored in Git or
+permitted in hosted CI.
+
+The public synthetic header vector is generated only inside the validator's
+exact-snapshot sandbox. Core test-resource preparation uses the validator's
+narrow public materialization interface; it must never invoke the manifested
+generator as a standalone subprocess.

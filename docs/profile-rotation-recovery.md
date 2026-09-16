@@ -140,9 +140,10 @@ lengths, all-zero input, erroneous continuous whole-table encryption, defensive
 copies, sanitized diagnostics, and the name-field blind spot. These are synthetic
 experiments only, never real-save evidence or a public encryption-for-write API.
 
-## Current verification and successor gates
+## Verification record and successor gates
 
-Current verification evidence is:
+The following is historical verification evidence from the pre-rebase Draft
+candidate. It is not acceptance evidence for the current candidate head:
 
 - The synthetic fixture identity is verified at 244921 bytes with SHA-256
   `0962938b53f4e54976b2d5f8a4b380f32e8b57155d89dd5fe3e002f301832f80`.
@@ -157,10 +158,11 @@ Current verification evidence is:
 - Hosted Core CI #30 passed both the fixture-policy and test jobs on that exact
   head, and a fresh immutable-head Codex review returned `CLEAN`.
 
-The PR remains Draft. These checks do not establish checksum authenticity or
-family detection, and this work does not complete issue #5. Full-save
-framing/locator work, historical Reborn evidence, real-save Kotlin end-to-end
-validation, semantic profiles/roster, and full inspection remain separate gates.
-Later framing work must not hardcode an observed private profile offset or guess
-unsupported tails. The recovered key must remain bound to the inspection that
-supplied the block.
+Authoritative acceptance or merge evidence must be regenerated and checked on
+the exact current candidate head after any mutation. These checks do not
+establish checksum authenticity or family detection, and this work does not
+complete issue #5. Full-save framing/locator work, historical Reborn evidence,
+real-save Kotlin end-to-end validation, semantic profiles/roster, and full
+inspection remain separate gates. Later framing work must not hardcode an
+observed private profile offset or guess unsupported tails. The recovered key
+must remain bound to the inspection that supplied the block.

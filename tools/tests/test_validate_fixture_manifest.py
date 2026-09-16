@@ -553,6 +553,31 @@ class SemanticGuardrailTests(unittest.TestCase):
         with self.assertRaises(policy.ValidationError):
             validate_in(self.repository, manifest)
 
+    def test_public_generated_fixture_materialization_reuses_sandbox_authority(self) -> None:
+        data = b"synthetic"
+        self.repository.write_text("tools/generate_synthetic.py", GOOD_GENERATOR)
+        run_git(self.repository.root, "add", "tools/generate_synthetic.py")
+        manifest = empty_manifest()
+        manifest["fixtures"] = [generated_fixture(data)]
+        self.repository.write_json(policy.MANIFEST_PATH, manifest)
+        run_git(self.repository.root, "add", policy.MANIFEST_PATH)
+        repository = policy.worktree_view(self.repository.root)
+
+        materialized = policy.materialize_public_generated_fixture(
+            "synthetic-generated-artifact",
+            repository=repository,
+        )
+
+        self.assertEqual(data, materialized)
+        manifest["fixtures"][0]["ci"]["mode"] = "excluded"
+        self.repository.write_json(policy.MANIFEST_PATH, manifest)
+        run_git(self.repository.root, "add", policy.MANIFEST_PATH)
+        with self.assertRaisesRegex(policy.ValidationError, "public generated fixture"):
+            policy.materialize_public_generated_fixture(
+                "synthetic-generated-artifact",
+                repository=policy.worktree_view(self.repository.root),
+            )
+
     def test_generator_symlink_and_unsafe_fixture_path_are_rejected(self) -> None:
         self.repository.write_text("tools/actual.py", "print('synthetic', end='')\n")
         (self.repository.root / "tools" / "generate_synthetic.py").symlink_to("actual.py")
@@ -1086,6 +1111,7 @@ class CliAndWorkflowTests(unittest.TestCase):
 
     def test_workflow_has_complete_checkout_dependencies_tests_and_all_heads(self) -> None:
         workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "core-ci.yml").read_text()
+        core_build = (REPOSITORY_ROOT / "core" / "build.gradle.kts").read_text()
         pull_request_types_match = re.search(
             r"(?m)^  pull_request:\n    types: \[([^\]]+)\]$",
             workflow,
@@ -1112,6 +1138,9 @@ class CliAndWorkflowTests(unittest.TestCase):
         self.assertIn('--base "${{ github.event.pull_request.base.sha }}"', workflow)
         self.assertIn('push-head=$GITHUB_SHA', workflow)
         self.assertIn("github.event.pull_request.base.sha || 'push'", workflow)
+        self.assertIn("materialize_public_generated_fixture", core_build)
+        self.assertNotIn("subprocess", core_build)
+        self.assertNotIn("generate_build041202_header.py", core_build)
 
 
 class FakeSandboxSetupHost:

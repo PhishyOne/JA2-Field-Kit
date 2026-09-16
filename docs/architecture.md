@@ -18,7 +18,10 @@ save bytes
   -> Android UI
 ```
 
-The current scaffold implements only the first, non-destructive structural probe and general little-endian primitives. It intentionally does not pretend that file length is enough to identify a save family.
+The current core implements the non-destructive structural probe, general
+little-endian primitives, and a narrow parser for the evidenced v103 /
+`Build 04.12.02` normal header. That parser is layout-specific and intentionally
+does not pretend that file length or header identity identifies a save family.
 
 ## Planned boundaries
 

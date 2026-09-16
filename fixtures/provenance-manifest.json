@@ -15,6 +15,7 @@
         "origin": "locally-supplied",
         "evidence": [
           "docs/save-format.md",
+          "docs/save-header-04.12.02.md",
           "docs/v0.1-scope.md"
         ]
       },
@@ -64,6 +65,85 @@
       "ci": {
         "mode": "local-only",
         "reason": "The real save is absent from the public repository and must not be supplied to hosted CI."
+      },
+      "input_policy": "read-only"
+    },
+    {
+      "id": "synthetic-build-04.12.02-header-v1",
+      "category": "synthetic",
+      "description": "Project-authored 432-byte v103 / Build 04.12.02 normal-header sentinel; not a real save or evidence of save-family detection.",
+      "source": {
+        "family": "UNKNOWN",
+        "save_version": 103,
+        "product": "Synthetic normal-header layout vector",
+        "build": "04.12.02",
+        "platform": "normal Windows/Stracciatella-style header layout",
+        "origin": "project-generated",
+        "evidence": [
+          "docs/save-header-04.12.02.md",
+          "Independent project-authored sentinel recipe in tools/generate_build041202_header.py; it reads no save or external input."
+        ]
+      },
+      "artifact": {
+        "storage": "generated",
+        "path": null,
+        "generator": {
+          "kind": "python-stdout",
+          "location": "tools/generate_build041202_header.py",
+          "recipe": "v1: start with 432 zero bytes; write the documented sentinel fields at literal offsets in little-endian order, the ASCII build identity, and a UTF-16LE synthetic description; opaque bytes at 276 are de ad be ef, at 308 are a0 through a6, at 315 are 7f, and at 324..431 are (offset * 37 + 11) & 255. The generator is the complete deterministic recipe."
+        },
+        "identity": {
+          "status": "verified",
+          "size_bytes": 432,
+          "sha256": "11197fd30eee5aaea7f7689549fb0a757a0e765d5245739bb24fd175cf35d4c8"
+        }
+      },
+      "derivation": null,
+      "redistribution": {
+        "status": "approved-for-repository",
+        "basis": "Project-authored deterministic sentinel bytes containing no real/private save data and no copied implementation text. This is operational fixture admission only; the repository still has no license.",
+        "review_reference": "PR #19 issue-4 reconstruction synthetic-header review"
+      },
+      "expected": {
+        "outcome": "success",
+        "completeness": "partial",
+        "basis": "Header-only synthetic expectations. Unit tests assert every mapped field and opaque range; the vector does not validate a full SaveInspection, identify a save family, or represent a real campaign.",
+        "assertions": [
+          {
+            "json_pointer": "/format/saveVersion",
+            "operator": "equals",
+            "value": 103
+          },
+          {
+            "json_pointer": "/format/buildLabel",
+            "operator": "equals",
+            "value": "04.12.02"
+          },
+          {
+            "json_pointer": "/campaign/day",
+            "operator": "equals",
+            "value": 270544960
+          },
+          {
+            "json_pointer": "/campaign/clockMinutes",
+            "operator": "equals",
+            "value": 1132
+          },
+          {
+            "json_pointer": "/campaign/playerMercCount",
+            "operator": "equals",
+            "value": 90
+          },
+          {
+            "json_pointer": "/campaign/balance",
+            "operator": "equals",
+            "value": -123456789
+          }
+        ]
+      },
+      "ci": {
+        "mode": "public",
+        "reason": "Only deterministic project-authored bytes; the current validator sandbox materializes and identity-checks them before core tests consume them."
       },
       "input_policy": "read-only"
     }

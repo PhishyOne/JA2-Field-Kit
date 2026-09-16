@@ -119,6 +119,7 @@ class GeneratorDeclaration:
     location: str
     size_bytes: int
     sha256: str
+    ci_mode: str
 
 
 @dataclass(frozen=True)
@@ -815,7 +816,15 @@ def validate_document(
             if location in generator_locations:
                 raise ValidationError("manifest contains a duplicate generator location")
             generator_locations.add(location)
-            generators.append(GeneratorDeclaration(fixture_id, location, identity.size_bytes, identity.sha256))
+            generators.append(
+                GeneratorDeclaration(
+                    fixture_id,
+                    location,
+                    identity.size_bytes,
+                    identity.sha256,
+                    ci_mode,
+                )
+            )
 
     for fixture_id, parent_digests in derivation_parents.items():
         if fixture_id in parent_digests:
@@ -1325,7 +1334,12 @@ def _sandbox_command(snapshot: Path, generator_path: str, seccomp_fd: int) -> li
     return command
 
 
-def _run_generator(snapshot: Path, declaration: GeneratorDeclaration) -> GeneratorMeasurement:
+def _run_generator(
+    snapshot: Path,
+    declaration: GeneratorDeclaration,
+    *,
+    capture_output: bool = False,
+) -> tuple[GeneratorMeasurement, bytes | None]:
     maximum_output = declaration.size_bytes + 1
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as seccomp_program:
         seccomp_program.write(_seccomp_network_filter())
@@ -1358,23 +1372,88 @@ def _run_generator(snapshot: Path, declaration: GeneratorDeclaration) -> Generat
         declaration.sha256,
         f"fixture {declaration.fixture_id} generator output",
     )
-    return GeneratorMeasurement(
-        declaration.fixture_id,
-        declaration.location,
-        len(data),
-        hashlib.sha256(data).hexdigest(),
+    return (
+        GeneratorMeasurement(
+            declaration.fixture_id,
+            declaration.location,
+            len(data),
+            hashlib.sha256(data).hexdigest(),
+        ),
+        data if capture_output else None,
     )
+
+
+def _execute_generators(
+    repository: RepositoryView,
+    declarations: Sequence[GeneratorDeclaration],
+    *,
+    capture_fixture_id: str | None = None,
+) -> tuple[str, tuple[GeneratorMeasurement, ...], bytes | None]:
+    with tempfile.TemporaryDirectory(prefix="fixture-admission-") as directory:
+        snapshot = Path(directory)
+        digest = _materialize_snapshot(repository, snapshot)
+        measurements: list[GeneratorMeasurement] = []
+        captured: bytes | None = None
+        for declaration in declarations:
+            measurement, data = _run_generator(
+                snapshot,
+                declaration,
+                capture_output=declaration.fixture_id == capture_fixture_id,
+            )
+            measurements.append(measurement)
+            if data is not None:
+                captured = data
+    return digest, tuple(measurements), captured
 
 
 def _measure_generators(
     repository: RepositoryView,
     declarations: Sequence[GeneratorDeclaration],
 ) -> tuple[str, tuple[GeneratorMeasurement, ...]]:
-    with tempfile.TemporaryDirectory(prefix="fixture-admission-") as directory:
-        snapshot = Path(directory)
-        digest = _materialize_snapshot(repository, snapshot)
-        measurements = tuple(_run_generator(snapshot, declaration) for declaration in declarations)
+    digest, measurements, _captured = _execute_generators(repository, declarations)
     return digest, measurements
+
+
+def materialize_public_generated_fixture(
+    fixture_id: str,
+    *,
+    repository: RepositoryView | None = None,
+) -> bytes:
+    """Return one verified public generator output from the exact worktree snapshot.
+
+    Every manifested generator is still run through the existing Bubblewrap,
+    network, seccomp, resource-limit, and identity authority. This is a
+    worktree convenience for test-resource consumers, not immutable admission.
+    """
+    if repository is None:
+        repository = worktree_view(ROOT)
+    if repository.historical:
+        raise ValidationError("generated test-resource materialization is worktree-only")
+    schema = load_json_bytes(
+        repository.read_bytes(SCHEMA_PATH, "tracked worktree fixture schema"),
+        SCHEMA_PATH,
+    )
+    manifest = load_json_bytes(
+        repository.read_bytes(MANIFEST_PATH, "tracked worktree fixture manifest"),
+        MANIFEST_PATH,
+    )
+    document = validate_document(manifest, schema=schema)
+    candidates = [
+        declaration
+        for declaration in document.generators
+        if declaration.fixture_id == fixture_id and declaration.ci_mode == "public"
+    ]
+    if len(candidates) != 1:
+        raise ValidationError("requested fixture is not one public generated fixture")
+    validate_repository_view(document, repository, check_local_files=False)
+    _snapshot_digest_value, _measurements, data = _execute_generators(
+        repository,
+        document.generators,
+        capture_fixture_id=fixture_id,
+    )
+    if data is None:  # Defensive: declaration selection above makes this unreachable.
+        raise ValidationError("requested public generated fixture was not materialized")
+    return data
 
 
 def validate(

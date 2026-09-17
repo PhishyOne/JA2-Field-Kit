@@ -214,18 +214,12 @@ class NormalNonLinuxProfileFramerTest {
             val laptopStart =
                 EVENT_DATA_OFFSET +
                     eventCount.toInt() * SaveLayoutFacts.NORMAL_NON_LINUX_STRATEGIC_EVENT_SIZE
-            save[
-                laptopStart + SaveLayoutFacts.NORMAL_NON_LINUX_BOBBY_RAY_ORDER_ARRAY_SIZE_OFFSET
-            ] = 9
-            save[
-                laptopStart + SaveLayoutFacts.NORMAL_NON_LINUX_BOBBY_RAY_ORDER_USED_COUNT_OFFSET
-            ] = orderUsedCount.toByte()
-            save[
-                laptopStart + SaveLayoutFacts.NORMAL_NON_LINUX_INSURANCE_PAYOUT_ARRAY_SIZE_OFFSET
-            ] = 7
-            save[
-                laptopStart + SaveLayoutFacts.NORMAL_NON_LINUX_INSURANCE_PAYOUT_USED_COUNT_OFFSET
-            ] = payoutUsedCount.toByte()
+            save[laptopStart + FIXTURE_BOBBY_RAY_ORDER_ARRAY_SIZE_OFFSET] = 9
+            save[laptopStart + FIXTURE_BOBBY_RAY_ORDER_USED_COUNT_OFFSET] =
+                orderUsedCount.toByte()
+            save[laptopStart + FIXTURE_INSURANCE_PAYOUT_ARRAY_SIZE_OFFSET] = 7
+            save[laptopStart + FIXTURE_INSURANCE_PAYOUT_USED_COUNT_OFFSET] =
+                payoutUsedCount.toByte()
             encryptedProfiles.copyInto(save, profileStart)
         }
     }
@@ -272,5 +266,10 @@ class NormalNonLinuxProfileFramerTest {
         const val EVENT_DATA_OFFSET = 819
         const val PROFILE_VECTOR_CIPHERTEXT_OFFSET = 121769
         const val PROFILE_VECTOR_CIPHERTEXT_END = 243489
+        // Test-owned format oracle: keep these independent of the production offsets under test.
+        const val FIXTURE_BOBBY_RAY_ORDER_ARRAY_SIZE_OFFSET = 7276
+        const val FIXTURE_BOBBY_RAY_ORDER_USED_COUNT_OFFSET = 7277
+        const val FIXTURE_INSURANCE_PAYOUT_ARRAY_SIZE_OFFSET = 7284
+        const val FIXTURE_INSURANCE_PAYOUT_USED_COUNT_OFFSET = 7285
     }
 }

@@ -57,6 +57,10 @@ status, 5-byte current sector, 62-byte game clock, little-endian `u32` event
 count, `count * 28` strategic-event bytes, and 7440-byte fixed laptop block.
 With both laptop used counts zero, the encrypted 170-by-716-byte profile table
 therefore begins at `8259 + count * 28` and occupies exactly 121720 bytes.
+The frame's `profileStartOffset` and `profileEndExclusive` are zero-based
+absolute byte offsets into the supplied save; the start is inclusive and the
+end is exclusive. Truncation diagnostics likewise report the zero-based
+absolute exclusive boundary as `requiredEndExclusive`.
 
 Every boundary is checked before narrowing an offset or copying bytes. A
 nonzero Bobby Ray order-used count or insurance payout-used count is reported

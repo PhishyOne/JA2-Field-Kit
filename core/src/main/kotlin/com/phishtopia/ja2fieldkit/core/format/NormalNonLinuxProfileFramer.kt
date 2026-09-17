@@ -17,29 +17,37 @@ enum class ProfileFramingStage {
     PROFILE_TABLE,
 }
 
-/** Structural diagnostics only: no payload, plaintext, key material, names, or paths. */
+/**
+ * Structural diagnostics only: no payload, plaintext, key material, names, or paths.
+ *
+ * [requiredEndExclusive], when present, is the exclusive end of the required byte range, expressed
+ * as a zero-based absolute byte offset into the supplied save.
+ */
 class ProfileFramingException(
     val reason: ProfileFramingFailure,
     val stage: ProfileFramingStage,
     val actualSize: Int,
-    val requiredEndOffset: Long? = null,
+    val requiredEndExclusive: Long? = null,
     val eventCount: Long? = null,
     val bobbyRayOrderUsedCount: Int? = null,
     val insurancePayoutUsedCount: Int? = null,
 ) : IllegalArgumentException(
     "Normal non-Linux Build 04.12.02 profile framing: $reason at $stage " +
-        "(size=$actualSize, requiredEnd=$requiredEndOffset, events=$eventCount, " +
+        "(size=$actualSize, requiredEndExclusive=$requiredEndExclusive, events=$eventCount, " +
         "orderUsed=$bobbyRayOrderUsedCount, payoutUsed=$insurancePayoutUsedCount)",
 )
 
 /**
  * A framed encrypted MERCPROFILESTRUCT table and its normal non-Linux layout metadata.
  *
+ * [profileStartOffset] and [profileEndExclusive] are zero-based absolute byte offsets into the
+ * supplied save. The start is inclusive and [profileEndExclusive] is exclusive.
+ *
  * The encrypted bytes are snapshotted on construction and copied on every access.
  */
 class EncryptedProfileFrame internal constructor(
     val profileStartOffset: Int,
-    val profileEndOffset: Int,
+    val profileEndExclusive: Int,
     val eventCount: Long,
     val bobbyRayOrderArraySize: Int,
     val bobbyRayOrderUsedCount: Int,
@@ -52,7 +60,7 @@ class EncryptedProfileFrame internal constructor(
     init {
         require(profileStartOffset >= 0) { "Profile start offset must be non-negative" }
         require(
-            profileEndOffset.toLong() - profileStartOffset.toLong() ==
+            profileEndExclusive.toLong() - profileStartOffset.toLong() ==
                 SaveLayoutFacts.MERC_PROFILE_BLOCK_SIZE.toLong(),
         ) {
             "Profile offsets must span the exact encrypted profile-table size"
@@ -66,7 +74,8 @@ class EncryptedProfileFrame internal constructor(
         get() = encryptedProfileSnapshot.copyOf()
 
     override fun toString(): String =
-        "EncryptedProfileFrame(start=$profileStartOffset, end=$profileEndOffset, " +
+        "EncryptedProfileFrame(profileStartOffset=$profileStartOffset, " +
+            "profileEndExclusive=$profileEndExclusive, " +
             "events=$eventCount, encryptedProfiles=${encryptedProfileSnapshot.size} bytes)"
 }
 
@@ -175,7 +184,7 @@ object NormalNonLinuxProfileFramer {
         val profileEndInt = profileEnd.toInt()
         return EncryptedProfileFrame(
             profileStartOffset = profileStartInt,
-            profileEndOffset = profileEndInt,
+            profileEndExclusive = profileEndInt,
             eventCount = eventCount,
             bobbyRayOrderArraySize = orderArraySize,
             bobbyRayOrderUsedCount = orderUsedCount,
@@ -196,16 +205,16 @@ object NormalNonLinuxProfileFramer {
 
     private fun requireAvailable(
         saveBytes: ByteArray,
-        requiredEndOffset: Long,
+        requiredEndExclusive: Long,
         stage: ProfileFramingStage,
         eventCount: Long? = null,
     ) {
-        if (requiredEndOffset > saveBytes.size.toLong()) {
+        if (requiredEndExclusive > saveBytes.size.toLong()) {
             throw ProfileFramingException(
                 reason = ProfileFramingFailure.TRUNCATED_INPUT,
                 stage = stage,
                 actualSize = saveBytes.size,
-                requiredEndOffset = requiredEndOffset,
+                requiredEndExclusive = requiredEndExclusive,
                 eventCount = eventCount,
             )
         }

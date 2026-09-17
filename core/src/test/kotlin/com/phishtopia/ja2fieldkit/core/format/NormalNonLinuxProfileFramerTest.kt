@@ -23,7 +23,10 @@ class NormalNonLinuxProfileFramerTest {
 
             val expectedStart = expectedProfileStart(eventCount)
             assertEquals(expectedStart, frame.profileStartOffset)
-            assertEquals(expectedStart + SaveLayoutFacts.MERC_PROFILE_BLOCK_SIZE, frame.profileEndOffset)
+            assertEquals(
+                expectedStart + SaveLayoutFacts.MERC_PROFILE_BLOCK_SIZE,
+                frame.profileEndExclusive,
+            )
             assertEquals(eventCount, frame.eventCount)
             assertEquals(9, frame.bobbyRayOrderArraySize)
             assertEquals(0, frame.bobbyRayOrderUsedCount)
@@ -59,7 +62,7 @@ class NormalNonLinuxProfileFramerTest {
             assertEquals(ProfileFramingFailure.TRUNCATED_INPUT, error.reason)
             assertEquals(case.stage, error.stage)
             assertEquals(case.inputSize, error.actualSize)
-            assertEquals(case.requiredEnd, error.requiredEndOffset)
+            assertEquals(case.requiredEndExclusive, error.requiredEndExclusive)
         }
     }
 
@@ -81,7 +84,7 @@ class NormalNonLinuxProfileFramerTest {
             val error = framingFailure(complete.copyOf(size))
             assertEquals(ProfileFramingFailure.TRUNCATED_INPUT, error.reason)
             assertEquals(ProfileFramingStage.PROFILE_TABLE, error.stage)
-            assertEquals(complete.size.toLong(), error.requiredEndOffset)
+            assertEquals(complete.size.toLong(), error.requiredEndExclusive)
             assertEquals(142L, error.eventCount)
         }
     }
@@ -99,9 +102,9 @@ class NormalNonLinuxProfileFramerTest {
             assertEquals(
                 EVENT_DATA_OFFSET.toLong() +
                     eventCount * SaveLayoutFacts.NORMAL_NON_LINUX_STRATEGIC_EVENT_SIZE,
-                error.requiredEndOffset,
+                error.requiredEndExclusive,
             )
-            assertTrue(checkNotNull(error.requiredEndOffset) > Int.MAX_VALUE.toLong())
+            assertTrue(checkNotNull(error.requiredEndExclusive) > Int.MAX_VALUE.toLong())
         }
     }
 
@@ -112,7 +115,7 @@ class NormalNonLinuxProfileFramerTest {
         val frame = NormalNonLinuxProfileFramer.frameBuild041202(save)
 
         assertEquals(expectedProfileStart(1), frame.profileStartOffset)
-        assertEquals(expectedProfileStart(1) + encryptedProfiles.size, frame.profileEndOffset)
+        assertEquals(expectedProfileStart(1) + encryptedProfiles.size, frame.profileEndExclusive)
         assertContentEquals(encryptedProfiles, frame.encryptedProfileBytes)
     }
 
@@ -131,7 +134,7 @@ class NormalNonLinuxProfileFramerTest {
 
             assertEquals(ProfileFramingFailure.UNSUPPORTED_DYNAMIC_LAPTOP_TAIL, error.reason)
             assertEquals(ProfileFramingStage.LAPTOP_FIXED_BLOCK, error.stage)
-            assertEquals(null, error.requiredEndOffset)
+            assertEquals(null, error.requiredEndExclusive)
             assertEquals(1L, error.eventCount)
             assertEquals(orderUsed, error.bobbyRayOrderUsedCount)
             assertEquals(payoutUsed, error.insurancePayoutUsedCount)
@@ -165,13 +168,14 @@ class NormalNonLinuxProfileFramerTest {
         assertEquals(
             "Normal non-Linux Build 04.12.02 profile framing: " +
                 "UNSUPPORTED_DYNAMIC_LAPTOP_TAIL at LAPTOP_FIXED_BLOCK " +
-                "(size=129979, requiredEnd=null, events=0, orderUsed=3, payoutUsed=0)",
+                "(size=129979, requiredEndExclusive=null, events=0, orderUsed=3, payoutUsed=0)",
             error.message,
         )
         assertTrue(marker !in error.toString())
         assertTrue("/" !in error.toString())
         assertEquals(
-            "EncryptedProfileFrame(start=8259, end=129979, events=0, " +
+            "EncryptedProfileFrame(profileStartOffset=8259, " +
+                "profileEndExclusive=129979, events=0, " +
                 "encryptedProfiles=121720 bytes)",
             NormalNonLinuxProfileFramer.frameBuild041202(syntheticSave(0)).toString(),
         )
@@ -260,7 +264,7 @@ class NormalNonLinuxProfileFramerTest {
         val inputSize: Int,
         val eventCount: Long,
         val stage: ProfileFramingStage,
-        val requiredEnd: Long,
+        val requiredEndExclusive: Long,
     )
 
     private companion object {

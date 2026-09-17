@@ -44,9 +44,31 @@ block. Tests use project-authored synthetic selector and decryption vectors.
 The repository does **not** contain the production 49-byte rotation-table
 contents or an independently admissible real encrypted-block vector, so this
 slice does not yet prove production decryption or fully satisfy issue #5.
-Encrypted block locations and merc-profile field offsets also remain
-unimplemented. Each later slice must be independently evidenced and tested
-rather than inferred from the structural header result.
+Full-save encrypted block locations and merc-profile field offsets were not
+established by the earlier encryption slice. Each later slice must be
+independently evidenced and tested rather than inferred from the structural
+header result; the bounded location now implemented below is one such slice.
+
+## Bounded encrypted-profile framing
+
+For the explicitly normal, non-Linux v103 / `Build 04.12.02` layout, the
+read-only framer now advances through the 432-byte header, 316-byte tactical
+status, 5-byte current sector, 62-byte game clock, little-endian `u32` event
+count, `count * 28` strategic-event bytes, and 7440-byte fixed laptop block.
+With both laptop used counts zero, the encrypted 170-by-716-byte profile table
+therefore begins at `8259 + count * 28` and occupies exactly 121720 bytes.
+The frame's `profileStartOffset` and `profileEndExclusive` are zero-based
+absolute byte offsets into the supplied save; the start is inclusive and the
+end is exclusive. Truncation diagnostics likewise report the zero-based
+absolute exclusive boundary as `requiredEndExclusive`.
+
+Every boundary is checked before narrowing an offset or copying bytes. A
+nonzero Bobby Ray order-used count or insurance payout-used count is reported
+as an unsupported dynamic laptop tail; the framer does not skip or infer those
+platform-layout-dependent structures. Later save sections may trail the exact
+profile range. This slice does not detect save families or Linux layouts, scan
+for ciphertext, decrypt profiles, parse roster semantics, or support dynamic
+laptop tails.
 
 ## Compatibility strategy
 

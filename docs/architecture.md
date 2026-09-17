@@ -25,9 +25,12 @@ little-endian primitives, a narrow parser for the evidenced v103 /
 selector and block transform. The bounded normal non-Linux path can also frame
 the encrypted profile table, recover its per-save rotation, decrypt each record,
 and return the minimal immutable profile model. Detection requires header,
-selector, framing, and bounded profile-consistency evidence; file length or
-header identity alone does not identify a supported family. Production rotation
-tables are not bundled; recovered rotation data is scoped to one inspection.
+selector, framing, bounded profile-consistency evidence, and an independently
+admitted digest for the exact selected rotation index; file length or header
+identity alone does not establish support. Producer family remains independent
+and currently unknown. Production rotation tables are not bundled; one
+non-secret table digest is admitted, and recovered rotation data is scoped to
+one inspection.
 
 ## Planned boundaries
 
@@ -37,7 +40,8 @@ Bounds-checked binary primitives and, later, seekable save input abstractions. N
 
 ### `core.format`
 
-Known layout facts, format/version detection, encryption selection, and family-specific adapters.
+Known layout facts, format/version compatibility, encryption selection, and
+adapters only where byte evidence establishes an actual divergence.
 
 A future stable adapter contract should expose logical parsing, not raw structure details, for example:
 

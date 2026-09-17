@@ -35,18 +35,21 @@ Reborn commit `743f38a6ca86c81893376c2576277db660320170`. The selector uses expl
 32-bit unsigned wrapping, the evidenced nested random branches, and the 19-entry
 option/difficulty banks. Header-to-selector conversion rejects non-`0`/`1`
 selector booleans, unsupported difficulty identities, and unsupported header
-identities instead of guessing. This conversion remains separate from save
-family detection.
+identities instead of guessing. Compatibility detection now binds that selected
+index to the recovered body rotation through a non-secret digest oracle. This
+binding establishes layout compatibility, not producer family.
 
 The transform accepts an exact expected block size, including a zero-byte
 no-op; zero is an API-valid block length, not a claim about a real serialized
 block. Tests use project-authored synthetic selector and decryption vectors.
 The repository does **not** contain the production 49-byte rotation-table
-contents or an independently admissible real encrypted-block vector. The
-rotation is instead recovered from each framed save and remains scoped to that
-inspection. Full-save encrypted block locations and merc-profile field offsets
-were not established by the earlier encryption slice; the bounded framing and
-profile decoding sections below independently establish those later slices.
+contents or an independently admissible real encrypted-block vector. It stores
+one SHA-256 identity for selector index `139`, derived from immutable upstream
+source, without storing table bytes. The rotation itself is recovered from each
+framed save and remains scoped to that inspection. Full-save encrypted block
+locations and merc-profile field offsets were not established by the earlier
+encryption slice; the bounded framing and profile decoding sections below
+independently establish those later slices.
 
 ## Bounded encrypted-profile framing
 
@@ -125,10 +128,13 @@ save-family detection.
 ## Compatibility strategy
 
 The implemented v0.1 decision matrix and deferred-family boundary are recorded
-in [`save-family-detection.md`](save-family-detection.md). Only the complete
-evidenced Reborn v103 / `Build 04.12.02` normal non-Linux path is currently
-classified as supported. Shared-header, truncated, contradictory, 1.13, and
-modded inputs do not fall through to that classification.
+in [`save-family-detection.md`](save-family-detection.md). Only a complete v103 /
+`Build 04.12.02` normal non-Linux path whose recovered rotation matches the
+admitted digest for its header-selected index is classified as compatible and
+`SUPPORTED`. Producer family remains `UNKNOWN`: the examined Reborn and
+Stracciatella evidence has no byte discriminator at this layer. Missing-oracle,
+shared-header, truncated, contradictory, 1.13, and modded inputs do not fall
+through to support.
 
 Target order:
 

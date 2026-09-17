@@ -12,41 +12,91 @@ import kotlin.test.assertTrue
 /** Detector constructions are project-authored and make no real-save-family claim. */
 class SaveFormatDetectorTest {
     private val header = resource("/fixtures/synthetic-build-04.12.02-header-v1.bin")
-    private val encryptedProfiles =
+    private val recoveryVector =
         resource("/fixtures/synthetic-build-04.12.02-profile-recovery-v1.bin")
-            .copyOfRange(PROFILE_VECTOR_CIPHERTEXT_OFFSET, PROFILE_VECTOR_CIPHERTEXT_END)
+    private val encryptedProfiles = recoveryVector.copyOfRange(
+        PROFILE_VECTOR_CIPHERTEXT_OFFSET,
+        PROFILE_VECTOR_CIPHERTEXT_END,
+    )
 
     @Test
-    fun supportsOnlyTheCompleteEvidencedRebornPath() {
+    fun oracleMatchForSharedRebornStracciatellaLayoutDoesNotAttributeProducerFamily() {
         val save = syntheticSave(eventCount = 2)
 
-        val result = Ja2SaveInspector().detect(save)
+        val result = SaveFormatDetector.detect(save, oracle(139 to SYNTHETIC_ROTATION_DIGEST))
 
-        assertEquals(SaveFamily.JA2_REBORN, result.family)
-        assertEquals(SaveDetectionState.SUPPORTED, result.state)
-        assertEquals(
-            SaveDetectionReason.MATCHED_REBORN_BUILD_041202_NORMAL_NON_LINUX,
-            result.reason,
-        )
+        assertEquals(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX, result.layout)
+        assertEquals(SaveCompatibility.SUPPORTED, result.compatibility)
+        assertEquals(SaveFamily.UNKNOWN, result.family)
+        assertEquals(SaveDetectionReason.SELECTOR_BODY_ROTATION_MATCH, result.reason)
         assertEquals(103, result.saveVersion)
         assertEquals(103L, result.facts.rawSaveVersion)
         assertEquals("04.12.02", result.buildLabel)
         assertEquals("Build 04.12.02", result.facts.gameVersion)
         assertEquals(true, result.facts.selectorHeaderCompatible)
+        assertEquals(139, result.facts.selectedRotationIndex)
+        assertEquals(true, result.facts.rotationOracleAvailable)
+        assertEquals(true, result.facts.rotationDigestMatched)
         assertEquals(2L, result.facts.eventCount)
         assertEquals(expectedProfileStart(2), result.facts.profileStartOffset)
         assertEquals(expectedProfileStart(2) + encryptedProfiles.size, result.facts.profileEndExclusive)
         assertFailsWith<UnsupportedOperationException> {
             (result.evidence as MutableList<String>).clear()
         }
+        assertTrue(result.evidence.none { it.contains("Reborn", ignoreCase = true) })
     }
 
     @Test
-    fun exactIdentityWithoutACompleteHeaderIsOnlyPartial() {
+    fun publicOracleRejectsTheExactSyntheticCompositeWithoutAttributingFamily() {
+        val result = Ja2SaveInspector().detect(syntheticSave(eventCount = 0))
+
+        assertEquals(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX, result.layout)
+        assertEquals(SaveCompatibility.INCONSISTENT, result.compatibility)
+        assertEquals(SaveFamily.UNKNOWN, result.family)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, result.reason)
+        assertEquals(true, result.facts.rotationOracleAvailable)
+        assertEquals(false, result.facts.rotationDigestMatched)
+    }
+
+    @Test
+    fun selectorAffectingHeaderMutationWithSameBodyFailsClosed() {
+        val save = syntheticSave(eventCount = 0)
+        save[LOAD_SCREEN_ID_OFFSET] = (save[LOAD_SCREEN_ID_OFFSET] + 1).toByte()
+
+        val result = SaveFormatDetector.detect(
+            save,
+            oracle(
+                139 to SYNTHETIC_ROTATION_DIGEST,
+                149 to DIFFERENT_ROTATION_DIGEST,
+            ),
+        )
+
+        assertEquals(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX, result.layout)
+        assertEquals(SaveCompatibility.INCONSISTENT, result.compatibility)
+        assertEquals(SaveFamily.UNKNOWN, result.family)
+        assertEquals(149, result.facts.selectedRotationIndex)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, result.reason)
+    }
+
+    @Test
+    fun missingOracleLeavesStructuralMatchAsCandidate() {
+        val result = SaveFormatDetector.detect(syntheticSave(eventCount = 0), oracle())
+
+        assertEquals(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX, result.layout)
+        assertEquals(SaveCompatibility.CANDIDATE, result.compatibility)
+        assertEquals(SaveFamily.UNKNOWN, result.family)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_ORACLE_MISSING, result.reason)
+        assertEquals(false, result.facts.rotationOracleAvailable)
+        assertNull(result.facts.rotationDigestMatched)
+    }
+
+    @Test
+    fun exactIdentityWithoutACompleteHeaderIsTruncatedAndHasNoLayoutClaim() {
         val result = SaveFormatDetector.detect(header.copyOf(20))
 
         assertEquals(SaveFamily.UNKNOWN, result.family)
-        assertEquals(SaveDetectionState.PARTIALLY_SUPPORTED, result.state)
+        assertEquals(SaveLayout.UNKNOWN, result.layout)
+        assertEquals(SaveCompatibility.TRUNCATED, result.compatibility)
         assertEquals(SaveDetectionReason.TRUNCATED_RECOGNIZED_HEADER, result.reason)
         assertEquals(103, result.saveVersion)
         assertEquals("04.12.02", result.buildLabel)
@@ -64,7 +114,8 @@ class SaveFormatDetectorTest {
         for (bytes in listOf(knownVersionWrongBuild, wrongVersionKnownBuild)) {
             val result = SaveFormatDetector.detect(bytes)
             assertEquals(SaveFamily.UNKNOWN, result.family)
-            assertEquals(SaveDetectionState.CONTRADICTORY, result.state)
+            assertEquals(SaveLayout.UNKNOWN, result.layout)
+            assertEquals(SaveCompatibility.INCONSISTENT, result.compatibility)
             assertEquals(SaveDetectionReason.CONTRADICTORY_HEADER_IDENTITY, result.reason)
             assertNull(result.buildLabel)
             assertNull(result.facts.selectorHeaderCompatible)
@@ -76,7 +127,8 @@ class SaveFormatDetectorTest {
         }
         val unknown = SaveFormatDetector.detect(unrecognized)
         assertEquals(SaveFamily.UNKNOWN, unknown.family)
-        assertEquals(SaveDetectionState.UNKNOWN, unknown.state)
+        assertEquals(SaveLayout.UNKNOWN, unknown.layout)
+        assertEquals(SaveCompatibility.UNKNOWN, unknown.compatibility)
         assertEquals(SaveDetectionReason.UNKNOWN_HEADER_IDENTITY, unknown.reason)
         assertEquals(999, unknown.saveVersion)
         assertEquals("1.13 modded", unknown.facts.gameVersion)
@@ -91,7 +143,8 @@ class SaveFormatDetectorTest {
     fun fileSizeAndIncompleteIdentityNeverSelectAParser() {
         val large = ByteArray(1_000_000) { 0x5a }
         val largeResult = SaveFormatDetector.detect(large)
-        assertEquals(SaveDetectionState.UNKNOWN, largeResult.state)
+        assertEquals(SaveCompatibility.UNKNOWN, largeResult.compatibility)
+        assertEquals(SaveLayout.UNKNOWN, largeResult.layout)
         assertEquals(SaveFamily.UNKNOWN, largeResult.family)
 
         val short = header.copyOf(19)
@@ -107,16 +160,18 @@ class SaveFormatDetectorTest {
 
         val result = SaveFormatDetector.detect(bytes)
 
-        assertEquals(SaveDetectionState.PARTIALLY_SUPPORTED, result.state)
+        assertEquals(SaveCompatibility.UNSUPPORTED_VARIANT, result.compatibility)
+        assertEquals(SaveLayout.UNKNOWN, result.layout)
         assertEquals(SaveDetectionReason.UNSUPPORTED_SELECTOR_HEADER, result.reason)
         assertEquals(false, result.facts.selectorHeaderCompatible)
+        assertNull(result.facts.selectedRotationIndex)
         assertNull(result.facts.eventCount)
     }
 
     @Test
     fun reportsTruncationAndUnsupportedDynamicTailsWithoutGuessing() {
         val truncated = SaveFormatDetector.detect(header)
-        assertEquals(SaveDetectionState.PARTIALLY_SUPPORTED, truncated.state)
+        assertEquals(SaveCompatibility.TRUNCATED, truncated.compatibility)
         assertEquals(SaveDetectionReason.TRUNCATED_NORMAL_NON_LINUX_LAYOUT, truncated.reason)
         assertEquals(ProfileFramingStage.TACTICAL_STATUS, truncated.facts.framingStage)
         assertEquals(748L, truncated.facts.requiredEndExclusive)
@@ -124,7 +179,7 @@ class SaveFormatDetectorTest {
         val dynamicTail = syntheticSave(eventCount = 0, orderUsedCount = 1)
             .copyOf(expectedProfileStart(0))
         val dynamic = SaveFormatDetector.detect(dynamicTail)
-        assertEquals(SaveDetectionState.PARTIALLY_SUPPORTED, dynamic.state)
+        assertEquals(SaveCompatibility.UNSUPPORTED_VARIANT, dynamic.compatibility)
         assertEquals(SaveDetectionReason.UNSUPPORTED_DYNAMIC_LAPTOP_TAIL, dynamic.reason)
         assertEquals(0L, dynamic.facts.eventCount)
         assertEquals(ProfileFramingStage.LAPTOP_FIXED_BLOCK, dynamic.facts.framingStage)
@@ -132,17 +187,41 @@ class SaveFormatDetectorTest {
     }
 
     @Test
-    fun completeFramingWithoutProfileConsistencyIsNotSupported() {
-        val save = syntheticSave(eventCount = 0)
-        save[expectedProfileStart(0) + 80] =
-            (save[expectedProfileStart(0) + 80].toInt() xor 1).toByte()
+    fun reportsRotationConstraintNoCandidateAndAmbiguousBoundaries() {
+        val conflicting = syntheticSave(eventCount = 0).also {
+            it[expectedProfileStart(0) + 80] =
+                (it[expectedProfileStart(0) + 80].toInt() xor 1).toByte()
+        }
+        val conflictResult = SaveFormatDetector.detect(conflicting)
+        assertEquals(SaveCompatibility.INCONSISTENT, conflictResult.compatibility)
+        assertEquals(
+            SaveDetectionReason.PROFILE_ROTATION_CONSTRAINT_CONFLICT,
+            conflictResult.reason,
+        )
 
-        val result = SaveFormatDetector.detect(save)
+        val noCandidate = syntheticSave(eventCount = 0).also {
+            it[expectedProfileStart(0) + STORED_CHECKSUM_OFFSET] =
+                (it[expectedProfileStart(0) + STORED_CHECKSUM_OFFSET].toInt() xor 1).toByte()
+        }
+        val noCandidateResult = SaveFormatDetector.detect(noCandidate)
+        assertEquals(SaveCompatibility.INCONSISTENT, noCandidateResult.compatibility)
+        assertEquals(SaveDetectionReason.PROFILE_ROTATION_NO_CANDIDATE, noCandidateResult.reason)
 
-        assertEquals(SaveFamily.UNKNOWN, result.family)
-        assertEquals(SaveDetectionState.PARTIALLY_SUPPORTED, result.state)
-        assertEquals(SaveDetectionReason.PROFILE_ROTATION_NOT_CONFIRMED, result.reason)
-        assertEquals(expectedProfileStart(0), result.facts.profileStartOffset)
+        val ambiguityRecord = recoveryVector.copyOfRange(
+            PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_OFFSET,
+            PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_END,
+        )
+        val ambiguousProfiles = ByteArray(encryptedProfiles.size).also { block ->
+            repeat(NormalProfileRotationRecovery.RECORD_COUNT) { record ->
+                ambiguityRecord.copyInto(block, record * ambiguityRecord.size)
+            }
+        }
+        val ambiguousResult = SaveFormatDetector.detect(
+            syntheticSave(eventCount = 0, profiles = ambiguousProfiles),
+        )
+        assertEquals(SaveCompatibility.CANDIDATE, ambiguousResult.compatibility)
+        assertEquals(SaveDetectionReason.PROFILE_ROTATION_AMBIGUOUS, ambiguousResult.reason)
+        assertEquals(SaveFamily.UNKNOWN, ambiguousResult.family)
     }
 
     @Test
@@ -150,17 +229,22 @@ class SaveFormatDetectorTest {
         val save = syntheticSave(eventCount = 0)
         val before = save.copyOf()
 
-        val result = SaveFormatDetector.detect(save)
+        val result = SaveFormatDetector.detect(save, oracle(139 to SYNTHETIC_ROTATION_DIGEST))
 
         assertContentEquals(before, save)
         save.fill(0)
-        assertEquals(SaveDetectionState.SUPPORTED, result.state)
-        assertTrue(result.evidence.none { it.contains("Synthetic") })
+        assertEquals(SaveCompatibility.SUPPORTED, result.compatibility)
+        assertEquals(139, result.facts.selectedRotationIndex)
+        assertTrue(result.evidence.none { it.contains(SYNTHETIC_ROTATION_DIGEST) })
     }
 
-    private fun syntheticSave(eventCount: Long, orderUsedCount: Int = 0): ByteArray {
+    private fun syntheticSave(
+        eventCount: Long,
+        orderUsedCount: Int = 0,
+        profiles: ByteArray = encryptedProfiles,
+    ): ByteArray {
         val profileStart = expectedProfileStart(eventCount)
-        return ByteArray(profileStart + encryptedProfiles.size).also { save ->
+        return ByteArray(profileStart + profiles.size).also { save ->
             header.copyInto(save)
             save.putU32Le(EVENT_COUNT_OFFSET, eventCount)
             val laptopStart = EVENT_DATA_OFFSET +
@@ -168,8 +252,15 @@ class SaveFormatDetectorTest {
             save[laptopStart + FIXTURE_ORDER_ARRAY_SIZE_OFFSET] = 9
             save[laptopStart + FIXTURE_ORDER_USED_COUNT_OFFSET] = orderUsedCount.toByte()
             save[laptopStart + FIXTURE_PAYOUT_ARRAY_SIZE_OFFSET] = 7
-            encryptedProfiles.copyInto(save, profileStart)
+            profiles.copyInto(save, profileStart)
         }
+    }
+
+    private fun oracle(vararg entries: Pair<Int, String>): RotationDigestOracle {
+        val digests = entries.associate { (index, digest) ->
+            index to RotationTableDigest.parse(digest)
+        }
+        return RotationDigestOracle { index -> digests[index.value] }
     }
 
     private fun expectedProfileStart(eventCount: Long): Int =
@@ -196,8 +287,16 @@ class SaveFormatDetectorTest {
     private companion object {
         const val EVENT_COUNT_OFFSET = 815
         const val EVENT_DATA_OFFSET = 819
+        const val LOAD_SCREEN_ID_OFFSET = 302
+        const val STORED_CHECKSUM_OFFSET = 696
         const val PROFILE_VECTOR_CIPHERTEXT_OFFSET = 121769
         const val PROFILE_VECTOR_CIPHERTEXT_END = 243489
+        const val PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_OFFSET = 244205
+        const val PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_END = 244921
+        const val SYNTHETIC_ROTATION_DIGEST =
+            "6f2444fea06021ff6a7319adabd3e3ac31c1d7ecacd530c7f4c9110dbd17dd52"
+        const val DIFFERENT_ROTATION_DIGEST =
+            "78877fa898f0b4c45c9c33ae941e40617ad7c8657a307db62bc5691f92f4f60e"
         // Test-owned offsets intentionally do not reference production constants.
         const val FIXTURE_ORDER_ARRAY_SIZE_OFFSET = 7276
         const val FIXTURE_ORDER_USED_COUNT_OFFSET = 7277

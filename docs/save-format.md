@@ -79,9 +79,48 @@ structured parse failures, public synthetic coverage, and upstream provenance
 are recorded in
 [`profile-decode-v0.1.md`](profile-decode-v0.1.md).
 
-The output is the complete profile table. It is deliberately not called a
-roster: no profile-only hired/player-membership predicate has been independently
-established, and this slice does not inspect `SOLDIERTYPE`.
+The profile output is the complete profile table and is deliberately not called
+a roster: no profile-only hired/player-membership predicate has been
+independently established.
+
+## Membership-only soldier crossing
+
+For this same exact layout, the soldier stream begins at
+`EncryptedProfileFrame.profileEndExclusive`. The roster API validates the
+already-loaded tactical-status player range at absolute offsets 436 and 437 as
+exactly first ID `0` and last ID `19`; these offsets are zero-based absolute
+save offsets. It then walks exactly those 20 slots. Each slot begins with a
+plaintext active marker that must be `0` or `1`. An inactive slot ends there.
+Each active slot has one separately encrypted 2328-byte normal `SOLDIERTYPE`
+record, followed by a plaintext little-endian `u32` path-node count, exactly
+`count * 20` opaque path bytes, a plaintext `0`/`1` keyring marker, and 128
+opaque keyring bytes when the marker is `1`.
+
+Only these zero-based offsets within a decrypted soldier record are public
+format semantics for this slice:
+
+| Offset | Encoding | Membership/check purpose |
+| ---: | --- | --- |
+| 0 | `u8` | soldier ID; must equal outer slot |
+| 8 | LE `u32` | require `SOLDIER_PC` (`0x00000008`); classify `SOLDIER_VEHICLE` (`0x00008000`) |
+| 751 | `i8` | inner active; must be `1` |
+| 752 | `i8` | team; must be `OUR_TEAM` (`0`) |
+| 1825 | `u8` | profile record index, `0..169`, for non-vehicles |
+| 2208 | LE `u32` | mandatory soldier checksum |
+
+The checksum recurrence additionally reads signed stat bytes at 868, 917, 880,
+840, 886, 1377, 1372, 916, 1378, and 849 in the documented source order. Its
+19 inventory checksum inputs are the LE `u16` item at `12 + 36*j` and unsigned
+count at `14 + 36*j`. These are opaque integrity inputs only: the roster API
+does not return soldier condition or inventory data.
+
+Active vehicles are structurally validated, including checksum and framing,
+but excluded from roster membership. Non-vehicle profile IDs must be unique and
+are joined directly to the already-parsed record-indexed profile table. After
+all 20 slots have been scanned, the derived non-vehicle count must equal header
+`ubNumOfMercsOnPlayersTeam`. That header field is a cross-check only; it never
+controls slot framing or scan length. This explicitly scoped API does not claim
+save-family detection.
 
 ## Compatibility strategy
 

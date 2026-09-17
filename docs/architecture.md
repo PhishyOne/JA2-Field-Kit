@@ -18,15 +18,16 @@ save bytes
   -> Android UI
 ```
 
-The current core implements the non-destructive structural probe, general
+The current core implements the non-destructive structural probe, an
+[evidence-based fail-closed detector](save-family-detection.md), general
 little-endian primitives, a narrow parser for the evidenced v103 /
 `Build 04.12.02` normal header, and the source-derived normal encryption
 selector and block transform. The bounded normal non-Linux path can also frame
 the encrypted profile table, recover its per-save rotation, decrypt each record,
-and return the minimal immutable profile model. The parser is layout-specific
-and intentionally does not pretend that file length or header identity
-identifies a save family. Production rotation tables are not bundled; recovered
-rotation data is scoped to one inspection.
+and return the minimal immutable profile model. Detection requires header,
+selector, framing, and bounded profile-consistency evidence; file length or
+header identity alone does not identify a supported family. Production rotation
+tables are not bundled; recovered rotation data is scoped to one inspection.
 
 ## Planned boundaries
 

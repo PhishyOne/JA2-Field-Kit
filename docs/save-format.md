@@ -124,6 +124,12 @@ save-family detection.
 
 ## Compatibility strategy
 
+The implemented v0.1 decision matrix and deferred-family boundary are recorded
+in [`save-family-detection.md`](save-family-detection.md). Only the complete
+evidenced Reborn v103 / `Build 04.12.02` normal non-Linux path is currently
+classified as supported. Shared-header, truncated, contradictory, 1.13, and
+modded inputs do not fall through to that classification.
+
 Target order:
 
 1. JA2 Reborn

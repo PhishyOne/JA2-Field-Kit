@@ -28,6 +28,7 @@ See:
 - `docs/fixture-policy.md`
 - `docs/save-format.md`
 - `docs/save-header-04.12.02.md`
+- `docs/profile-decode-v0.1.md`
 - `docs/v0.1-scope.md`
 - `fixtures/README.md`
 

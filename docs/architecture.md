@@ -21,11 +21,12 @@ save bytes
 The current core implements the non-destructive structural probe, general
 little-endian primitives, a narrow parser for the evidenced v103 /
 `Build 04.12.02` normal header, and the source-derived normal encryption
-selector and block transform. The parser is layout-specific and intentionally
-does not pretend that file length or header identity identifies a save family.
-Rotation-table data stays behind a provider boundary: production tables are not
-bundled, and the transform is currently tested only with project-authored
-synthetic data rather than an admitted real encrypted block.
+selector and block transform. The bounded normal non-Linux path can also frame
+the encrypted profile table, recover its per-save rotation, decrypt each record,
+and return the minimal immutable profile model. The parser is layout-specific
+and intentionally does not pretend that file length or header identity
+identifies a save family. Production rotation tables are not bundled; recovered
+rotation data is scoped to one inspection.
 
 ## Planned boundaries
 
@@ -37,7 +38,7 @@ Bounds-checked binary primitives and, later, seekable save input abstractions. N
 
 Known layout facts, format/version detection, encryption selection, and family-specific adapters.
 
-A future internal adapter contract should expose logical parsing, not raw structure details, for example:
+A future stable adapter contract should expose logical parsing, not raw structure details, for example:
 
 ```text
 probe -> detect -> parseCampaignSummary -> parseRoster
@@ -48,6 +49,9 @@ Do not create separate adapters until fixture evidence shows the formats actuall
 ### `core.model`
 
 Immutable logical data consumed by UI: campaign summary, roster, merc stats, and later condition/inventory/economy models.
+
+The current `MercProfile` model is an exact 170-entry profile-table view. It is
+not a roster model and carries no inferred hired/player-membership state.
 
 ### future Android `app`
 

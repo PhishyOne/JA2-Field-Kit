@@ -42,12 +42,11 @@ The transform accepts an exact expected block size, including a zero-byte
 no-op; zero is an API-valid block length, not a claim about a real serialized
 block. Tests use project-authored synthetic selector and decryption vectors.
 The repository does **not** contain the production 49-byte rotation-table
-contents or an independently admissible real encrypted-block vector, so this
-slice does not yet prove production decryption or fully satisfy issue #5.
-Full-save encrypted block locations and merc-profile field offsets were not
-established by the earlier encryption slice. Each later slice must be
-independently evidenced and tested rather than inferred from the structural
-header result; the bounded location now implemented below is one such slice.
+contents or an independently admissible real encrypted-block vector. The
+rotation is instead recovered from each framed save and remains scoped to that
+inspection. Full-save encrypted block locations and merc-profile field offsets
+were not established by the earlier encryption slice; the bounded framing and
+profile decoding sections below independently establish those later slices.
 
 ## Bounded encrypted-profile framing
 
@@ -66,9 +65,23 @@ Every boundary is checked before narrowing an offset or copying bytes. A
 nonzero Bobby Ray order-used count or insurance payout-used count is reported
 as an unsupported dynamic laptop tail; the framer does not skip or infer those
 platform-layout-dependent structures. Later save sections may trail the exact
-profile range. This slice does not detect save families or Linux layouts, scan
-for ciphertext, decrypt profiles, parse roster semantics, or support dynamic
-laptop tails.
+profile range. The framer itself does not detect save families or Linux layouts,
+scan for ciphertext, decrypt profiles, parse roster semantics, or support
+dynamic laptop tails.
+
+## Read-only profile decode
+
+The whole-save profile API now composes the framer with the save-derived
+rotation recovery and explicit-table decryptor. It decrypts each of the 170
+records as a separate 716-byte operation and parses only names, profile life
+and maximum life, and the requested core stats. Exact offsets, encodings,
+structured parse failures, public synthetic coverage, and upstream provenance
+are recorded in
+[`profile-decode-v0.1.md`](profile-decode-v0.1.md).
+
+The output is the complete profile table. It is deliberately not called a
+roster: no profile-only hired/player-membership predicate has been independently
+established, and this slice does not inspect `SOLDIERTYPE`.
 
 ## Compatibility strategy
 

@@ -30,7 +30,8 @@ admitted digest for the exact selected rotation index; file length or header
 identity alone does not establish support. Producer family remains independent
 and currently unknown. Production rotation tables are not bundled; one
 non-secret table digest is admitted, and recovered rotation data is scoped to
-one inspection.
+one inspection. Every layout-specific interpretation method on the public
+inspector enforces that same detector result before returning parsed data.
 
 ## Planned boundaries
 

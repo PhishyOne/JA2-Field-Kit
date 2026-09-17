@@ -73,6 +73,13 @@ index, oracle presence/match booleans, event count, framing boundaries, and
 failure stage. They never retain save bytes, descriptions, profile plaintext,
 names, paths, recovered rotation material, or digest values.
 
+All layout-specific interpretation methods on `Ja2SaveInspector` snapshot the
+input and apply this detector before returning a header, encrypted-profile
+frame, profile table, or roster. They continue only for exactly `SUPPORTED`
+plus `NORMAL_V103_BUILD_041202_NON_LINUX`; every other compatibility fails with
+sanitized enum diagnostics. Lower-level format primitives remain explicit
+research and unit-test boundaries and do not replace this public admission.
+
 ## Evidence limits
 
 The authorized Android Stracciatella fixture is verified and local-only. Its

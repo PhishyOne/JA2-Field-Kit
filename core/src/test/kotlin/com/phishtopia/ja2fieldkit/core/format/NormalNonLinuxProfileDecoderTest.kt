@@ -1,9 +1,12 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
+import com.phishtopia.ja2fieldkit.core.SaveInterpretationAdmissionException
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 /** The whole-save inputs are assembled only from admitted project-authored synthetic resources. */
 class NormalNonLinuxProfileDecoderTest {
@@ -16,9 +19,13 @@ class NormalNonLinuxProfileDecoderTest {
     fun publicApiFramesRecoversDecryptsAndParsesEveryRecord() {
         val plaintext = withValidSyntheticNames(basePlaintext)
         val save = syntheticSave(encryptRecords(plaintext), eventCount = 2)
+        val inspector = admittedInspector()
 
-        val profiles = Ja2SaveInspector().parseBuild041202NormalNonLinuxProfiles(save)
+        val detection = inspector.detect(save)
+        val profiles = inspector.parseBuild041202NormalNonLinuxProfiles(save)
 
+        assertEquals(SaveCompatibility.SUPPORTED, detection.compatibility)
+        assertEquals(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX, detection.layout)
         assertEquals(170, profiles.size)
         assertEquals((0 until 170).toList(), profiles.map { it.profileId })
         assertEquals("Synthetic 0", profiles.first().name)
@@ -42,6 +49,30 @@ class NormalNonLinuxProfileDecoderTest {
     }
 
     @Test
+    fun publicApiRejectsTheSameHeaderBodyDigestMismatchAsDetectionWithoutMutation() {
+        val privateMarker = "PRIVATE_NAME_PATH_OR_SAVE_CONTENT"
+        val save = syntheticSave(
+            encryptRecords(withValidSyntheticNames(basePlaintext)),
+            0,
+        ) + privateMarker.encodeToByteArray()
+        val original = save.copyOf()
+        val inspector = Ja2SaveInspector()
+
+        val detection = inspector.detect(save)
+        val failure = assertFailsWith<SaveInterpretationAdmissionException> {
+            inspector.parseBuild041202NormalNonLinuxProfiles(save)
+        }
+
+        assertEquals(SaveCompatibility.INCONSISTENT, detection.compatibility)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, detection.reason)
+        assertEquals(detection.compatibility, failure.compatibility)
+        assertEquals(detection.layout, failure.layout)
+        assertEquals(detection.reason, failure.reason)
+        assertFalse(privateMarker in failure.toString())
+        assertContentEquals(original, save)
+    }
+
+    @Test
     fun oneByteWrongRecordAlignmentCannotSilentlyParse() {
         val ciphertext = encryptRecords(withValidSyntheticNames(basePlaintext))
         val shifted = ByteArray(ciphertext.size) { index ->
@@ -49,12 +80,12 @@ class NormalNonLinuxProfileDecoderTest {
         }
 
         assertFailsWith<ProfileRotationRecoveryException> {
-            Ja2SaveInspector().parseBuild041202NormalNonLinuxProfiles(syntheticSave(shifted, 0))
+            NormalNonLinuxProfileDecoder.decodeBuild041202(syntheticSave(shifted, 0))
         }
     }
 
     @Test
-    fun publicApiRejectsMalformedEncryptionSelectorHeaderInputs() {
+    fun lowerLevelDecoderRejectsMalformedEncryptionSelectorHeaderInputs() {
         val ciphertext = encryptRecords(withValidSyntheticNames(basePlaintext))
         val malformedInputs =
             listOf(
@@ -69,7 +100,7 @@ class NormalNonLinuxProfileDecoderTest {
             save[headerOffset] = rawValue.toByte()
 
             val error = assertFailsWith<InvalidEncryptionHeaderInputException>(fieldName) {
-                Ja2SaveInspector().parseBuild041202NormalNonLinuxProfiles(save)
+                NormalNonLinuxProfileDecoder.decodeBuild041202(save)
             }
 
             assertEquals(fieldName, error.fieldName)
@@ -121,6 +152,17 @@ class NormalNonLinuxProfileDecoderTest {
         }
     }
 
+    private fun admittedInspector(): Ja2SaveInspector =
+        Ja2SaveInspector.withRotationDigestOracleForTesting(
+            RotationDigestOracle { index ->
+                if (index.value == 139) {
+                    RotationTableDigest.from(SaveRotationTable.fromBytes(key))
+                } else {
+                    null
+                }
+            },
+        )
+
     private fun ByteArray.putUtf16Le(offset: Int, codeUnits: Int, value: String) {
         val encoded = value.toCharArray()
         require(encoded.size < codeUnits)
@@ -138,4 +180,5 @@ class NormalNonLinuxProfileDecoderTest {
     private fun resource(path: String): ByteArray =
         checkNotNull(javaClass.getResourceAsStream(path)) { "Synthetic test resource is missing" }
             .use { it.readBytes() }
+
 }

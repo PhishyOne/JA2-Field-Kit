@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
+import com.phishtopia.ja2fieldkit.core.SaveInterpretationAdmissionException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -56,6 +57,27 @@ class SaveFormatDetectorTest {
         assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, result.reason)
         assertEquals(true, result.facts.rotationOracleAvailable)
         assertEquals(false, result.facts.rotationDigestMatched)
+    }
+
+    @Test
+    fun publicInterpretationRejectsEveryNonSupportedCompatibility() {
+        val candidate = syntheticSave(eventCount = 0).also {
+            it[LOAD_SCREEN_ID_OFFSET] = (it[LOAD_SCREEN_ID_OFFSET] + 1).toByte()
+        }
+        val cases = listOf(
+            SaveCompatibility.CANDIDATE to candidate,
+            SaveCompatibility.INCONSISTENT to syntheticSave(eventCount = 0),
+            SaveCompatibility.TRUNCATED to header,
+            SaveCompatibility.UNSUPPORTED_VARIANT to header.copyOf().also { it[303] = 2 },
+            SaveCompatibility.UNKNOWN to ByteArray(20),
+        )
+
+        for ((compatibility, bytes) in cases) {
+            val failure = assertFailsWith<SaveInterpretationAdmissionException> {
+                Ja2SaveInspector().parseBuild041202NormalNonLinuxProfiles(bytes)
+            }
+            assertEquals(compatibility, failure.compatibility)
+        }
     }
 
     @Test

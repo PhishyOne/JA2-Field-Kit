@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
+import com.phishtopia.ja2fieldkit.core.SaveInterpretationAdmissionException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -53,11 +54,13 @@ class SaveHeaderParserTest {
     }
 
     @Test
-    fun publicEntryPointRemainsLayoutSpecificAndReadOnly() {
-        assertEquals(
-            SaveHeaderParser.parseBuild041202(syntheticBuild041202Header()),
-            Ja2SaveInspector().parseBuild041202Header(syntheticBuild041202Header()),
-        )
+    fun publicEntryPointRequiresWholeSaveDetectorAdmission() {
+        val failure = assertFailsWith<SaveInterpretationAdmissionException> {
+            Ja2SaveInspector().parseBuild041202Header(syntheticBuild041202Header())
+        }
+
+        assertEquals(SaveCompatibility.TRUNCATED, failure.compatibility)
+        assertEquals(SaveDetectionReason.TRUNCATED_NORMAL_NON_LINUX_LAYOUT, failure.reason)
     }
 
     @Test

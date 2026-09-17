@@ -9,6 +9,9 @@ import com.phishtopia.ja2fieldkit.core.model.MercProfile
 object NormalNonLinuxProfileDecoder {
     fun decodeBuild041202(saveBytes: ByteArray): List<MercProfile> {
         val frame = NormalNonLinuxProfileFramer.frameBuild041202(saveBytes)
+        NormalEncryptionHeaderInputs.fromBuild041202(
+            SaveHeaderParser.parseBuild041202(saveBytes),
+        )
         val encryptedProfiles = frame.encryptedProfileBytes
         val rotation = NormalProfileRotationRecovery.recoverBuild041202(encryptedProfiles)
         val decryptedProfiles = ByteArray(NormalProfileRotationRecovery.BLOCK_SIZE)

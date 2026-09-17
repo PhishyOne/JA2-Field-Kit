@@ -53,6 +53,30 @@ class NormalNonLinuxProfileDecoderTest {
         }
     }
 
+    @Test
+    fun publicApiRejectsMalformedEncryptionSelectorHeaderInputs() {
+        val ciphertext = encryptRecords(withValidSyntheticNames(basePlaintext))
+        val malformedInputs =
+            listOf(
+                Triple(300, 2, "alternateSector"),
+                Triple(303, 2, "gunNut"),
+                Triple(304, 0xff, "sciFi"),
+                Triple(305, 0, "difficultyLevel"),
+            )
+
+        malformedInputs.forEach { (headerOffset, rawValue, fieldName) ->
+            val save = syntheticSave(ciphertext, eventCount = 0)
+            save[headerOffset] = rawValue.toByte()
+
+            val error = assertFailsWith<InvalidEncryptionHeaderInputException>(fieldName) {
+                Ja2SaveInspector().parseBuild041202NormalNonLinuxProfiles(save)
+            }
+
+            assertEquals(fieldName, error.fieldName)
+            assertEquals(rawValue, error.rawValue)
+        }
+    }
+
     private fun withValidSyntheticNames(source: ByteArray): ByteArray =
         source.copyOf().also { plaintext ->
             repeat(170) { record ->

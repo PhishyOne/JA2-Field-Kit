@@ -76,10 +76,31 @@ The table contains all 170 profiles, not the player's hired roster. Although
 the profile structure contains assorted status and flags, the pinned evidence
 does not independently establish a profile-only predicate that reproduces
 current hired/player membership. Upstream code uses active `SOLDIERTYPE`
-records for such runtime membership checks. Those records are explicitly out
-of scope here, so this API does not filter, label, count, or guess roster
-members. Establishing acceptable independent roster evidence remains a later
-Issue #6 tranche.
+records for such runtime membership checks.
+
+The separate public
+`Ja2SaveInspector.parseBuild041202NormalNonLinuxRoster` method now performs the
+justified membership-only crossing for the exact supported layout. One internal
+invocation context frames the save and recovers the rotation once; profile and
+soldier records use that same invocation-local table, and every record remains
+a separate decrypt operation/reset. The table is neither returned nor cached.
+
+The crossing scans canonical slots 0 through 19, requires the plaintext and
+inner active values to agree, verifies soldier ID, `OUR_TEAM`, `SOLDIER_PC`, and
+the mandatory wrapping `u32` soldier checksum, excludes vehicles, requires
+unique profile indices `0..169`, and joins by record index. Path and keyring
+payloads are bounds-checked framing only. Header player-merc count is checked
+against the final derived non-vehicle count after all slots; it is not used to
+decide how many slots to read.
+
+Full active-condition parsing remains outside v0.1: no current life or other
+condition, assignment, sector, tactical inventory, path, or key semantics are
+modeled or returned. The stat and inventory bytes involved in the source
+checksum remain opaque integrity inputs. Roster `MercStats.health` is the core
+profile attribute `bLifeMax`; the separately parsed profile `bLife` is not used
+as active-soldier condition. This method is explicitly layout scoped and makes
+no save-family-detection claim. Issue #6 remains open pending candidate and
+authorized private acceptance of the known roster.
 
 ## Public tests and privacy
 
@@ -92,3 +113,11 @@ iteration, signed-byte behavior, exact-size rejection, malformed UTF-16, and a
 one-byte wrong-alignment rejection. No real save bytes, private names, private
 paths, production rotations, binaries, or extracted proprietary content are
 included.
+
+Roster tests add a test-owned soldier serializer with literal offsets, checksum
+recurrence, and forward encryption; production parser constants are not reused.
+They cover sparse and exactly 18-member teams, vehicle exclusion, profile joins,
+record resets, every identity/checksum failure, malformed markers and tails,
+large path counts, truncation, duplicate/invalid profiles, canonical team range,
+header-count cross-checking, immutability, and payload-free diagnostics. They do
+not interpret condition, inventory, path, or key semantics.

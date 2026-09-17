@@ -4,10 +4,12 @@ import com.phishtopia.ja2fieldkit.core.format.EncryptedProfileFrame
 import com.phishtopia.ja2fieldkit.core.format.HeaderProbe
 import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxProfileDecoder
 import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxProfileFramer
+import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxRosterDecoder
 import com.phishtopia.ja2fieldkit.core.format.SaveHeader
 import com.phishtopia.ja2fieldkit.core.format.SaveHeaderParser
 import com.phishtopia.ja2fieldkit.core.format.SaveHeaderProbe
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
+import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
 
 /**
  * Public read-only entry point for the parser core.
@@ -32,4 +34,11 @@ class Ja2SaveInspector {
      */
     fun parseBuild041202NormalNonLinuxProfiles(bytes: ByteArray): List<MercProfile> =
         NormalNonLinuxProfileDecoder.decodeBuild041202(bytes)
+
+    /**
+     * Return current non-vehicle player-team mercs for the evidenced normal non-Linux layout.
+     * Membership is joined to profiles by the validated serialized profile index.
+     */
+    fun parseBuild041202NormalNonLinuxRoster(bytes: ByteArray): List<MercRosterEntry> =
+        NormalNonLinuxRosterDecoder.decodeBuild041202(bytes)
 }

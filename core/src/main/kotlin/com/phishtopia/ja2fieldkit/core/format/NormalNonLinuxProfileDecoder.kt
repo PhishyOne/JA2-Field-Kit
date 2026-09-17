@@ -7,11 +7,14 @@ import com.phishtopia.ja2fieldkit.core.model.MercProfile
  * layout. The recovered rotation belongs only to this invocation and is not retained or cached.
  */
 object NormalNonLinuxProfileDecoder {
-    fun decodeBuild041202(saveBytes: ByteArray): List<MercProfile> {
+    fun decodeBuild041202(saveBytes: ByteArray): List<MercProfile> =
+        decodeContextBuild041202(saveBytes).profiles
+
+    /** Internal invocation-scoped composition; the recovered rotation never enters a public model. */
+    internal fun decodeContextBuild041202(saveBytes: ByteArray): DecodedProfileContext {
         val frame = NormalNonLinuxProfileFramer.frameBuild041202(saveBytes)
-        NormalEncryptionHeaderInputs.fromBuild041202(
-            SaveHeaderParser.parseBuild041202(saveBytes),
-        )
+        val header = SaveHeaderParser.parseBuild041202(saveBytes)
+        NormalEncryptionHeaderInputs.fromBuild041202(header)
         val encryptedProfiles = frame.encryptedProfileBytes
         val rotation = NormalProfileRotationRecovery.recoverBuild041202(encryptedProfiles)
         val decryptedProfiles = ByteArray(NormalProfileRotationRecovery.BLOCK_SIZE)
@@ -26,6 +29,18 @@ object NormalNonLinuxProfileDecoder {
             ).copyInto(decryptedProfiles, start)
         }
 
-        return NormalMercProfileParser.parseBuild041202(decryptedProfiles)
+        return DecodedProfileContext(
+            header = header,
+            frame = frame,
+            profiles = NormalMercProfileParser.parseBuild041202(decryptedProfiles),
+            rotation = rotation,
+        )
     }
 }
+
+internal data class DecodedProfileContext(
+    val header: SaveHeader,
+    val frame: EncryptedProfileFrame,
+    val profiles: List<MercProfile>,
+    val rotation: SaveRotationTable,
+)

@@ -112,7 +112,10 @@ object InspectionPresentationMapper {
     private fun mapFormat(format: SaveInspectionFormat): FormatPresentation =
         FormatPresentation(
             version = format.saveVersion?.toString() ?: "Unknown",
-            build = format.buildLabel ?: "Unknown",
+            build = format.buildLabel
+                ?.let(PresentationTextSanitizer::sanitize)
+                ?.takeUnless(String::isBlank)
+                ?: "Unknown",
             layout = when (format.layout) {
                 SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX ->
                     "Normal non-Linux v103"
@@ -135,8 +138,10 @@ object InspectionPresentationMapper {
         )
 
     private fun mapMerc(merc: MercRosterEntry): MercPresentation = MercPresentation(
-        name = merc.name,
-        nickname = merc.nickname,
+        name = PresentationTextSanitizer.sanitize(merc.name)
+            .takeUnless(String::isBlank)
+            ?: "Unknown merc",
+        nickname = merc.nickname?.let(PresentationTextSanitizer::sanitize),
         stats = listOf(
             StatPresentation("Health", merc.stats.health.display()),
             StatPresentation("Agility", merc.stats.agility.display()),
@@ -153,6 +158,31 @@ object InspectionPresentationMapper {
     )
 
     private fun Int?.display(): String = this?.toString() ?: "Unknown"
+}
+
+/** Removes text controls at the boundary where save data becomes retained screen state. */
+private object PresentationTextSanitizer {
+    fun sanitize(value: String): String = buildString(value.length) {
+        var index = 0
+        while (index < value.length) {
+            val codePoint = Character.codePointAt(value, index)
+            if (isUnsafe(codePoint)) {
+                append(' ')
+            } else {
+                appendCodePoint(codePoint)
+            }
+            index += Character.charCount(codePoint)
+        }
+    }
+
+    private fun isUnsafe(codePoint: Int): Boolean = when (Character.getType(codePoint)) {
+        Character.CONTROL.toInt(),
+        Character.FORMAT.toInt(),
+        Character.LINE_SEPARATOR.toInt(),
+        Character.PARAGRAPH_SEPARATOR.toInt(),
+        -> true
+        else -> false
+    }
 }
 
 enum class SourceFailureKind {

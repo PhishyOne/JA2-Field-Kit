@@ -48,6 +48,64 @@ class InspectionPresentationMapperTest {
     }
 
     @Test
+    fun sanitizesControlAndBidiCharactersBeforeRetainingMercPresentation() {
+        val rawName = "I\n\r\t\u202Era\u2066\u2069"
+        val rawNickname = "F\u202Eox\n\u2066\u2069"
+
+        val state = assertIs<InspectionScreenState.Success>(
+            InspectionPresentationMapper.map(source, successResult(rawName, rawNickname)),
+        )
+
+        assertEquals("I    ra  ", state.roster.single().name)
+        assertEquals("F ox   ", state.roster.single().nickname)
+        assertEquals(false, state.toString().contains(rawName))
+        assertEquals(false, state.toString().contains(rawNickname))
+        assertEquals(false, state.toString().any(::isUnsafePresentationCharacter))
+    }
+
+    @Test
+    fun preservesOrdinaryAccentedAndNonLatinMercText() {
+        val state = assertIs<InspectionScreenState.Success>(
+            InspectionPresentationMapper.map(source, successResult("Zoë 李", "Éclair・猫")),
+        )
+
+        assertEquals("Zoë 李", state.roster.single().name)
+        assertEquals("Éclair・猫", state.roster.single().nickname)
+    }
+
+    @Test
+    fun substitutesFallbackForBlankOrAllUnsafeMercNames() {
+        val unsafe = assertIs<InspectionScreenState.Success>(
+            InspectionPresentationMapper.map(source, successResult("\n\u202E\u2066\u2069", "\t")),
+        )
+        val blank = assertIs<InspectionScreenState.Success>(
+            InspectionPresentationMapper.map(source, successResult("   ", null)),
+        )
+
+        assertEquals("Unknown merc", unsafe.roster.single().name)
+        assertEquals(" ", unsafe.roster.single().nickname)
+        assertEquals("Unknown merc", blank.roster.single().name)
+        assertEquals(null, blank.roster.single().nickname)
+    }
+
+    @Test
+    fun sanitizesSaveDerivedBuildLabelWithDeterministicFallback() {
+        val sanitized = assertIs<InspectionScreenState.Success>(
+            InspectionPresentationMapper.map(
+                source,
+                successResult(buildLabel = "04.12\n\u202E\u2066\u2069.02"),
+            ),
+        )
+        val fallback = assertIs<InspectionScreenState.Success>(
+            InspectionPresentationMapper.map(source, successResult(buildLabel = "\r\t\u202E")),
+        )
+
+        assertEquals("04.12    .02", sanitized.format.build)
+        assertEquals("Unknown", fallback.format.build)
+        assertEquals(false, sanitized.toString().any(::isUnsafePresentationCharacter))
+    }
+
+    @Test
     fun unsupportedTruncatedAndCorruptFailuresRemainDistinct() {
         val cases = listOf(
             SaveInspectionFailureKind.UNSUPPORTED_VARIANT to SaveInspectionDiagnostic.VARIANT_UNSUPPORTED,
@@ -82,29 +140,47 @@ class InspectionPresentationMapperTest {
         failure = SaveInspectionFailure(kind, diagnostic),
     )
 
-    private fun successResult(): SaveInspectionV01Result.Success {
+    private fun successResult(
+        name: String = "Ira",
+        nickname: String? = "Ira",
+        buildLabel: String? = "04.12.02",
+    ): SaveInspectionV01Result.Success {
         val constructor = SaveInspectionV01Result.Success::class.java.declaredConstructors
             .single { it.parameterCount == 3 }
             .apply { isAccessible = true }
         return constructor.newInstance(
-            format(SaveCompatibility.SUPPORTED),
+            format(SaveCompatibility.SUPPORTED, buildLabel),
             CampaignSummaryV01(12, 7, 5, CampaignSector(9, 4, 0), 1, 45_000),
             listOf(
                 MercRosterEntry(
                     profileIndex = 1,
-                    name = "Ira",
-                    nickname = "Ira",
+                    name = name,
+                    nickname = nickname,
                     stats = MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90),
                 ),
             ),
         ) as SaveInspectionV01Result.Success
     }
 
-    private fun format(compatibility: SaveCompatibility) = SaveInspectionFormat(
+    private fun format(
+        compatibility: SaveCompatibility,
+        buildLabel: String? = "04.12.02",
+    ) = SaveInspectionFormat(
         layout = SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,
         compatibility = compatibility,
         family = SaveFamily.UNKNOWN,
         saveVersion = 103,
-        buildLabel = "04.12.02",
+        buildLabel = buildLabel,
     )
+
+    private fun isUnsafePresentationCharacter(character: Char): Boolean = when (
+        Character.getType(character)
+    ) {
+        Character.CONTROL.toInt(),
+        Character.FORMAT.toInt(),
+        Character.LINE_SEPARATOR.toInt(),
+        Character.PARAGRAPH_SEPARATOR.toInt(),
+        -> true
+        else -> false
+    }
 }

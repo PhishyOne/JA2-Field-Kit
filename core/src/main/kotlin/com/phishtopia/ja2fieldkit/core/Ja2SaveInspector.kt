@@ -5,6 +5,8 @@ import com.phishtopia.ja2fieldkit.core.format.HeaderProbe
 import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxProfileDecoder
 import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxProfileFramer
 import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxRosterDecoder
+import com.phishtopia.ja2fieldkit.core.format.RosterMembershipException
+import com.phishtopia.ja2fieldkit.core.format.RosterMembershipFailure
 import com.phishtopia.ja2fieldkit.core.format.RotationDigestOracle
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveDetectionReason
@@ -103,6 +105,11 @@ class Ja2SaveInspector private constructor(
                     balance = header.balance,
                 ),
                 roster = roster,
+            )
+        } catch (error: RosterMembershipException) {
+            SaveInspectionV01Result.Failure(
+                format = format,
+                failure = error.toInspectionFailure(),
             )
         } catch (_: RuntimeException) {
             SaveInspectionV01Result.Failure(
@@ -206,6 +213,24 @@ class Ja2SaveInspector private constructor(
                     SaveInspectionDiagnostic.CONTENT_INCONSISTENT
             },
         )
+
+    private fun RosterMembershipException.toInspectionFailure(): SaveInspectionFailure =
+        if (
+            reason == RosterMembershipFailure.TRUNCATED_SOLDIER_RECORD ||
+            reason == RosterMembershipFailure.TRUNCATED_PATH_COUNT ||
+            reason == RosterMembershipFailure.TRUNCATED_PATH_DATA ||
+            reason == RosterMembershipFailure.TRUNCATED_KEYRING_DATA
+        ) {
+            SaveInspectionFailure(
+                kind = SaveInspectionFailureKind.TRUNCATED_INPUT,
+                diagnostic = SaveInspectionDiagnostic.LAYOUT_TRUNCATED,
+            )
+        } else {
+            SaveInspectionFailure(
+                kind = SaveInspectionFailureKind.CORRUPT_INPUT,
+                diagnostic = SaveInspectionDiagnostic.CONTENT_CORRUPT,
+            )
+        }
 
     private fun unknownInspectionFormat(): SaveInspectionFormat = SaveInspectionFormat(
         layout = SaveLayout.UNKNOWN,

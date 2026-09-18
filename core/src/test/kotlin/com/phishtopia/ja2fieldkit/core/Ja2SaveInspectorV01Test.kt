@@ -127,6 +127,35 @@ class Ja2SaveInspectorV01Test {
     }
 
     @Test
+    fun admittedRosterTailTruncationsReturnSanitizedTruncatedFailures() {
+        val save = syntheticSave(listOf(7, 42))
+        val soldierStart = PROFILE_END + 1
+        val pathCountStart = soldierStart + SOLDIER_RECORD_SIZE
+        val pathDataStart = pathCountStart + 4
+        val cases = listOf(
+            "soldier record" to save.copyOf(soldierStart + SOLDIER_RECORD_SIZE - 1),
+            "path count" to save.copyOf(pathCountStart + 3),
+            "path data" to save.copyOf().also { it.putU32Le(pathCountStart, 1) }
+                .copyOf(pathDataStart + 19),
+            "keyring data" to save.copyOf().also { it[pathDataStart] = 1 }
+                .copyOf(pathDataStart + 1 + 127),
+        )
+
+        for ((variant, truncated) in cases) {
+            val original = truncated.copyOf()
+            val result = assertIs<SaveInspectionV01Result.Failure>(
+                admittedInspector().inspectV01(truncated),
+                variant,
+            )
+
+            assertEquals(SaveCompatibility.SUPPORTED, result.format.compatibility, variant)
+            assertEquals(SaveInspectionFailureKind.TRUNCATED_INPUT, result.failure.kind, variant)
+            assertEquals(SaveInspectionDiagnostic.LAYOUT_TRUNCATED, result.failure.diagnostic, variant)
+            assertContentEquals(original, truncated, variant)
+        }
+    }
+
+    @Test
     fun publicV01ModelsDoNotExposeParserOrCryptographicInternals() {
         val modelTypes = listOf(
             com.phishtopia.ja2fieldkit.core.model.SaveInspectionFormat::class.java,

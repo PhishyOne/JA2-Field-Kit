@@ -134,17 +134,26 @@ internal fun interface RotationDigestOracle {
 /**
  * Minimal public-build oracle derived from the exact immutable upstream source.
  *
- * Only index 139 is admitted. The repository stores its digest, never the corresponding 49 bytes.
+ * Only indexes 124 and 139 are admitted. The repository stores their digests, never the
+ * corresponding 49-byte rows.
  * Provenance: RealTommyGreen/JA2-Reborn commit 743f38a6ca86c81893376c2576277db660320170,
  * src/game/Tactical/Tactical_Save.cc blob 5640f1a623f609f973020b0a617bbc00b2dafe75.
+ * Matching either digest establishes selector/body identity, not producer family.
  */
-private object Build041202RotationDigestOracle : RotationDigestOracle {
+internal object Build041202RotationDigestOracle : RotationDigestOracle {
+    private val index124 = RotationTableDigest.parse(
+        "384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306",
+    )
     private val index139 = RotationTableDigest.parse(
         "b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc",
     )
 
     override fun digestFor(index: NormalRotationTableIndex): RotationTableDigest? =
-        if (index.value == 139) index139 else null
+        when (index.value) {
+            124 -> index124
+            139 -> index139
+            else -> null
+        }
 }
 
 /** Evidence-based, fail-closed detector for the single currently evidenced layout. */

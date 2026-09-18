@@ -60,6 +60,45 @@ class SaveFormatDetectorTest {
     }
 
     @Test
+    fun productionOracleAdmitsOnlyPinnedDigestsForIndexes124And139() {
+        val admitted = (0 until NormalSaveEncryptionSelector.ROTATION_TABLE_COUNT)
+            .map(::NormalRotationTableIndex)
+            .mapNotNull { index ->
+                Build041202RotationDigestOracle.digestFor(index)?.let { index.value to it }
+            }
+
+        assertEquals(
+            listOf(
+                124 to RotationTableDigest.parse(
+                    "384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306",
+                ),
+                139 to RotationTableDigest.parse(
+                    "b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc",
+                ),
+            ),
+            admitted,
+        )
+    }
+
+    @Test
+    fun publicOracleTreatsIndex124AsAdmittedWithoutAttributingFamily() {
+        val save = syntheticSave(eventCount = 0).also {
+            it.putU32Le(WORLD_DAY_OFFSET, 10)
+            it[LOAD_SCREEN_ID_OFFSET] = 8
+            it[DIFFICULTY_LEVEL_OFFSET] = 1
+        }
+
+        val result = Ja2SaveInspector().detect(save)
+
+        assertEquals(124, result.facts.selectedRotationIndex)
+        assertEquals(true, result.facts.rotationOracleAvailable)
+        assertEquals(false, result.facts.rotationDigestMatched)
+        assertEquals(SaveCompatibility.INCONSISTENT, result.compatibility)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, result.reason)
+        assertEquals(SaveFamily.UNKNOWN, result.family)
+    }
+
+    @Test
     fun publicInterpretationRejectsEveryNonSupportedCompatibility() {
         val candidate = syntheticSave(eventCount = 0).also {
             it[LOAD_SCREEN_ID_OFFSET] = (it[LOAD_SCREEN_ID_OFFSET] + 1).toByte()
@@ -309,7 +348,9 @@ class SaveFormatDetectorTest {
     private companion object {
         const val EVENT_COUNT_OFFSET = 815
         const val EVENT_DATA_OFFSET = 819
+        const val WORLD_DAY_OFFSET = 280
         const val LOAD_SCREEN_ID_OFFSET = 302
+        const val DIFFICULTY_LEVEL_OFFSET = 305
         const val STORED_CHECKSUM_OFFSET = 696
         const val PROFILE_VECTOR_CIPHERTEXT_OFFSET = 121769
         const val PROFILE_VECTOR_CIPHERTEXT_END = 243489

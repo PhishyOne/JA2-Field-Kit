@@ -91,20 +91,41 @@ class NormalNonLinuxRosterDecoderTest {
     }
 
     @Test
-    fun rejectsMalformedOuterActiveMarker() {
+    fun distinguishesMissingAndMalformedOuterActiveMarker() {
+        val missing = failure(
+            RosterMembershipFailure.TRUNCATED_ACTIVE_MARKER,
+            syntheticSave(emptyMap(), 0).copyOf(profileEnd()),
+            slot = 0,
+        )
+        assertTruncation(
+            missing,
+            RosterMembershipStage.ACTIVE_MARKER,
+            offset = profileEnd(),
+            requiredEndExclusive = profileEnd() + 1L,
+        )
+
         val save = syntheticSave(emptyMap(), 0)
         save[profileEnd()] = 2
-        failure(RosterMembershipFailure.INVALID_ACTIVE_MARKER, save, slot = 0)
+        val malformed = failure(RosterMembershipFailure.INVALID_ACTIVE_MARKER, save, slot = 0)
+        assertEquals(RosterMembershipStage.ACTIVE_MARKER, malformed.stage)
+        assertEquals(profileEnd().toLong(), malformed.absoluteOffset)
+        assertEquals(null, malformed.requiredEndExclusive)
     }
 
     @Test
     fun rejectsTruncatedSoldierRecord() {
         val complete = syntheticSave(mapOf(19 to SoldierSpec(4)), 1)
         val recordStart = profileEnd() + 20
-        failure(
+        val error = failure(
             RosterMembershipFailure.TRUNCATED_SOLDIER_RECORD,
             complete.copyOf(recordStart + 2327),
             slot = 19,
+        )
+        assertTruncation(
+            error,
+            RosterMembershipStage.SOLDIER_RECORD,
+            offset = recordStart,
+            requiredEndExclusive = recordStart + 2328L,
         )
     }
 
@@ -112,16 +133,29 @@ class NormalNonLinuxRosterDecoderTest {
     fun rejectsTruncatedPathCountAndHugeOrTruncatedPathData() {
         val complete = syntheticSave(mapOf(19 to SoldierSpec(4, pathNodeCount = 2)), 1)
         val pathCountOffset = profileEnd() + 20 + 2328
-        failure(
+        val pathCountError = failure(
             RosterMembershipFailure.TRUNCATED_PATH_COUNT,
             complete.copyOf(pathCountOffset + 3),
             slot = 19,
         )
-        failure(
+        assertTruncation(
+            pathCountError,
+            RosterMembershipStage.PATH_COUNT,
+            offset = pathCountOffset,
+            requiredEndExclusive = pathCountOffset + 4L,
+        )
+        val pathDataError = failure(
             RosterMembershipFailure.TRUNCATED_PATH_DATA,
             complete.copyOf(pathCountOffset + 4 + 39),
             slot = 19,
         )
+        assertTruncation(
+            pathDataError,
+            RosterMembershipStage.PATH_DATA,
+            offset = pathCountOffset + 4,
+            requiredEndExclusive = pathCountOffset + 4L + 40L,
+        )
+        assertEquals(2L, pathDataError.pathNodeCount)
 
         val huge = complete.copyOf(pathCountOffset + 4).also {
             it.putU32Le(pathCountOffset, 0xffff_ffffL)
@@ -132,17 +166,39 @@ class NormalNonLinuxRosterDecoderTest {
     }
 
     @Test
-    fun rejectsBadKeyringMarkerAndTruncatedKeyring() {
+    fun distinguishesMissingAndMalformedKeyringMarkerAndRejectsTruncatedKeyring() {
         val noKeys = syntheticSave(mapOf(19 to SoldierSpec(4)), 1)
         val markerOffset = profileEnd() + 20 + 2328 + 4
+        val missing = failure(
+            RosterMembershipFailure.TRUNCATED_KEYRING_MARKER,
+            noKeys.copyOf(markerOffset),
+            slot = 19,
+        )
+        assertTruncation(
+            missing,
+            RosterMembershipStage.KEYRING_MARKER,
+            offset = markerOffset,
+            requiredEndExclusive = markerOffset + 1L,
+        )
+
         noKeys[markerOffset] = 2
-        failure(RosterMembershipFailure.INVALID_KEYRING_MARKER, noKeys, slot = 19)
+        val malformed = failure(RosterMembershipFailure.INVALID_KEYRING_MARKER, noKeys, slot = 19)
+        assertEquals(RosterMembershipStage.KEYRING_MARKER, malformed.stage)
+        assertEquals(markerOffset.toLong(), malformed.absoluteOffset)
+        assertEquals(null, malformed.requiredEndExclusive)
 
         val withKeys = syntheticSave(mapOf(19 to SoldierSpec(4, hasKeyring = true)), 1)
-        failure(
+        val keyringDataStart = markerOffset + 1
+        val truncated = failure(
             RosterMembershipFailure.TRUNCATED_KEYRING_DATA,
             withKeys.copyOf(withKeys.size - 1),
             slot = 19,
+        )
+        assertTruncation(
+            truncated,
+            RosterMembershipStage.KEYRING_DATA,
+            offset = keyringDataStart,
+            requiredEndExclusive = keyringDataStart + 128L,
         )
     }
 
@@ -340,6 +396,17 @@ class NormalNonLinuxRosterDecoderTest {
             assertEquals(reason, it.reason)
             assertEquals(slot, it.slotIndex)
         }
+
+    private fun assertTruncation(
+        error: RosterMembershipException,
+        stage: RosterMembershipStage,
+        offset: Int,
+        requiredEndExclusive: Long,
+    ) {
+        assertEquals(stage, error.stage)
+        assertEquals(offset.toLong(), error.absoluteOffset)
+        assertEquals(requiredEndExclusive, error.requiredEndExclusive)
+    }
 
     private fun admittedInspector(): Ja2SaveInspector =
         Ja2SaveInspector.withRotationDigestOracleForTesting(

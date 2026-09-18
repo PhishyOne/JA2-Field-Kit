@@ -92,16 +92,16 @@ class MainActivity : ComponentActivity() {
                 content.addCampaign(screenState.campaign)
                 content.addHeading("Roster")
                 if (screenState.roster.isEmpty()) content.addBody("No roster members found.")
-                else screenState.roster.forEach(content::addMerc)
+                else screenState.roster.forEach { content.addMerc(it) }
                 content.addOpenButton(R.string.open_another_save)
             }
 
             is InspectionScreenState.Failure -> {
                 content.addHeading(screenState.title)
-                screenState.source?.let(content::addSource)
+                screenState.source?.let { content.addSource(it) }
                 content.addLabelValue("Failure kind", screenState.failureKind)
                 content.addLabelValue("Diagnostic", screenState.diagnostic)
-                screenState.format?.let(content::addFormat)
+                screenState.format?.let { content.addFormat(it) }
                 content.addBody("No save data was changed.")
                 content.addOpenButton(R.string.open_another_save)
             }

@@ -63,5 +63,10 @@ in-place write target. Issue #10 is not implemented or closed by this shell.
 - minSdk 23, matching the current AndroidX default baseline
 - AndroidX Activity 1.13.0 for Activity Result APIs and ViewModel ownership
 
+CI bootstraps Google's command-line-tools package `15859902` using its pinned
+published SHA-256, then installs only platform package `android-37.0` and the
+declared Build Tools into the ephemeral runner directory. No SDK or generated
+wrapper binary is checked in.
+
 The UI uses platform views and no Compose, navigation, persistence, network,
 analytics, dependency-injection, or background-work dependency.

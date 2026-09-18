@@ -56,6 +56,9 @@ jobs:
 
   test:
     runs-on: ubuntu-24.04
+    env:
+      ANDROID_HOME: ${{ runner.temp }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -85,13 +88,33 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Install pinned Android SDK packages
-        run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+      - name: Run core tests
+        run: gradle :core:test --no-daemon
 
-      - name: Run core and Android shell checks
+      - name: Install pinned Android command-line tools
+        env:
+          COMMAND_LINE_TOOLS_SHA256: 4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583
+        run: |
+          archive="$RUNNER_TEMP/commandlinetools-linux-15859902_latest.zip"
+          curl --fail --silent --show-error --location \
+            https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip \
+            --output "$archive"
+          echo "$COMMAND_LINE_TOOLS_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          python3 -m zipfile -e "$archive" "$ANDROID_SDK_ROOT/cmdline-tools"
+          mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          chmod u+x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+      - name: Install pinned Android SDK packages
+        run: |
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-37.0" "build-tools;36.0.0"
+
+      - name: Run Android shell checks
         run: >-
           gradle
-          :core:test
           :android-app:testDebugUnitTest
           :android-app:lintDebug
           :android-app:assembleDebug

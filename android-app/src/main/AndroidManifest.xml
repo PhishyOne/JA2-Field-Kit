@@ -20,6 +20,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data
+                    android:host="*"
                     android:mimeType="application/octet-stream"
                     android:pathPattern=".*\\.sav"
                     android:scheme="content" />
@@ -28,6 +29,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data
+                    android:host="*"
                     android:mimeType="application/x-ja2-save"
                     android:scheme="content" />
             </intent-filter>

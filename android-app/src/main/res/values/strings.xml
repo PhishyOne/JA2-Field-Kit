@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">JA2 Field Kit</string>
+    <string name="read_only_notice">Read-only inspection. Your original save is never modified.</string>
+    <string name="open_save">Open save</string>
+    <string name="open_another_save">Open another save</string>
+    <string name="loading_save">Reading and inspecting save…</string>
+    <string name="no_save_selected">Select a JA2 .sav file to inspect its campaign and roster.</string>
+</resources>

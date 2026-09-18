@@ -1,0 +1,164 @@
+package com.phishtopia.ja2fieldkit.android.presentation
+
+import com.phishtopia.ja2fieldkit.android.importing.SourceMetadata
+import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
+import com.phishtopia.ja2fieldkit.core.format.SaveFamily
+import com.phishtopia.ja2fieldkit.core.format.SaveLayout
+import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFormat
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailureKind
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
+import java.util.Locale
+
+sealed interface InspectionScreenState {
+    data object Initial : InspectionScreenState
+
+    data class Loading(val sourceName: String?) : InspectionScreenState
+
+    data class Success(
+        val source: SourceMetadata,
+        val format: FormatPresentation,
+        val campaign: CampaignPresentation,
+        val roster: List<MercPresentation>,
+    ) : InspectionScreenState
+
+    data class Failure(
+        val source: SourceMetadata?,
+        val title: String,
+        val failureKind: String,
+        val diagnostic: String,
+        val format: FormatPresentation?,
+    ) : InspectionScreenState
+}
+
+data class FormatPresentation(
+    val version: String,
+    val build: String,
+    val layout: String,
+    val compatibility: String,
+    val producer: String,
+)
+
+data class CampaignPresentation(
+    val dayAndTime: String,
+    val sector: String,
+    val rosterCount: String,
+    val balance: String,
+)
+
+data class MercPresentation(
+    val name: String,
+    val nickname: String?,
+    val stats: List<StatPresentation>,
+)
+
+data class StatPresentation(val label: String, val value: String)
+
+object InspectionPresentationMapper {
+    fun map(
+        source: SourceMetadata,
+        result: SaveInspectionV01Result,
+    ): InspectionScreenState = when (result) {
+        is SaveInspectionV01Result.Success -> InspectionScreenState.Success(
+            source = source,
+            format = mapFormat(result.format),
+            campaign = CampaignPresentation(
+                dayAndTime = "Day ${result.campaign.day}, " +
+                    String.format(Locale.ROOT, "%02d:%02d", result.campaign.hour, result.campaign.minute),
+                sector = "${result.campaign.sector.x}, ${result.campaign.sector.y}, " +
+                    "level ${result.campaign.sector.z}",
+                rosterCount = "${result.roster.size} shown " +
+                    "(${result.campaign.playerMercCount} recorded)",
+                balance = result.campaign.balance.toString(),
+            ),
+            roster = result.roster.map(::mapMerc),
+        )
+
+        is SaveInspectionV01Result.Failure -> InspectionScreenState.Failure(
+            source = source,
+            title = when (result.failure.kind) {
+                SaveInspectionFailureKind.UNKNOWN_FORMAT -> "Unknown save format"
+                SaveInspectionFailureKind.UNSUPPORTED_VARIANT -> "Unsupported save variant"
+                SaveInspectionFailureKind.TRUNCATED_INPUT -> "Truncated save"
+                SaveInspectionFailureKind.INCONSISTENT_INPUT -> "Inconsistent save"
+                SaveInspectionFailureKind.CORRUPT_INPUT -> "Corrupt save"
+            },
+            failureKind = result.failure.kind.name,
+            diagnostic = result.failure.diagnostic.name,
+            format = mapFormat(result.format),
+        )
+    }
+
+    fun sourceFailure(
+        source: SourceMetadata?,
+        kind: SourceFailureKind,
+    ): InspectionScreenState.Failure = InspectionScreenState.Failure(
+        source = source,
+        title = when (kind) {
+            SourceFailureKind.NOT_CONTENT_URI -> "Unsupported source"
+            SourceFailureKind.MULTIPLE_ITEMS -> "Share one save at a time"
+            SourceFailureKind.SIZE_LIMIT -> "Save is too large"
+            SourceFailureKind.UNAVAILABLE -> "Save could not be opened"
+            SourceFailureKind.READ_FAILED -> "Save could not be read"
+        },
+        failureKind = "SOURCE_${kind.name}",
+        diagnostic = when (kind) {
+            SourceFailureKind.SIZE_LIMIT -> "MAXIMUM_16_MIB"
+            else -> "CONTENT_URI_${kind.name}"
+        },
+        format = null,
+    )
+
+    private fun mapFormat(format: SaveInspectionFormat): FormatPresentation =
+        FormatPresentation(
+            version = format.saveVersion?.toString() ?: "Unknown",
+            build = format.buildLabel ?: "Unknown",
+            layout = when (format.layout) {
+                SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX ->
+                    "Normal non-Linux v103"
+                SaveLayout.UNKNOWN -> "Unknown"
+            },
+            compatibility = when (format.compatibility) {
+                SaveCompatibility.SUPPORTED -> "Supported"
+                SaveCompatibility.CANDIDATE -> "Candidate"
+                SaveCompatibility.TRUNCATED -> "Truncated"
+                SaveCompatibility.UNSUPPORTED_VARIANT -> "Unsupported variant"
+                SaveCompatibility.INCONSISTENT -> "Inconsistent"
+                SaveCompatibility.UNKNOWN -> "Unknown"
+            },
+            producer = when (format.family) {
+                SaveFamily.JA2_REBORN -> "JA2 Reborn"
+                SaveFamily.STRACCIATELLA -> "JA2 Stracciatella"
+                SaveFamily.CLASSIC -> "Classic JA2"
+                SaveFamily.UNKNOWN -> "Not established"
+            },
+        )
+
+    private fun mapMerc(merc: MercRosterEntry): MercPresentation = MercPresentation(
+        name = merc.name,
+        nickname = merc.nickname,
+        stats = listOf(
+            StatPresentation("Health", merc.stats.health.display()),
+            StatPresentation("Agility", merc.stats.agility.display()),
+            StatPresentation("Dexterity", merc.stats.dexterity.display()),
+            StatPresentation("Strength", merc.stats.strength.display()),
+            StatPresentation("Leadership", merc.stats.leadership.display()),
+            StatPresentation("Wisdom", merc.stats.wisdom.display()),
+            StatPresentation("Experience", merc.stats.experienceLevel.display()),
+            StatPresentation("Marksmanship", merc.stats.marksmanship.display()),
+            StatPresentation("Mechanical", merc.stats.mechanical.display()),
+            StatPresentation("Explosives", merc.stats.explosives.display()),
+            StatPresentation("Medical", merc.stats.medical.display()),
+        ),
+    )
+
+    private fun Int?.display(): String = this?.toString() ?: "Unknown"
+}
+
+enum class SourceFailureKind {
+    NOT_CONTENT_URI,
+    MULTIPLE_ITEMS,
+    SIZE_LIMIT,
+    UNAVAILABLE,
+    READ_FAILED,
+}

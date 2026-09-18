@@ -65,9 +65,17 @@ Immutable logical data consumed by UI: campaign summary, roster, merc stats, and
 The current `MercProfile` model is an exact 170-entry profile-table view. It is
 not a roster model and carries no inferred hired/player-membership state.
 
-### future Android `app`
+### Android `android-app`
 
-Owns Android Storage Access Framework integration, permissions, document picker, screens, and sharing/export. It should not know binary offsets or encryption rules.
+Owns Android Storage Access Framework integration, the document picker,
+content-URI reads, presentation mapping, and the screen. Its narrow importer
+collects a sanitized display name and optional provider size, then reads a
+maximum of 16 MiB. Only bytes enter `Ja2SaveInspector.inspectV01`; URI and
+provider details never enter core. Presentation state contains no offsets,
+rotation indexes, digests, keys, ciphertext, or parser exceptions.
+
+The current shell has no permissions, persistence, network, analytics, write,
+export, or URI-to-filesystem-path code. Share/export remains future scope.
 
 ## Failure policy
 
@@ -79,7 +87,6 @@ Owns Android Storage Access Framework integration, permissions, document picker,
 
 ## What we are deliberately not building yet
 
-- Android UI
 - inventory/item databases
 - active soldier decoding
 - save rewriting

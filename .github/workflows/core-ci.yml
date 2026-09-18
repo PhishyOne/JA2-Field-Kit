@@ -85,5 +85,14 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Run core tests
-        run: gradle :core:test --no-daemon
+      - name: Install pinned Android SDK packages
+        run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+
+      - name: Run core and Android shell checks
+        run: >-
+          gradle
+          :core:test
+          :android-app:testDebugUnitTest
+          :android-app:lintDebug
+          :android-app:assembleDebug
+          --no-daemon

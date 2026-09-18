@@ -6,13 +6,19 @@ JA2 Field Kit is intentionally separate from JA2 Reborn and from other game proj
 
 ## Current status
 
-The project is at the read-only core/scaffolding stage.
+The project has a first read-only Android shell over the v0.1 core.
 
 Milestone v0.1 is deliberately narrow:
 
 `open .sav -> detect format/version -> campaign summary -> roster -> merc stats`
 
 No save-writing API exists yet. Editing will only be added after reliable parse/rewrite/reread validation exists.
+
+The `android-app/` shell can select a save with Android's document picker and
+accept narrowly advertised open-with/share-to content URIs. It reads at most
+16 MiB, passes only a byte snapshot to `inspectV01`, and displays the source
+filename, format, campaign summary, roster, stats, or sanitized failure codes.
+It requests no storage permission and never writes, exports, or modifies a save.
 
 The core v0.1 presentation facade is
 `Ja2SaveInspector.inspectV01(ByteArray)`. It returns a sealed, sanitized result
@@ -23,7 +29,7 @@ offset, rotation, digest, key, or encryption details cross this facade.
 ## Architecture
 
 - `core/` is a pure Kotlin/JVM library with no Android dependencies.
-- Android UI will be added later as a consumer of `core`.
+- `android-app/` owns content-URI access and presentation; it contains no parser logic.
 - Save-family/version-specific logic belongs behind format adapters rather than leaking into UI code.
 - Binary parsing must be bounds-checked and fail closed on unknown/truncated input.
 - Original save files must never be overwritten by default once editing exists.
@@ -37,11 +43,13 @@ See:
 - `docs/save-header-04.12.02.md`
 - `docs/profile-decode-v0.1.md`
 - `docs/v0.1-scope.md`
+- `docs/android-read-only-shell.md`
 - `fixtures/README.md`
 
 ## Build
 
-The core build requires JDK 21. CI pins Gradle 9.5.0 and Kotlin 2.4.10.
+The build requires JDK 21. CI pins Gradle 9.5.0, Kotlin 2.4.10, Android
+Gradle Plugin 9.3.2, Android API 37, and Build Tools 36.0.0.
 Fixture-policy validation additionally supports CPython 3.12 on Linux x86-64
 and uses a fully pinned, hashed dependency lock.
 
@@ -49,6 +57,7 @@ and uses a fully pinned, hashed dependency lock.
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements/fixture-validation.lock
 FIXTURE_VALIDATOR_PYTHON=.venv/bin/python gradle :core:test --no-daemon
+gradle :android-app:testDebugUnitTest :android-app:lintDebug :android-app:assembleDebug --no-daemon
 .venv/bin/python -m unittest discover -s tools/tests -v
 head_oid=$(git rev-parse HEAD)
 .venv/bin/python tools/validate_fixture_manifest.py \

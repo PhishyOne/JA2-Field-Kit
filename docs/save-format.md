@@ -44,8 +44,12 @@ no-op; zero is an API-valid block length, not a claim about a real serialized
 block. Tests use project-authored synthetic selector and decryption vectors.
 The repository does **not** contain the production 49-byte rotation-table
 contents or an independently admissible real encrypted-block vector. It stores
-one SHA-256 identity for selector index `139`, derived from immutable upstream
-source, without storing table bytes. The rotation itself is recovered from each
+SHA-256 identities for selector indexes `124` and `139`, both derived from
+`src/game/Tactical/Tactical_Save.cc` at immutable upstream commit
+`743f38a6ca86c81893376c2576277db660320170` and exact source blob
+`5640f1a623f609f973020b0a617bbc00b2dafe75`, without storing either row's
+bytes. These identities establish selector/body matches only; index `124` does
+not establish producer family. The rotation itself is recovered from each
 framed save and remains scoped to that inspection. Full-save encrypted block
 locations and merc-profile field offsets were not established by the earlier
 encryption slice; the bounded framing and profile decoding sections below

@@ -109,21 +109,31 @@ class Ja2SaveInspectorV01Test {
     }
 
     @Test
-    fun admittedButCorruptRosterReturnsNoPartialCampaignOrRoster() {
-        val save = syntheticSave(listOf(7, 42)).also { it[PROFILE_END] = 2 }
+    fun admittedPresentButInvalidRosterMarkersAreCorruptWithoutPartialResults() {
+        val complete = syntheticSave(listOf(7, 42))
+        val keyringMarkerOffset = PROFILE_END + 1 + SOLDIER_RECORD_SIZE + 4
         val marker = "PRIVATE_PAYLOAD_MUST_NOT_LEAK"
-        marker.encodeToByteArray().copyInto(save, PROFILE_END + 1)
-        val original = save.copyOf()
-
-        val result = assertIs<SaveInspectionV01Result.Failure>(
-            admittedInspector().inspectV01(save),
+        val cases = listOf(
+            "active marker" to complete.copyOf().also {
+                it[PROFILE_END] = 2
+                marker.encodeToByteArray().copyInto(it, PROFILE_END + 1)
+            },
+            "keyring marker" to complete.copyOf().also { it[keyringMarkerOffset] = 2 },
         )
 
-        assertEquals(SaveCompatibility.SUPPORTED, result.format.compatibility)
-        assertEquals(SaveInspectionFailureKind.CORRUPT_INPUT, result.failure.kind)
-        assertEquals(SaveInspectionDiagnostic.CONTENT_CORRUPT, result.failure.diagnostic)
-        assertTrue(marker !in result.toString())
-        assertContentEquals(original, save)
+        for ((variant, save) in cases) {
+            val original = save.copyOf()
+            val result = assertIs<SaveInspectionV01Result.Failure>(
+                admittedInspector().inspectV01(save),
+                variant,
+            )
+
+            assertEquals(SaveCompatibility.SUPPORTED, result.format.compatibility, variant)
+            assertEquals(SaveInspectionFailureKind.CORRUPT_INPUT, result.failure.kind, variant)
+            assertEquals(SaveInspectionDiagnostic.CONTENT_CORRUPT, result.failure.diagnostic, variant)
+            assertTrue(marker !in result.toString(), variant)
+            assertContentEquals(original, save, variant)
+        }
     }
 
     @Test
@@ -133,10 +143,12 @@ class Ja2SaveInspectorV01Test {
         val pathCountStart = soldierStart + SOLDIER_RECORD_SIZE
         val pathDataStart = pathCountStart + 4
         val cases = listOf(
+            "active marker" to save.copyOf(PROFILE_END),
             "soldier record" to save.copyOf(soldierStart + SOLDIER_RECORD_SIZE - 1),
             "path count" to save.copyOf(pathCountStart + 3),
             "path data" to save.copyOf().also { it.putU32Le(pathCountStart, 1) }
                 .copyOf(pathDataStart + 19),
+            "keyring marker" to save.copyOf(pathDataStart),
             "keyring data" to save.copyOf().also { it[pathDataStart] = 1 }
                 .copyOf(pathDataStart + 1 + 127),
         )

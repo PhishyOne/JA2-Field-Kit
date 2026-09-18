@@ -22,6 +22,8 @@ enum class RosterMembershipFailure {
     INVALID_KEYRING_MARKER,
     TRUNCATED_KEYRING_DATA,
     HEADER_COUNT_MISMATCH,
+    TRUNCATED_ACTIVE_MARKER,
+    TRUNCATED_KEYRING_MARKER,
 }
 
 enum class RosterMembershipStage {
@@ -75,7 +77,7 @@ object NormalNonLinuxRosterDecoder {
             requireAvailable(
                 saveBytes,
                 checkedAdd(offset, 1L),
-                RosterMembershipFailure.INVALID_ACTIVE_MARKER,
+                RosterMembershipFailure.TRUNCATED_ACTIVE_MARKER,
                 RosterMembershipStage.ACTIVE_MARKER,
                 slotIndex,
                 offset,
@@ -137,7 +139,7 @@ object NormalNonLinuxRosterDecoder {
             requireAvailable(
                 saveBytes,
                 keyringMarkerEnd,
-                RosterMembershipFailure.INVALID_KEYRING_MARKER,
+                RosterMembershipFailure.TRUNCATED_KEYRING_MARKER,
                 RosterMembershipStage.KEYRING_MARKER,
                 slotIndex,
                 offset,

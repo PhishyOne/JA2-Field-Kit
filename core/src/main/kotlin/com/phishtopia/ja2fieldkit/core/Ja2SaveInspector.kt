@@ -216,9 +216,11 @@ class Ja2SaveInspector private constructor(
 
     private fun RosterMembershipException.toInspectionFailure(): SaveInspectionFailure =
         if (
+            reason == RosterMembershipFailure.TRUNCATED_ACTIVE_MARKER ||
             reason == RosterMembershipFailure.TRUNCATED_SOLDIER_RECORD ||
             reason == RosterMembershipFailure.TRUNCATED_PATH_COUNT ||
             reason == RosterMembershipFailure.TRUNCATED_PATH_DATA ||
+            reason == RosterMembershipFailure.TRUNCATED_KEYRING_MARKER ||
             reason == RosterMembershipFailure.TRUNCATED_KEYRING_DATA
         ) {
             SaveInspectionFailure(

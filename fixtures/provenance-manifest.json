@@ -38,12 +38,12 @@
       "expected": {
         "outcome": "success",
         "completeness": "partial",
-        "basis": "Prior successful manual decode recorded in the repository documentation; campaign fields and per-merc assertions remain to be registered from evidence.",
+        "basis": "Prior successful manual decode recorded in the repository documentation; source provenance identifies the producer, but current save bytes do not independently discriminate producer family. Campaign fields and per-merc assertions remain to be registered from evidence.",
         "assertions": [
           {
             "json_pointer": "/format/family",
             "operator": "equals",
-            "value": "JA2_REBORN"
+            "value": "UNKNOWN"
           },
           {
             "json_pointer": "/format/buildLabel",

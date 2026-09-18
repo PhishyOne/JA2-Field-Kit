@@ -58,7 +58,7 @@ object SaveHeaderProbe {
             notes = listOf(
                 "A complete 432-byte candidate header is present.",
                 "File size alone does not identify JA2 Reborn, Stracciatella, or classic JA2.",
-                "The Build 04.12.02 parser is layout-only; format detection and encryption selection remain disabled.",
+                "The Build 04.12.02 header parser is layout-only; use the evidence-based detector before automatic routing.",
             ),
         )
     }

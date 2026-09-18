@@ -88,10 +88,31 @@ class UnsupportedSaveHeaderException(
         "Unsupported normal header identity: save version $saveVersion, game version '$gameVersion'",
     )
 
+data class SaveHeaderIdentity(
+    val saveVersion: Long?,
+    val gameVersion: String?,
+    val hasCompleteIdentity: Boolean,
+)
+
 /** Bounds-checked parser for the evidenced v103 / Build 04.12.02 normal header only. */
 object SaveHeaderParser {
     const val SUPPORTED_SAVE_VERSION = 103L
     const val SUPPORTED_GAME_VERSION = "Build 04.12.02"
+
+    /** Read only the bounded version/build identity used by diagnostics and detection. */
+    fun probeIdentity(bytes: ByteArray): SaveHeaderIdentity {
+        // Snapshot the small diagnostic boundary so no result depends on later caller mutation.
+        val snapshot = bytes.copyOfRange(0, minOf(bytes.size, 20))
+        val reader = LittleEndianReader(snapshot)
+        val saveVersion = if (snapshot.size >= 4) reader.u32(0) else null
+        val hasCompleteIdentity = bytes.size >= 20
+        val gameVersion = if (hasCompleteIdentity) {
+            readNullTerminatedSingleByteString(reader, offset = 4, length = 16)
+        } else {
+            null
+        }
+        return SaveHeaderIdentity(saveVersion, gameVersion, hasCompleteIdentity)
+    }
 
     fun parseBuild041202(bytes: ByteArray): SaveHeader {
         if (bytes.size < SaveLayoutFacts.NORMAL_HEADER_SIZE) {

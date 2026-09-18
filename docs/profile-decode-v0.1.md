@@ -51,11 +51,19 @@ There is no independently evidenced serialized profile-ID field. The public
 `Ja2SaveInspector.parseBuild041202NormalNonLinuxProfiles` is the public
 whole-save entry point. For each invocation it:
 
-1. frames the exact 121720-byte encrypted table;
-2. recovers one invocation-owned 49-byte rotation table;
-3. decrypts 170 separate 716-byte operations, resetting feedback and rotation
+1. snapshots the caller-owned bytes and requires the production detector to
+   return exactly `SUPPORTED` for `NORMAL_V103_BUILD_041202_NON_LINUX`;
+2. frames the exact 121720-byte encrypted table;
+3. recovers one invocation-owned 49-byte rotation table;
+4. decrypts 170 separate 716-byte operations, resetting feedback and rotation
    position through the existing decryptor on each record; and
-4. parses and returns an unmodifiable list of exactly 170 `MercProfile` values.
+5. parses and returns an unmodifiable list of exactly 170 `MercProfile` values.
+
+The roster parser, header parser, and encrypted-profile framer exposed by
+`Ja2SaveInspector` use the same guard. Any compatibility other than that exact
+supported result fails with structured, payload-free admission metadata before
+domain data is returned. Lower-level format decoders remain available for
+focused format tests and research.
 
 `NormalMercProfileParser.parseBuild041202` is the lower-level boundary for an
 already-decrypted table. It accepts exactly 121720 bytes, snapshots them before
@@ -107,7 +115,11 @@ authorized private acceptance of the known roster.
 Tests use only the admitted project-authored synthetic header and recovery
 vectors. A test-owned forward transform assembles a complete synthetic save
 with valid synthetic UTF-16 names, then exercises framing, recovery,
-per-record decryption, and parsing through the public inspector. Separate
+per-record decryption, and parsing through lower-level format boundaries. A
+test-only digest oracle admits the same synthetic evidence through the real
+detector to verify the guarded public success path; the production oracle
+rejects the synthetic header/body mismatch through both profile and roster
+entry points. Separate
 test-owned numeric format oracles anchor every parsed offset, exact 170-record
 iteration, signed-byte behavior, exact-size rejection, malformed UTF-16, and a
 one-byte wrong-alignment rejection. No real save bytes, private names, private

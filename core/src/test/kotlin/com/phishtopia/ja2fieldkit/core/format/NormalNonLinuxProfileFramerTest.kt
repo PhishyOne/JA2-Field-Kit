@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
+import com.phishtopia.ja2fieldkit.core.SaveInterpretationAdmissionException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -37,13 +38,15 @@ class NormalNonLinuxProfileFramerTest {
     }
 
     @Test
-    fun publicEntryPointFramesWithoutDecryptingOrInterpretingProfiles() {
+    fun publicEntryPointRequiresDigestAdmissionBeforeReturningAFrame() {
         val save = syntheticSave(eventCount = 1)
 
-        val frame = Ja2SaveInspector().frameBuild041202NormalNonLinuxProfiles(save)
+        val failure = assertFailsWith<SaveInterpretationAdmissionException> {
+            Ja2SaveInspector().frameBuild041202NormalNonLinuxProfiles(save)
+        }
 
-        assertEquals(expectedProfileStart(1), frame.profileStartOffset)
-        assertContentEquals(encryptedProfiles, frame.encryptedProfileBytes)
+        assertEquals(SaveCompatibility.INCONSISTENT, failure.compatibility)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, failure.reason)
     }
 
     @Test

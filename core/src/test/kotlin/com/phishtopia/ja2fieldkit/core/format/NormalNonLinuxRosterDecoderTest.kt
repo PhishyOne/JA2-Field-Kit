@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
+import com.phishtopia.ja2fieldkit.core.SaveInterpretationAdmissionException
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -26,9 +27,13 @@ class NormalNonLinuxRosterDecoderTest {
             ),
             headerCount = 2,
         )
+        val inspector = admittedInspector()
 
-        val roster = Ja2SaveInspector().parseBuild041202NormalNonLinuxRoster(save)
+        val detection = inspector.detect(save)
+        val roster = inspector.parseBuild041202NormalNonLinuxRoster(save)
 
+        assertEquals(SaveCompatibility.SUPPORTED, detection.compatibility)
+        assertEquals(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX, detection.layout)
         assertEquals(listOf(7, 42), roster.map { it.profileIndex })
         assertEquals(listOf("Synthetic 7", "Synthetic 42"), roster.map { it.name })
         assertEquals("P7", roster[0].nickname)
@@ -38,8 +43,30 @@ class NormalNonLinuxRosterDecoderTest {
     }
 
     @Test
+    fun publicApiRejectsTheSameHeaderBodyDigestMismatchAsDetectionWithoutMutation() {
+        val save = syntheticSave(emptyMap(), 0).also {
+            // Preserve the admitted synthetic header selector while retaining the roster-shaped tail.
+            it[291] = header[291]
+        }
+        val original = save.copyOf()
+        val inspector = Ja2SaveInspector()
+
+        val detection = inspector.detect(save)
+        val failure = assertFailsWith<SaveInterpretationAdmissionException> {
+            inspector.parseBuild041202NormalNonLinuxRoster(save)
+        }
+
+        assertEquals(SaveCompatibility.INCONSISTENT, detection.compatibility)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, detection.reason)
+        assertEquals(detection.compatibility, failure.compatibility)
+        assertEquals(detection.layout, failure.layout)
+        assertEquals(detection.reason, failure.reason)
+        assertContentEquals(original, save)
+    }
+
+    @Test
     fun acceptsExactlyEighteenNonVehicleMercs() {
-        val roster = Ja2SaveInspector().parseBuild041202NormalNonLinuxRoster(
+        val roster = NormalNonLinuxRosterDecoder.decodeBuild041202(
             syntheticSave((0 until 18).associateWith { SoldierSpec(profileId = 100 + it) }, 18),
         )
 
@@ -49,7 +76,7 @@ class NormalNonLinuxRosterDecoderTest {
 
     @Test
     fun vehiclesInHighSlotsAreValidButExcludedFromRosterAndHeaderCount() {
-        val roster = Ja2SaveInspector().parseBuild041202NormalNonLinuxRoster(
+        val roster = NormalNonLinuxRosterDecoder.decodeBuild041202(
             syntheticSave(
                 mapOf(
                     17 to SoldierSpec(profileId = 3),
@@ -308,11 +335,22 @@ class NormalNonLinuxRosterDecoderTest {
         slot: Int? = null,
     ): RosterMembershipException =
         assertFailsWith<RosterMembershipException> {
-            Ja2SaveInspector().parseBuild041202NormalNonLinuxRoster(save)
+            NormalNonLinuxRosterDecoder.decodeBuild041202(save)
         }.also {
             assertEquals(reason, it.reason)
             assertEquals(slot, it.slotIndex)
         }
+
+    private fun admittedInspector(): Ja2SaveInspector =
+        Ja2SaveInspector.withRotationDigestOracleForTesting(
+            RotationDigestOracle { index ->
+                if (index.value == 139) {
+                    RotationTableDigest.from(SaveRotationTable.fromBytes(key))
+                } else {
+                    null
+                }
+            },
+        )
 
     private fun profileEnd(): Int = 819 + 7_440 + 121_720
 
@@ -349,4 +387,5 @@ class NormalNonLinuxRosterDecoderTest {
         val hasKeyring: Boolean = false,
         val beforeChecksum: (ByteArray) -> Unit = {},
     )
+
 }

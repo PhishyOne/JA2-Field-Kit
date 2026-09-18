@@ -17,8 +17,12 @@ No save-writing API exists yet. Editing will only be added after reliable parse/
 The `android-app/` shell can select a save with Android's document picker and
 accept narrowly advertised open-with/share-to content URIs. It reads at most
 16 MiB, passes only a byte snapshot to `inspectV01`, and displays the source
-filename, format, campaign summary, roster, stats, or sanitized failure codes.
-It requests no storage permission and never writes, exports, or modifies a save.
+filename, actual and optional provider sizes, optional provider timestamp,
+lowercase SHA-256, format, campaign summary, roster, stats, or sanitized failure
+codes. Local/Downloads, USB, and cloud documents use Android Storage Access
+Framework providers; open-with and share-to converge on the same importer. It
+requests no storage permission, retains no URI grant or save bytes, performs no
+scanning/upload, and never writes, exports, or modifies a save.
 
 The core v0.1 presentation facade is
 `Ja2SaveInspector.inspectV01(ByteArray)`. It returns a sealed, sanitized result

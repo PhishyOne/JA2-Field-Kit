@@ -1,6 +1,6 @@
 package com.phishtopia.ja2fieldkit.android.presentation
 
-import com.phishtopia.ja2fieldkit.android.importing.SourceMetadata
+import com.phishtopia.ja2fieldkit.android.importing.ImportedSaveProvenance
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveFamily
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
@@ -16,14 +16,14 @@ sealed interface InspectionScreenState {
     data class Loading(val sourceName: String?) : InspectionScreenState
 
     data class Success(
-        val source: SourceMetadata,
+        val source: ImportedSaveProvenance,
         val format: FormatPresentation,
         val campaign: CampaignPresentation,
         val roster: List<MercPresentation>,
     ) : InspectionScreenState
 
     data class Failure(
-        val source: SourceMetadata?,
+        val source: ImportedSaveProvenance?,
         val title: String,
         val failureKind: String,
         val diagnostic: String,
@@ -56,7 +56,7 @@ data class StatPresentation(val label: String, val value: String)
 
 object InspectionPresentationMapper {
     fun map(
-        source: SourceMetadata,
+        source: ImportedSaveProvenance,
         result: SaveInspectionV01Result,
     ): InspectionScreenState = when (result) {
         is SaveInspectionV01Result.Success -> InspectionScreenState.Success(
@@ -90,10 +90,9 @@ object InspectionPresentationMapper {
     }
 
     fun sourceFailure(
-        source: SourceMetadata?,
         kind: SourceFailureKind,
     ): InspectionScreenState.Failure = InspectionScreenState.Failure(
-        source = source,
+        source = null,
         title = when (kind) {
             SourceFailureKind.NOT_CONTENT_URI -> "Unsupported source"
             SourceFailureKind.MULTIPLE_ITEMS -> "Share one save at a time"

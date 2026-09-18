@@ -1,6 +1,6 @@
 package com.phishtopia.ja2fieldkit.android.presentation
 
-import com.phishtopia.ja2fieldkit.android.importing.SourceMetadata
+import com.phishtopia.ja2fieldkit.android.importing.ImportedSaveProvenance
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveFamily
@@ -16,11 +16,19 @@ import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFormat
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 
 class InspectionPresentationMapperTest {
-    private val source = SourceMetadata("slot01.sav", 2_563_321, SourceProvenance.DOCUMENT_PICKER)
+    private val source = ImportedSaveProvenance(
+        displayName = "slot01.sav",
+        provenance = SourceProvenance.DOCUMENT_PICKER,
+        declaredSizeBytes = 2_563_321,
+        actualSizeBytes = 2_563_321,
+        lastModifiedEpochMillis = null,
+        sha256Hex = "00".repeat(32),
+    )
 
     @Test
     fun mapsSuccessToCampaignRosterAndEveryCoreStat() {
@@ -45,6 +53,17 @@ class InspectionPresentationMapperTest {
             state.roster.single().stats.map { it.label },
         )
         assertEquals((80..90).map(Int::toString), state.roster.single().stats.map { it.value })
+    }
+
+    @Test
+    fun mappedPresentationStateHasNoSaveByteContainer() {
+        val state = assertIs<InspectionScreenState.Success>(
+            InspectionPresentationMapper.map(source, successResult()),
+        )
+
+        assertFalse(state.javaClass.declaredFields.any { it.type == ByteArray::class.java })
+        assertFalse(state.source.javaClass.declaredFields.any { it.type == ByteArray::class.java })
+        assertFalse(state.toString().contains("exactBytes"))
     }
 
     @Test
@@ -125,7 +144,7 @@ class InspectionPresentationMapperTest {
 
     @Test
     fun sourceSizeFailureDisclosesOnlyBoundedAppCode() {
-        val state = InspectionPresentationMapper.sourceFailure(source, SourceFailureKind.SIZE_LIMIT)
+        val state = InspectionPresentationMapper.sourceFailure(SourceFailureKind.SIZE_LIMIT)
 
         assertEquals("SOURCE_SIZE_LIMIT", state.failureKind)
         assertEquals("MAXIMUM_16_MIB", state.diagnostic)

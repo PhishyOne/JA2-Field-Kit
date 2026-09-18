@@ -16,7 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.phishtopia.ja2fieldkit.android.importing.SourceMetadata
+import com.phishtopia.ja2fieldkit.android.importing.ImportedSaveProvenance
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.CampaignPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
@@ -54,18 +54,18 @@ class MainActivity : ComponentActivity() {
         when (incoming?.action) {
             Intent.ACTION_VIEW -> {
                 val uri = incoming.data
-                if (uri == null) model.showSourceFailure(null, SourceFailureKind.UNAVAILABLE)
+                if (uri == null) model.showSourceFailure(SourceFailureKind.UNAVAILABLE)
                 else model.inspect(applicationContext.contentResolver, uri, SourceProvenance.OPEN_WITH)
             }
 
             Intent.ACTION_SEND -> {
                 val clipData = incoming.clipData
                 if (clipData != null && clipData.itemCount > 1) {
-                    model.showSourceFailure(null, SourceFailureKind.MULTIPLE_ITEMS)
+                    model.showSourceFailure(SourceFailureKind.MULTIPLE_ITEMS)
                     return
                 }
                 val uri = clipData?.getItemAt(0)?.uri ?: incoming.sharedStreamUri()
-                if (uri == null) model.showSourceFailure(null, SourceFailureKind.UNAVAILABLE)
+                if (uri == null) model.showSourceFailure(SourceFailureKind.UNAVAILABLE)
                 else model.inspect(applicationContext.contentResolver, uri, SourceProvenance.SHARE_TO)
             }
         }
@@ -146,10 +146,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun LinearLayout.addSource(source: SourceMetadata) {
+    private fun LinearLayout.addSource(source: ImportedSaveProvenance) {
         addHeading("Source")
         addLabelValue("Filename", source.displayName)
+        addLabelValue("Actual size", "${source.actualSizeBytes} bytes")
         source.declaredSizeBytes?.let { addLabelValue("Provider size", "$it bytes") }
+        source.lastModifiedEpochMillis?.let {
+            addLabelValue("Provider last modified", "$it ms since Unix epoch")
+        }
+        addLabelValue("SHA-256", source.sha256Hex)
         addLabelValue(
             "Opened via",
             when (source.provenance) {

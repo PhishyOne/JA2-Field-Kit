@@ -12,14 +12,24 @@ class BoundedSaveReaderTest {
     fun readsUnknownLengthThroughBoundedStream() {
         val bytes = byteArrayOf(1, 2, 3, 4)
 
-        assertContentEquals(bytes, BoundedSaveReader(4).read(ByteArrayInputStream(bytes), null))
+        val result = BoundedSaveReader(4).read(ByteArrayInputStream(bytes), null)
+
+        assertContentEquals(bytes, result.bytes)
+        assertEquals(4, result.actualSizeBytes)
+        assertEquals(
+            "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a",
+            result.sha256Hex,
+        )
     }
 
     @Test
     fun acceptsExactlyTheLimitAndRejectsOneByteMore() {
         val reader = BoundedSaveReader(4)
 
-        assertContentEquals(byteArrayOf(1, 2, 3, 4), reader.read(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)), 4))
+        assertContentEquals(
+            byteArrayOf(1, 2, 3, 4),
+            reader.read(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)), 4).bytes,
+        )
         assertFailsWith<SaveTooLargeException> {
             reader.read(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4, 5)), null)
         }
@@ -49,6 +59,6 @@ class BoundedSaveReaderTest {
                 if (bulkReads++ == 0) 0 else delegate.read(target, offset, length)
         }
 
-        assertContentEquals(byteArrayOf(7, 8), BoundedSaveReader(2).read(input, null))
+        assertContentEquals(byteArrayOf(7, 8), BoundedSaveReader(2).read(input, null).bytes)
     }
 }

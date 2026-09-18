@@ -4,14 +4,18 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.phishtopia.ja2fieldkit.android.importing.SourceMetadata
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.CampaignPresentation
@@ -30,6 +34,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         model.attach(stateObserver)
         if (savedInstanceState == null) handleIntent(intent)
     }
@@ -69,7 +74,6 @@ class MainActivity : ComponentActivity() {
     private fun render(screenState: InspectionScreenState) {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(20), dp(20), dp(32))
             addTitle(getString(R.string.app_name))
             addBody(getString(R.string.read_only_notice))
         }
@@ -107,7 +111,39 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        setContentView(ScrollView(this).apply { addView(content) })
+        val root = ScrollView(this).apply {
+            addView(content)
+            applySafeContentPadding(
+                ContentPadding(
+                    left = dp(20),
+                    top = dp(20),
+                    right = dp(20),
+                    bottom = dp(32),
+                ),
+            )
+        }
+        setContentView(root)
+        ViewCompat.requestApplyInsets(root)
+    }
+
+    private fun View.applySafeContentPadding(base: ContentPadding) {
+        ViewCompat.setOnApplyWindowInsetsListener(this) { view, windowInsets ->
+            val safeInsets = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or
+                    WindowInsetsCompat.Type.displayCutout(),
+            )
+            val padding = contentPadding(
+                base = base,
+                insets = ContentInsets(
+                    left = safeInsets.left,
+                    top = safeInsets.top,
+                    right = safeInsets.right,
+                    bottom = safeInsets.bottom,
+                ),
+            )
+            view.setPadding(padding.left, padding.top, padding.right, padding.bottom)
+            windowInsets
+        }
     }
 
     private fun LinearLayout.addSource(source: SourceMetadata) {

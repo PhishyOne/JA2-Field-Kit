@@ -70,3 +70,8 @@ wrapper binary is checked in.
 
 The UI uses platform views and no Compose, navigation, persistence, network,
 analytics, dependency-injection, or background-work dependency.
+
+The activity draws edge to edge and applies AndroidX system-bar and display-cutout
+insets on all four edges. Each inset dispatch is added to the fixed design
+padding rather than the view's current padding, so rotations and repeated inset
+delivery cannot accumulate spacing.

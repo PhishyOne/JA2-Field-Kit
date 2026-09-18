@@ -32,6 +32,11 @@ and currently unknown. Production rotation tables are not bundled; one
 non-secret table digest is admitted, and recovered rotation data is scoped to
 one inspection. Every layout-specific interpretation method on the public
 inspector enforces that same detector result before returning parsed data.
+The presentation boundary is `Ja2SaveInspector.inspectV01`: it snapshots the
+input, detects once, and returns a sealed sanitized success/failure result. Its
+models contain logical format facts, a minimal campaign summary, and roster
+stats only; structural offsets and cryptographic internals remain below the
+boundary.
 
 ## Planned boundaries
 
@@ -44,10 +49,10 @@ Bounds-checked binary primitives and, later, seekable save input abstractions. N
 Known layout facts, format/version compatibility, encryption selection, and
 adapters only where byte evidence establishes an actual divergence.
 
-A future stable adapter contract should expose logical parsing, not raw structure details, for example:
+A stable adapter contract exposes logical parsing, not raw structure details:
 
 ```text
-probe -> detect -> parseCampaignSummary -> parseRoster
+inspectV01 -> success(format + campaign + roster) | failure(format + bounded codes)
 ```
 
 Do not create separate adapters until fixture evidence shows the formats actually diverge.

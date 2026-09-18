@@ -14,8 +14,15 @@ import com.phishtopia.ja2fieldkit.core.format.SaveHeader
 import com.phishtopia.ja2fieldkit.core.format.SaveHeaderParser
 import com.phishtopia.ja2fieldkit.core.format.SaveHeaderProbe
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
+import com.phishtopia.ja2fieldkit.core.model.CampaignSector
+import com.phishtopia.ja2fieldkit.core.model.CampaignSummaryV01
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionDiagnostic
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailure
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailureKind
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFormat
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
 
 /**
  * Public read-only entry point for the parser core.
@@ -36,12 +43,77 @@ class Ja2SaveInspector private constructor(
         ): Ja2SaveInspector = Ja2SaveInspector { bytes ->
             SaveFormatDetector.detect(bytes, rotationDigestOracle)
         }
+
+        @JvmSynthetic
+        fun withDetectorForTesting(
+            detector: (ByteArray) -> SaveFormatDetection,
+        ): Ja2SaveInspector = Ja2SaveInspector(detector)
     }
 
     fun probe(bytes: ByteArray): HeaderProbe = SaveHeaderProbe.probe(bytes)
 
     /** Detect compatibility without retaining or mutating caller-owned bytes. */
     fun detect(bytes: ByteArray): SaveFormatDetection = detector(bytes)
+
+    /**
+     * Run the complete read-only v0.1 flow against one private snapshot of [bytes].
+     *
+     * Detection runs once. Only the exact admitted layout is interpreted, and all input-driven
+     * failures are returned as bounded presentation codes rather than parser exceptions.
+     */
+    fun inspectV01(bytes: ByteArray): SaveInspectionV01Result {
+        val snapshot = bytes.copyOf()
+        val detection = try {
+            detector(snapshot)
+        } catch (_: RuntimeException) {
+            return SaveInspectionV01Result.Failure(
+                format = unknownInspectionFormat(),
+                failure = SaveInspectionFailure(
+                    kind = SaveInspectionFailureKind.CORRUPT_INPUT,
+                    diagnostic = SaveInspectionDiagnostic.DETECTION_FAILED,
+                ),
+            )
+        }
+        val format = detection.toInspectionFormat()
+        if (
+            detection.compatibility != SaveCompatibility.SUPPORTED ||
+            detection.layout != SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX
+        ) {
+            return SaveInspectionV01Result.Failure(
+                format = format,
+                failure = detection.toInspectionFailure(),
+            )
+        }
+
+        return try {
+            val header = SaveHeaderParser.parseBuild041202(snapshot)
+            val roster = NormalNonLinuxRosterDecoder.decodeBuild041202(snapshot)
+            SaveInspectionV01Result.Success.create(
+                format = format,
+                campaign = CampaignSummaryV01(
+                    day = header.day,
+                    hour = header.hour,
+                    minute = header.minute,
+                    sector = CampaignSector(
+                        x = header.sector.x,
+                        y = header.sector.y,
+                        z = header.sector.z,
+                    ),
+                    playerMercCount = header.playerMercCount,
+                    balance = header.balance,
+                ),
+                roster = roster,
+            )
+        } catch (_: RuntimeException) {
+            SaveInspectionV01Result.Failure(
+                format = format,
+                failure = SaveInspectionFailure(
+                    kind = SaveInspectionFailureKind.CORRUPT_INPUT,
+                    diagnostic = SaveInspectionDiagnostic.CONTENT_CORRUPT,
+                ),
+            )
+        }
+    }
 
     /** Parse the evidenced header layout without identifying a save family. */
     fun parseBuild041202Header(bytes: ByteArray): SaveHeader = admitted(bytes) { snapshot ->
@@ -87,6 +159,61 @@ class Ja2SaveInspector private constructor(
         }
         return parse(snapshot)
     }
+
+    private fun SaveFormatDetection.toInspectionFormat(): SaveInspectionFormat =
+        SaveInspectionFormat(
+            layout = layout,
+            compatibility = compatibility,
+            family = family,
+            saveVersion = saveVersion,
+            buildLabel = buildLabel,
+        )
+
+    private fun SaveFormatDetection.toInspectionFailure(): SaveInspectionFailure =
+        SaveInspectionFailure(
+            kind = when (compatibility) {
+                SaveCompatibility.UNKNOWN -> SaveInspectionFailureKind.UNKNOWN_FORMAT
+                SaveCompatibility.CANDIDATE,
+                SaveCompatibility.UNSUPPORTED_VARIANT ->
+                    SaveInspectionFailureKind.UNSUPPORTED_VARIANT
+                SaveCompatibility.TRUNCATED -> SaveInspectionFailureKind.TRUNCATED_INPUT
+                SaveCompatibility.INCONSISTENT -> SaveInspectionFailureKind.INCONSISTENT_INPUT
+                SaveCompatibility.SUPPORTED -> SaveInspectionFailureKind.INCONSISTENT_INPUT
+            },
+            diagnostic = when (reason) {
+                SaveDetectionReason.TOO_SHORT_FOR_HEADER_IDENTITY ->
+                    SaveInspectionDiagnostic.IDENTITY_INCOMPLETE
+                SaveDetectionReason.UNKNOWN_HEADER_IDENTITY ->
+                    SaveInspectionDiagnostic.IDENTITY_UNKNOWN
+                SaveDetectionReason.CONTRADICTORY_HEADER_IDENTITY ->
+                    SaveInspectionDiagnostic.IDENTITY_INCONSISTENT
+                SaveDetectionReason.TRUNCATED_RECOGNIZED_HEADER ->
+                    SaveInspectionDiagnostic.HEADER_TRUNCATED
+                SaveDetectionReason.TRUNCATED_NORMAL_NON_LINUX_LAYOUT ->
+                    SaveInspectionDiagnostic.LAYOUT_TRUNCATED
+                SaveDetectionReason.UNSUPPORTED_SELECTOR_HEADER,
+                SaveDetectionReason.UNSUPPORTED_DYNAMIC_LAPTOP_TAIL,
+                SaveDetectionReason.ROTATION_DIGEST_ORACLE_MISSING ->
+                    SaveInspectionDiagnostic.VARIANT_UNSUPPORTED
+                SaveDetectionReason.PROFILE_ROTATION_AMBIGUOUS ->
+                    SaveInspectionDiagnostic.CONTENT_AMBIGUOUS
+                SaveDetectionReason.ROTATION_DIGEST_MISMATCH ->
+                    SaveInspectionDiagnostic.HEADER_BODY_MISMATCH
+                SaveDetectionReason.PROFILE_ROTATION_CONSTRAINT_CONFLICT,
+                SaveDetectionReason.PROFILE_ROTATION_NO_CANDIDATE ->
+                    SaveInspectionDiagnostic.CONTENT_INCONSISTENT
+                SaveDetectionReason.SELECTOR_BODY_ROTATION_MATCH ->
+                    SaveInspectionDiagnostic.CONTENT_INCONSISTENT
+            },
+        )
+
+    private fun unknownInspectionFormat(): SaveInspectionFormat = SaveInspectionFormat(
+        layout = SaveLayout.UNKNOWN,
+        compatibility = SaveCompatibility.UNKNOWN,
+        family = com.phishtopia.ja2fieldkit.core.format.SaveFamily.UNKNOWN,
+        saveVersion = null,
+        buildLabel = null,
+    )
 }
 
 /** Sanitized detector result for a rejected public interpretation request. */

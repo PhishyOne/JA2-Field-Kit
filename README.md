@@ -14,6 +14,12 @@ Milestone v0.1 is deliberately narrow:
 
 No save-writing API exists yet. Editing will only be added after reliable parse/rewrite/reread validation exists.
 
+The core v0.1 presentation facade is
+`Ja2SaveInspector.inspectV01(ByteArray)`. It returns a sealed, sanitized result
+covering format/version/layout compatibility, the minimal campaign summary, and
+the verified roster/core stats. Inputs are copied before inspection; no raw
+offset, rotation, digest, key, or encryption details cross this facade.
+
 ## Architecture
 
 - `core/` is a pure Kotlin/JVM library with no Android dependencies.

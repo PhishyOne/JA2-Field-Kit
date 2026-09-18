@@ -20,8 +20,9 @@ while streaming. Actual byte count is authoritative when a provider's declared
 size differs. Size and lowercase hexadecimal SHA-256 provenance are published
 only for a complete accepted import, never for a rejected prefix.
 
-Display filenames are reduced to a leaf name, stripped of control characters,
-and limited to 120 Unicode code points. Retained provenance is limited to that
+Display filenames are reduced to a leaf name, have control, format,
+line-separator, and paragraph-separator characters replaced with spaces, and
+are limited to 120 Unicode code points. Retained provenance is limited to that
 filename, entry category, actual size, optional provider-declared size, optional
 provider last-modified timestamp, and the SHA-256 of the exact imported bytes.
 No URI, filesystem path, provider/account identifier, provider exception, save

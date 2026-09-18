@@ -76,7 +76,7 @@ object DisplayNameSanitizer {
         val leaf = providerName
             ?.substringAfterLast('/')
             ?.substringAfterLast('\\')
-            ?.filterNot { it.isISOControl() }
+            ?.let(::replaceUnsafeCodePoints)
             ?.trim()
             .orEmpty()
         if (leaf.isEmpty()) return "Selected save"
@@ -85,5 +85,23 @@ object DisplayNameSanitizer {
         if (count <= MAXIMUM_CODE_POINTS) return leaf
         val end = leaf.offsetByCodePoints(0, MAXIMUM_CODE_POINTS)
         return leaf.substring(0, end) + "…"
+    }
+
+    private fun replaceUnsafeCodePoints(value: String): String = buildString(value.length) {
+        var index = 0
+        while (index < value.length) {
+            val codePoint = Character.codePointAt(value, index)
+            if (isUnsafe(codePoint)) append(' ') else appendCodePoint(codePoint)
+            index += Character.charCount(codePoint)
+        }
+    }
+
+    private fun isUnsafe(codePoint: Int): Boolean = when (Character.getType(codePoint)) {
+        Character.CONTROL.toInt(),
+        Character.FORMAT.toInt(),
+        Character.LINE_SEPARATOR.toInt(),
+        Character.PARAGRAPH_SEPARATOR.toInt(),
+        -> true
+        else -> false
     }
 }

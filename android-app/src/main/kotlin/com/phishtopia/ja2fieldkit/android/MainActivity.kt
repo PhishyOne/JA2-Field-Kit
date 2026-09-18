@@ -22,7 +22,6 @@ import com.phishtopia.ja2fieldkit.android.presentation.CampaignPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.MercPresentation
-import com.phishtopia.ja2fieldkit.android.presentation.SourceFailureKind
 
 class MainActivity : ComponentActivity() {
     private val model: InspectionViewModel by viewModels()
@@ -34,15 +33,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val consumed = consumeIntent(if (savedInstanceState == null) intent else null)
+        retainIntent(consumed.storedIntent)
         enableEdgeToEdge()
         model.attach(stateObserver)
-        if (savedInstanceState == null) handleIntent(intent)
+        handleRequest(consumed.request)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
+        val consumed = consumeIntent(intent)
+        retainIntent(consumed.storedIntent)
+        handleRequest(consumed.request)
     }
 
     override fun onDestroy() {
@@ -50,24 +52,51 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun handleIntent(incoming: Intent?) {
-        when (incoming?.action) {
-            Intent.ACTION_VIEW -> {
-                val uri = incoming.data
-                if (uri == null) model.showSourceFailure(SourceFailureKind.UNAVAILABLE)
-                else model.inspect(applicationContext.contentResolver, uri, SourceProvenance.OPEN_WITH)
-            }
+    private fun consumeIntent(incoming: Intent?): ConsumedImportIntent<Uri> {
+        if (incoming == null) {
+            return consumeImportIntent(IncomingImportIntent<Uri>(action = null))
+        }
+        val extracted = when (incoming.action) {
+            Intent.ACTION_VIEW -> IncomingImportIntent(
+                action = incoming.action,
+                viewSource = incoming.data,
+            )
 
             Intent.ACTION_SEND -> {
                 val clipData = incoming.clipData
-                if (clipData != null && clipData.itemCount > 1) {
-                    model.showSourceFailure(SourceFailureKind.MULTIPLE_ITEMS)
-                    return
+                val sharedSourceCount = clipData?.itemCount ?: 0
+                val sharedSource = when {
+                    sharedSourceCount > 1 -> null
+                    sharedSourceCount == 1 -> clipData?.getItemAt(0)?.uri ?: incoming.sharedStreamUri()
+                    else -> incoming.sharedStreamUri()
                 }
-                val uri = clipData?.getItemAt(0)?.uri ?: incoming.sharedStreamUri()
-                if (uri == null) model.showSourceFailure(SourceFailureKind.UNAVAILABLE)
-                else model.inspect(applicationContext.contentResolver, uri, SourceProvenance.SHARE_TO)
+                IncomingImportIntent(
+                    action = incoming.action,
+                    sharedSource = sharedSource,
+                    sharedSourceCount = sharedSourceCount,
+                )
             }
+
+            else -> IncomingImportIntent(action = incoming.action)
+        }
+        return consumeImportIntent(extracted)
+    }
+
+    private fun retainIntent(storedIntent: StoredActivityIntent) {
+        when (storedIntent) {
+            StoredActivityIntent.SOURCE_FREE -> setIntent(Intent(this, MainActivity::class.java))
+        }
+    }
+
+    private fun handleRequest(request: ImportIntentRequest<Uri>) {
+        when (request) {
+            ImportIntentRequest.None -> Unit
+            is ImportIntentRequest.Reject -> model.showSourceFailure(request.kind)
+            is ImportIntentRequest.Inspect -> model.inspect(
+                applicationContext.contentResolver,
+                request.source,
+                request.provenance,
+            )
         }
     }
 

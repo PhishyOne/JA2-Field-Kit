@@ -4,6 +4,35 @@ import com.phishtopia.ja2fieldkit.android.importing.ImportedSaveProvenance
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 
+/** Allow-listed facts retained before a user explicitly asks to generate a report. */
+data class CompatibilityReportInputs(
+    val sourceCategory: String,
+    val actualSizeBytes: Long,
+    val sourceSha256: String,
+    val saveVersion: Int?,
+    val build: String?,
+    val layout: String,
+    val compatibility: String,
+    val producer: String,
+    val failureKind: String,
+    val failureDiagnostic: String,
+) {
+    init {
+        CompatibilityReportV01.validateFacts(
+            sourceCategory = sourceCategory,
+            actualSizeBytes = actualSizeBytes,
+            sourceSha256 = sourceSha256,
+            saveVersion = saveVersion,
+            build = build,
+            layout = layout,
+            compatibility = compatibility,
+            producer = producer,
+            failureKind = failureKind,
+            failureDiagnostic = failureDiagnostic,
+        )
+    }
+}
+
 /** Privacy-bounded inputs accepted by the compatibility-report v0.1 serializer. */
 data class CompatibilityReportV01(
     val appVersion: String,
@@ -20,16 +49,10 @@ data class CompatibilityReportV01(
 ) {
     init {
         require(appVersion.matches(SAFE_VERSION))
-        require(sourceCategory in SOURCE_CATEGORIES)
-        require(actualSizeBytes in 0..MAXIMUM_SOURCE_BYTES)
-        require(sourceSha256.matches(SHA_256))
-        require(saveVersion == null || saveVersion >= 0)
-        require(build == null || build in BUILDS)
-        require(layout in LAYOUTS)
-        require(compatibility in COMPATIBILITIES)
-        require(producer in PRODUCERS)
-        require(failureKind in FAILURE_KINDS)
-        require(failureDiagnostic in FAILURE_DIAGNOSTICS)
+        validateFacts(
+            sourceCategory, actualSizeBytes, sourceSha256, saveVersion, build,
+            layout, compatibility, producer, failureKind, failureDiagnostic,
+        )
     }
 
     /** Stable field order, LF line endings, two-space indentation, and one final LF. */
@@ -140,19 +163,41 @@ data class CompatibilityReportV01(
             "layout_truncated", "variant_unsupported", "content_ambiguous", "header_body_mismatch",
             "content_inconsistent", "content_corrupt", "detection_failed",
         )
+
+        internal fun validateFacts(
+            sourceCategory: String,
+            actualSizeBytes: Long,
+            sourceSha256: String,
+            saveVersion: Int?,
+            build: String?,
+            layout: String,
+            compatibility: String,
+            producer: String,
+            failureKind: String,
+            failureDiagnostic: String,
+        ) {
+            require(sourceCategory in SOURCE_CATEGORIES)
+            require(actualSizeBytes in 0..MAXIMUM_SOURCE_BYTES)
+            require(sourceSha256.matches(SHA_256))
+            require(saveVersion == null || saveVersion >= 0)
+            require(build == null || build in BUILDS)
+            require(layout in LAYOUTS)
+            require(compatibility in COMPATIBILITIES)
+            require(producer in PRODUCERS)
+            require(failureKind in FAILURE_KINDS)
+            require(failureDiagnostic in FAILURE_DIAGNOSTICS)
+        }
     }
 }
 
 /** Builds a report only from retained safe provenance and inspectV01 presentation facts. */
 object CompatibilityReportFactory {
-    fun create(
-        appVersion: String,
+    fun captureInputs(
         source: ImportedSaveProvenance,
         format: FormatPresentation,
         failureKind: String,
         failureDiagnostic: String,
-    ): CompatibilityReportV01 = CompatibilityReportV01(
-        appVersion = appVersion,
+    ): CompatibilityReportInputs = CompatibilityReportInputs(
         sourceCategory = when (source.provenance) {
             SourceProvenance.DOCUMENT_PICKER -> "document_picker"
             SourceProvenance.OPEN_WITH -> "open_with"
@@ -183,6 +228,21 @@ object CompatibilityReportFactory {
         failureKind = failureKind.lowercase(),
         failureDiagnostic = failureDiagnostic.lowercase(),
     )
+
+    fun create(appVersion: String, inputs: CompatibilityReportInputs): CompatibilityReportV01 =
+        CompatibilityReportV01(
+            appVersion = appVersion,
+            sourceCategory = inputs.sourceCategory,
+            actualSizeBytes = inputs.actualSizeBytes,
+            sourceSha256 = inputs.sourceSha256,
+            saveVersion = inputs.saveVersion,
+            build = inputs.build,
+            layout = inputs.layout,
+            compatibility = inputs.compatibility,
+            producer = inputs.producer,
+            failureKind = inputs.failureKind,
+            failureDiagnostic = inputs.failureDiagnostic,
+        )
 }
 
 /** One preview is the sole source for both explicit output actions. */

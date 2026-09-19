@@ -2,6 +2,8 @@ package com.phishtopia.ja2fieldkit.android.presentation
 
 import com.phishtopia.ja2fieldkit.android.importing.ImportedSaveProvenance
 import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportFactory
+import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportInputs
+import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveFamily
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
@@ -29,8 +31,8 @@ sealed interface InspectionScreenState {
         val failureKind: String,
         val diagnostic: String,
         val format: FormatPresentation?,
-        val compatibilityReportText: String?,
-        val reportPreviewVisible: Boolean = false,
+        val compatibilityReportInputs: CompatibilityReportInputs?,
+        val compatibilityReportPreview: CompatibilityReportPreview? = null,
     ) : InspectionScreenState
 }
 
@@ -61,7 +63,6 @@ object InspectionPresentationMapper {
     fun map(
         source: ImportedSaveProvenance,
         result: SaveInspectionV01Result,
-        appVersion: String = "0.1.0",
     ): InspectionScreenState = when (result) {
         is SaveInspectionV01Result.Success -> InspectionScreenState.Success(
             source = source,
@@ -94,13 +95,12 @@ object InspectionPresentationMapper {
                 failureKind = failureKind,
                 diagnostic = diagnostic,
                 format = format,
-                compatibilityReportText = CompatibilityReportFactory.create(
-                    appVersion = appVersion,
+                compatibilityReportInputs = CompatibilityReportFactory.captureInputs(
                     source = source,
                     format = format,
                     failureKind = failureKind,
                     failureDiagnostic = diagnostic,
-                ).toJson(),
+                ),
             )
         }
     }
@@ -122,7 +122,7 @@ object InspectionPresentationMapper {
             else -> "CONTENT_URI_${kind.name}"
         },
         format = null,
-        compatibilityReportText = null,
+        compatibilityReportInputs = null,
     )
 
     private fun mapFormat(format: SaveInspectionFormat): FormatPresentation =
@@ -176,12 +176,13 @@ object InspectionPresentationMapper {
     private fun Int?.display(): String = this?.toString() ?: "Unknown"
 }
 
-fun InspectionScreenState.withCompatibilityReportPreview(): InspectionScreenState =
-    if (this is InspectionScreenState.Failure && compatibilityReportText != null) {
-        copy(reportPreviewVisible = true)
-    } else {
-        this
-    }
+fun InspectionScreenState.withCompatibilityReportPreview(appVersion: String): InspectionScreenState {
+    if (this !is InspectionScreenState.Failure) return this
+    if (compatibilityReportPreview != null) return this
+    val inputs = compatibilityReportInputs ?: return this
+    val text = CompatibilityReportFactory.create(appVersion, inputs).toJson()
+    return copy(compatibilityReportPreview = CompatibilityReportPreview(text))
+}
 
 /** Removes text controls at the boundary where save data becomes retained screen state. */
 private object PresentationTextSanitizer {

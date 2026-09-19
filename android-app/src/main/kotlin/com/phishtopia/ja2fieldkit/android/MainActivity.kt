@@ -140,9 +140,10 @@ class MainActivity : ComponentActivity() {
                 content.addLabelValue("Diagnostic", screenState.diagnostic)
                 screenState.format?.let { content.addFormat(it) }
                 content.addBody("No save data was changed.")
-                screenState.compatibilityReportText?.let { reportText ->
-                    if (screenState.reportPreviewVisible) {
-                        content.addCompatibilityReportPreview(reportText)
+                screenState.compatibilityReportInputs?.let {
+                    val preview = screenState.compatibilityReportPreview
+                    if (preview != null) {
+                        content.addCompatibilityReportPreview(preview)
                     } else {
                         content.addView(Button(this).apply {
                             setText(R.string.preview_compatibility_report)
@@ -260,8 +261,7 @@ class MainActivity : ComponentActivity() {
         }, matchWidth())
     }
 
-    private fun LinearLayout.addCompatibilityReportPreview(reportText: String) {
-        val preview = CompatibilityReportPreview(reportText)
+    private fun LinearLayout.addCompatibilityReportPreview(preview: CompatibilityReportPreview) {
         addHeading(getString(R.string.compatibility_report_preview))
         addBody(getString(R.string.compatibility_report_privacy_notice))
         addBody(preview.text)

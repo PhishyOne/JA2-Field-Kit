@@ -144,7 +144,10 @@ class InspectionPresentationMapperTest {
         assertEquals(3, cases.map { it.failureKind }.toSet().size)
         assertEquals(3, cases.map { it.diagnostic }.toSet().size)
         assertNotEquals(cases[0], cases[1])
-        cases.forEach { assertNotNull(it.compatibilityReportText) }
+        cases.forEach {
+            assertNotNull(it.compatibilityReportInputs)
+            assertNull(it.compatibilityReportPreview)
+        }
     }
 
     @Test
@@ -158,9 +161,13 @@ class InspectionPresentationMapperTest {
 
         cases.forEach { (kind, diagnostic) ->
             val state = assertIs<InspectionScreenState.Failure>(
-                InspectionPresentationMapper.map(source, failure(kind, diagnostic), "0.1.0"),
+                InspectionPresentationMapper.map(source, failure(kind, diagnostic)),
             )
-            val report = assertNotNull(state.compatibilityReportText)
+            assertNull(state.compatibilityReportPreview)
+            val preview = assertIs<InspectionScreenState.Failure>(
+                state.withCompatibilityReportPreview("0.1.0"),
+            )
+            val report = assertNotNull(preview.compatibilityReportPreview).text
             assertTrue(report.contains("\"kind\": \"${kind.name.lowercase()}\""))
             assertTrue(report.contains("\"diagnostic\": \"${diagnostic.name.lowercase()}\""))
         }
@@ -170,11 +177,12 @@ class InspectionPresentationMapperTest {
     fun reportActionIsUnavailableWithoutCompleteSafeFailureContext() {
         SourceFailureKind.entries.forEach { kind ->
             val state = InspectionPresentationMapper.sourceFailure(kind)
-            assertNull(state.compatibilityReportText)
-            assertSame(state, state.withCompatibilityReportPreview())
+            assertNull(state.compatibilityReportInputs)
+            assertNull(state.compatibilityReportPreview)
+            assertSame(state, state.withCompatibilityReportPreview("0.1.0"))
         }
         val success = InspectionPresentationMapper.map(source, successResult())
-        assertSame(success, success.withCompatibilityReportPreview())
+        assertSame(success, success.withCompatibilityReportPreview("0.1.0"))
     }
 
     @Test
@@ -186,10 +194,19 @@ class InspectionPresentationMapperTest {
             ),
         )
 
-        assertFalse(initial.reportPreviewVisible)
-        val preview = assertIs<InspectionScreenState.Failure>(initial.withCompatibilityReportPreview())
-        assertTrue(preview.reportPreviewVisible)
-        assertEquals(initial.compatibilityReportText, preview.compatibilityReportText)
+        assertNotNull(initial.compatibilityReportInputs)
+        assertNull(initial.compatibilityReportPreview)
+        assertFalse(initial.toString().contains("schema_version"))
+
+        val preview = assertIs<InspectionScreenState.Failure>(
+            initial.withCompatibilityReportPreview("0.1.0"),
+        )
+        val generatedPreview = assertNotNull(preview.compatibilityReportPreview)
+        val text = generatedPreview.text
+        assertTrue(text.contains("\"schema_version\": \"ja2-field-kit.compatibility-report/0.1\""))
+        assertEquals(text, generatedPreview.clipboardText)
+        assertEquals(text, generatedPreview.share.text)
+        assertSame(preview, preview.withCompatibilityReportPreview("different-version"))
     }
 
     @Test
@@ -200,12 +217,15 @@ class InspectionPresentationMapperTest {
                 failure(SaveInspectionFailureKind.CORRUPT_INPUT, SaveInspectionDiagnostic.CONTENT_CORRUPT),
             ),
         )
-        val report = assertNotNull(state.compatibilityReportText)
+        val inputs = assertNotNull(state.compatibilityReportInputs)
 
         assertFalse(state.javaClass.declaredFields.any { it.type == ByteArray::class.java })
-        assertFalse(report.contains("Ira"))
-        assertFalse(report.contains("campaign"))
-        assertFalse(report.contains("slot01.sav"))
+        assertFalse(inputs.javaClass.declaredFields.any { it.type == ByteArray::class.java })
+        assertFalse(inputs.toString().contains("Ira"))
+        assertFalse(inputs.toString().contains("campaign"))
+        assertFalse(inputs.toString().contains("slot01.sav"))
+        assertFalse(inputs.toString().contains("9999999"))
+        assertFalse(inputs.toString().contains("1725000000000"))
     }
 
     @Test
@@ -215,7 +235,8 @@ class InspectionPresentationMapperTest {
         assertEquals("SOURCE_SIZE_LIMIT", state.failureKind)
         assertEquals("MAXIMUM_16_MIB", state.diagnostic)
         assertEquals(null, state.format)
-        assertEquals(null, state.compatibilityReportText)
+        assertEquals(null, state.compatibilityReportInputs)
+        assertEquals(null, state.compatibilityReportPreview)
     }
 
     private fun failure(

@@ -72,7 +72,6 @@ class InspectionViewModel : ViewModel() {
                 InspectionPresentationMapper.map(
                     imported.provenance,
                     imported.inspectV01With(inspector),
-                    BuildConfig.VERSION_NAME,
                 )
             } catch (_: SaveTooLargeException) {
                 InspectionPresentationMapper.sourceFailure(SourceFailureKind.SIZE_LIMIT)
@@ -95,7 +94,7 @@ class InspectionViewModel : ViewModel() {
     }
 
     fun showCompatibilityReportPreview() {
-        val next = state.withCompatibilityReportPreview()
+        val next = state.withCompatibilityReportPreview(BuildConfig.VERSION_NAME)
         if (next !== state) publish(next)
     }
 

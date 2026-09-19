@@ -31,14 +31,17 @@ The report does not contain save bytes or a byte prefix; filename; provider
 size or timestamp; raw content URI, filesystem path, provider/account/device
 identifier; campaign fields or free-form gameplay text; merc names, nicknames,
 or stats; stack traces or exception messages; offsets; or encryption rotation,
-index, key, or digest details. Report state contains only the serialized text.
-The source URI is consumed for the immediate import and is neither reread nor
-retained to produce a report.
+index, key, or digest details. Before the explicit Preview action, failure state
+contains only allow-listed provenance, format, and failure facts and no
+serialized report text. After that action, it also contains one immutable
+preview text used by every output action. The source URI is consumed for the
+immediate import and is neither reread nor retained to produce a report.
 
 ## Preview, copy, and share
 
-The failure screen initially offers **Compatibility report**. Selecting it is
-an explicit user action that reveals the exact JSON text and only then reveals
+The failure screen initially offers **Compatibility report** without generating
+or serializing JSON. Selecting it is the explicit user action that generates
+and reveals the exact JSON text and only then reveals
 **Copy report** and **Share report**. Both actions consume that same immutable
 preview text. Copy writes to the clipboard only on the Copy button click.
 Share opens Android's chooser with an `ACTION_SEND` `text/plain` intent whose

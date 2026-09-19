@@ -14,13 +14,13 @@ import kotlin.test.assertTrue
 class CompatibilityReportTest {
     @Test
     fun serializesDeterministicV01JsonWithSafeFormatFacts() {
-        val report = CompatibilityReportFactory.create(
-            appVersion = "0.1.0",
+        val inputs = CompatibilityReportFactory.captureInputs(
             source = source(),
             format = format(),
             failureKind = "UNSUPPORTED_VARIANT",
             failureDiagnostic = "VARIANT_UNSUPPORTED",
         )
+        val report = CompatibilityReportFactory.create("0.1.0", inputs)
         val expected = """
             {
               "schema_version": "ja2-field-kit.compatibility-report/0.1",
@@ -66,13 +66,13 @@ class CompatibilityReportTest {
             lastModifiedEpochMillis = 1_725_000_000_000,
         )
 
-        val text = CompatibilityReportFactory.create(
-            appVersion = "0.1.0",
+        val inputs = CompatibilityReportFactory.captureInputs(
             source = hostile,
             format = format(build = "campaign notes are private"),
             failureKind = "CORRUPT_INPUT",
             failureDiagnostic = "CONTENT_CORRUPT",
-        ).toJson()
+        )
+        val text = CompatibilityReportFactory.create("0.1.0", inputs).toJson()
 
         listOf(
             "private", "account-42", "Ira", "Health99", "slot.sav",
@@ -85,13 +85,13 @@ class CompatibilityReportTest {
     @Test
     fun onlyAllowListedBuildFactCanEnterReport() {
         listOf("Ira", "save-notes", "04.12.03", "04.12.02 private").forEach { hostileBuild ->
-            val text = CompatibilityReportFactory.create(
-                appVersion = "0.1.0",
+            val inputs = CompatibilityReportFactory.captureInputs(
                 source = source(),
                 format = format(build = hostileBuild),
                 failureKind = "UNKNOWN_FORMAT",
                 failureDiagnostic = "IDENTITY_UNKNOWN",
-            ).toJson()
+            )
+            val text = CompatibilityReportFactory.create("0.1.0", inputs).toJson()
 
             assertTrue(text.contains("\"build\": null"))
             assertFalse(text.contains(hostileBuild))
@@ -119,6 +119,25 @@ class CompatibilityReportTest {
         }
         assertFalse(report.toString().contains("content://"))
         assertNull(report.build)
+    }
+
+    @Test
+    fun retainedInputsExcludeFilenameAndProviderMetadataBeforeSerialization() {
+        val inputs = CompatibilityReportFactory.captureInputs(
+            source = source(
+                displayName = "private-account-Ira.sav",
+                declaredSizeBytes = 9_999_999,
+                lastModifiedEpochMillis = 1_725_000_000_000,
+            ),
+            format = format(build = "private gameplay"),
+            failureKind = "CORRUPT_INPUT",
+            failureDiagnostic = "CONTENT_CORRUPT",
+        )
+
+        val retained = inputs.toString()
+        listOf("private", "account", "Ira", "9999999", "1725000000000", "gameplay")
+            .forEach { forbidden -> assertFalse(retained.contains(forbidden, ignoreCase = true)) }
+        assertFalse(inputs.javaClass.declaredFields.any { it.type == ByteArray::class.java })
     }
 
     private fun report(

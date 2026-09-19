@@ -52,6 +52,7 @@ See:
 - `docs/v0.1-scope.md`
 - `docs/android-read-only-shell.md`
 - `docs/compatibility-report-v0.1.md`
+- `docs/licensing-boundary-review.md`
 - `fixtures/README.md`
 
 ## Build
@@ -95,6 +96,12 @@ A Gradle wrapper will be added once the initial build is validated, rather than 
 
 This repository intentionally has **no license yet**.
 
-JA2/JA2 Reborn source is under the Strategy First Source Code License and carries restrictions that are not compatible with casually treating derived implementation code as MIT/Apache code. Field Kit should therefore be implemented as original code that understands the save-file format. Source code may be consulted to understand the format, but implementation code should not be copied into this repository.
+JA2/JA2 Reborn source is under the Strategy First Source Code License and
+carries restrictions that are not compatible with casually treating derived
+implementation code as MIT/Apache code. Field Kit should use project-authored
+expression of reviewed interoperability facts. Upstream implementation code,
+comments, and tables must not be copied or translated into this repository.
 
-A licensing-boundary review is required before choosing an open-source license.
+The current engineering boundary review and its remaining decision gate are in
+[`docs/licensing-boundary-review.md`](docs/licensing-boundary-review.md). No
+project license has been selected or added.

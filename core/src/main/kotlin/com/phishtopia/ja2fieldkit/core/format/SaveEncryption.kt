@@ -162,11 +162,18 @@ data class NormalRotationTableIndex(val value: Int) {
     }
 }
 
-/** Independently written implementation of the documented normal, non-German selector. */
+/** Project-authored expression of the documented normal, non-German selector facts. */
 object NormalSaveEncryptionSelector {
     const val TABLES_PER_BANK = 19
     const val ROTATION_TABLE_COUNT = TABLES_PER_BANK * 12
     private const val UINT32_MASK = 0xffff_ffffL
+    private val RANDOM_CONTRIBUTIONS =
+        listOf(
+            DivisibilityContribution(divisor = 2L, amount = 1L),
+            DivisibilityContribution(divisor = 14L, amount = 1L),
+            DivisibilityContribution(divisor = 322L, amount = 1L),
+            DivisibilityContribution(divisor = 1_106L, amount = 2L),
+        )
 
     fun select(inputs: NormalEncryptionHeaderInputs): NormalRotationTableIndex {
         var accumulator = wrapUnsigned32(inputs.balance.toLong())
@@ -176,19 +183,10 @@ object NormalSaveEncryptionSelector {
         accumulator = wrapUnsigned32(accumulator + inputs.loadScreenId.toLong())
 
         if (inputs.alternateSector) accumulator = wrapUnsigned32(accumulator + 7L)
-
-        if (inputs.perSaveRandom % 2L == 0L) {
-            accumulator = wrapUnsigned32(accumulator + 1L)
-            if (inputs.perSaveRandom % 7L == 0L) {
-                accumulator = wrapUnsigned32(accumulator + 1L)
-                if (inputs.perSaveRandom % 23L == 0L) {
-                    accumulator = wrapUnsigned32(accumulator + 1L)
-                }
-                if (inputs.perSaveRandom % 79L == 0L) {
-                    accumulator = wrapUnsigned32(accumulator + 2L)
-                }
-            }
+        val randomContribution = RANDOM_CONTRIBUTIONS.sumOf { contribution ->
+            if (inputs.perSaveRandom % contribution.divisor == 0L) contribution.amount else 0L
         }
+        accumulator = wrapUnsigned32(accumulator + randomContribution)
 
         val positionWithinBank =
             ((accumulator % 10L + inputs.worldDay / 10L) % TABLES_PER_BANK).toInt()
@@ -201,6 +199,8 @@ object NormalSaveEncryptionSelector {
     }
 
     private fun wrapUnsigned32(value: Long): Long = value and UINT32_MASK
+
+    private data class DivisibilityContribution(val divisor: Long, val amount: Long)
 }
 
 /** Immutable, defensively copied rotation bytes for one table. */

@@ -253,21 +253,20 @@ object NormalNonLinuxRosterDecoder {
     }
 
     private fun sourceChecksum(reader: LittleEndianReader): Long {
-        var sum = 1L
-        sum = wrap(sum + 1L + reader.i8(LIFE_OFFSET))
-        sum = wrap(sum * (1L + reader.i8(LIFE_MAX_OFFSET)))
-        sum = wrap(sum + 1L + reader.i8(AGILITY_OFFSET))
-        sum = wrap(sum * (1L + reader.i8(DEXTERITY_OFFSET)))
-        sum = wrap(sum + 1L + reader.i8(STRENGTH_OFFSET))
-        sum = wrap(sum * (1L + reader.i8(MARKSMANSHIP_OFFSET)))
-        sum = wrap(sum + 1L + reader.i8(MEDICAL_OFFSET))
-        sum = wrap(sum * (1L + reader.i8(MECHANICAL_OFFSET)))
-        sum = wrap(sum + 1L + reader.i8(EXPLOSIVE_OFFSET))
-        sum = wrap(sum * (1L + reader.i8(EXPERIENCE_LEVEL_OFFSET)))
+        var sum = CHECKSUM_STAT_OFFSET_PAIRS.fold(1L) { checksum, offsets ->
+            wrap(
+                (checksum + 1L + reader.i8(offsets.addend)) *
+                    (1L + reader.i8(offsets.multiplier)),
+            )
+        }
         sum = wrap(sum + 1L + reader.u8(PROFILE_OFFSET))
         repeat(INVENTORY_SLOT_COUNT) { slot ->
-            sum = wrap(sum + reader.u16(INVENTORY_START_OFFSET + INVENTORY_RECORD_SIZE * slot))
-            sum = wrap(sum + reader.u8(INVENTORY_COUNT_OFFSET + INVENTORY_RECORD_SIZE * slot))
+            val recordOffset = INVENTORY_RECORD_SIZE * slot
+            sum = wrap(
+                sum +
+                    reader.u16(INVENTORY_START_OFFSET + recordOffset) +
+                    reader.u8(INVENTORY_COUNT_OFFSET + recordOffset),
+            )
         }
         return sum
     }
@@ -373,4 +372,15 @@ object NormalNonLinuxRosterDecoder {
     private const val PROFILE_OFFSET = 1825
     private const val STORED_CHECKSUM_OFFSET = 2208
     private const val UINT32_MASK = 0xffff_ffffL
+
+    private data class ChecksumStatOffsets(val addend: Int, val multiplier: Int)
+
+    private val CHECKSUM_STAT_OFFSET_PAIRS =
+        listOf(
+            ChecksumStatOffsets(LIFE_OFFSET, LIFE_MAX_OFFSET),
+            ChecksumStatOffsets(AGILITY_OFFSET, DEXTERITY_OFFSET),
+            ChecksumStatOffsets(STRENGTH_OFFSET, MARKSMANSHIP_OFFSET),
+            ChecksumStatOffsets(MEDICAL_OFFSET, MECHANICAL_OFFSET),
+            ChecksumStatOffsets(EXPLOSIVE_OFFSET, EXPERIENCE_LEVEL_OFFSET),
+        )
 }

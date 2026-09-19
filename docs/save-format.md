@@ -30,10 +30,11 @@ validation; the historical JA2 Reborn entry remains pending independently. The
 parser does not identify a save family by itself.
 
 The normal, non-German encryption selector and byte-wise block transform are
-now implemented from source-derived format facts rechecked at immutable JA2
-Reborn commit `743f38a6ca86c81893376c2576277db660320170`. The selector uses explicit
-32-bit unsigned wrapping, the evidenced nested random branches, and the 19-entry
-option/difficulty banks. Header-to-selector conversion rejects non-`0`/`1`
+project-authored expressions of interoperability facts rechecked at immutable
+JA2 Reborn commit `743f38a6ca86c81893376c2576277db660320170`.
+The selector uses explicit 32-bit unsigned wrapping, algebraic divisibility
+contributions, and the 19-entry option/difficulty banks. Header-to-selector
+conversion rejects non-`0`/`1`
 selector booleans, unsupported difficulty identities, and unsupported header
 identities instead of guessing. Compatibility detection now binds that selected
 index to the recovered body rotation through a non-secret digest oracle. This
@@ -169,6 +170,6 @@ If redistribution of a save fixture is legally or personally questionable, keep 
 
 ## Licensing boundary
 
-JA2/JA2 Reborn source may be consulted to understand serialized structures and algorithms. Field Kit implementation should be independently written from those facts rather than copied from restricted source.
+JA2/JA2 Reborn source may be consulted to identify necessary interoperability facts. Field Kit implementation should express reviewed facts through project-authored specifications, tests, and code rather than translate or copy restricted source.
 
 Before adding any copied constants, tables, code-shaped logic, or a repository license, review whether the material is factual format information or protected implementation expression.

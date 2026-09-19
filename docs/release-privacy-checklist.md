@@ -146,15 +146,18 @@ the review rather than selecting the most convenient description.
   advertising, background-work, storage, and account behavior. A dependency
   must not silently change this inventory.
 - [ ] Exercise the final artifact and update this data-flow table from actual
-  behavior. Derive the privacy policy and
-  [Data Safety declarations](https://support.google.com/googleplay/android-developer/answer/11150561)
+  behavior. Derive the privacy policy and the separate
+  [Data Safety form declarations](https://support.google.com/googleplay/android-developer/answer/10787469)
   from what ships, including SDK behavior and user-initiated exports, not from
-  intentions or an older build.
+  intentions or an older build. Review each as its own release obligation.
 - [ ] If any future feature needs sensitive data or permissions, reassess data
   minimization and the current
   [permission declaration](https://support.google.com/googleplay/android-developer/answer/9214102)
-  rules. Add prominent disclosure/consent where the then-current policy or the
-  feature's reasonable user expectations require it.
+  requirements. Add
+  [prominent in-app disclosure and consent](https://support.google.com/googleplay/android-developer/answer/11150561)
+  where the then-current policy or the feature's reasonable user expectations
+  require it; do not treat that step as a substitute for the privacy policy,
+  Data Safety form declarations, or any required permission declaration.
 - [ ] Keep Issue #12 as a mandatory design and verification gate before any
   editing, write-back, or generated-save export implementation. Keep Issue #13
   as a mandatory protocol and threat-model gate before any LAN bridge,
@@ -192,7 +195,8 @@ linked requirements immediately before each public release:
 
 - [App statistics: Installed Audience and Install base](https://support.google.com/googleplay/android-developer/answer/139628)
 - [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756)
-- [Data Safety](https://support.google.com/googleplay/android-developer/answer/11150561)
+- [Data Safety form: Provide information for Google Play's Data safety section](https://support.google.com/googleplay/android-developer/answer/10787469)
+- [Prominent disclosure and consent: Best practices](https://support.google.com/googleplay/android-developer/answer/11150561)
 - [Permission declarations](https://support.google.com/googleplay/android-developer/answer/9214102)
 - [Play Console requirements](https://support.google.com/googleplay/android-developer/answer/10788890)
 - [Prepare and roll out a release](https://support.google.com/googleplay/android-developer/answer/9859348)

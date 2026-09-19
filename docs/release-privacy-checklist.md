@@ -17,8 +17,22 @@ retain or transmit data; it is not automatic collection or upload by Field Kit.
 ## Audited current boundary
 
 - Application ID: `com.phishtopia.ja2fieldkit`.
-- The merged manifest declares zero Android permissions, including no
-  `INTERNET` permission. It declares no service or background scanner.
+- The source app manifest declares zero `uses-permission` elements and no
+  `INTERNET` permission. The generated debug merged manifest does contain the
+  app-scoped
+  `com.phishtopia.ja2fieldkit.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
+  signature permission and a `uses-permission` for it, both injected by
+  `androidx.core:core:1.18.0`. This package-scoped AndroidX infrastructure does
+  not grant Field Kit network or save access. The merged manifest still has no
+  `INTERNET` permission, user-granted broad storage permission, Field Kit
+  service, or background save scanner.
+- `androidx.profileinstaller:profileinstaller:1.4.0` contributes the non-exported
+  `androidx.startup.InitializationProvider`, its `ProfileInstallerInitializer`
+  metadata, and the exported `androidx.profileinstaller.ProfileInstallReceiver`,
+  which is guarded by `android.permission.DUMP`. These are transitive AndroidX
+  runtime-infrastructure entries, not additions made by this documentation PR;
+  they do not grant Field Kit network or save access. Their presence must still
+  be acknowledged and reviewed in the final release manifest audit.
 - The dependency graph is `:core`, AndroidX Activity, Kotlin/JUnit test support,
   and Android build tooling. It contains no network stack, analytics,
   telemetry, crash-reporting, advertising, account, cloud-provider, database,
@@ -44,9 +58,9 @@ summarizes their release/privacy consequences rather than replacing them.
 
 | Feature or state | Data accessed | Retained or persisted by Field Kit | Transmitted outside Field Kit | User action required | Android permission or capability | Release / Data Safety review note |
 |---|---|---|---|---|---|---|
-| Document picker import (current) | One user-selected provider `content://` stream | URI exists only for the immediate import; bytes are ephemeral as described below; no history or disk persistence | No Field Kit network transmission | Tap **Open save**, choose one document | `ACTION_OPEN_DOCUMENT` and a temporary provider grant; no declared permission and no persistable grant | Recheck that the shipping flow still selects one document and does not broaden storage access |
-| Open With import (current) | One `content://` URI delivered by another app | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | No Field Kit network transmission | Choose Field Kit from an Android Open With flow | `ACTION_VIEW`, narrowly advertised MIME/path filters, temporary sender grant; no declared permission | Treat as user-directed local input, not collection; preserve content-only URI policy |
-| Share To import (current) | Exactly one stream URI from `ClipData` or `EXTRA_STREAM`; multiple items are rejected | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | No Field Kit network transmission | Share one save to Field Kit | `ACTION_SEND` for `application/x-ja2-save`, temporary sender grant; no declared permission | Do not describe receipt from the Android share sheet as an upload by Field Kit |
+| Document picker import (current) | One user-selected provider `content://` stream | URI exists only for the immediate import; bytes are ephemeral as described below; no history or disk persistence | No Field Kit network transmission | Tap **Open save**, choose one document | `ACTION_OPEN_DOCUMENT` and a temporary provider grant; no user runtime storage permission and no persistable grant | Recheck that the shipping flow still selects one document and does not broaden storage access. The merged manifest's AndroidX package-scoped signature permission does not provide save access |
+| Open With import (current) | One `content://` URI delivered by another app | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | No Field Kit network transmission | Choose Field Kit from an Android Open With flow | `ACTION_VIEW`, narrowly advertised MIME/path filters, temporary sender grant; no user runtime storage permission | Treat as user-directed local input, not collection; preserve content-only URI policy. The merged manifest's AndroidX package-scoped signature permission does not provide save access |
+| Share To import (current) | Exactly one stream URI from `ClipData` or `EXTRA_STREAM`; multiple items are rejected | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | No Field Kit network transmission | Share one save to Field Kit | `ACTION_SEND` for `application/x-ja2-save`, temporary sender grant; no user runtime storage permission | Do not describe receipt from the Android share sheet as an upload by Field Kit. The merged manifest's AndroidX package-scoped signature permission does not provide save access |
 | Provider metadata (current) | Sanitized leaf display filename, nonnegative provider-declared size, optional positive last-modified timestamp, and import-route category | Retained ephemerally in presentation state after a complete import; filename may also appear while loading. No app-managed persistence | None unless a user separately exports visible information; filename, declared size, and timestamp are excluded from compatibility reports | Same explicit import action | Provider query through the temporary URI grant | Filename controls/separators are replaced, path components removed, and length capped at 120 code points. Declared size is advisory; actual streamed bytes govern the limit |
 | Content URI, path, and provider identifiers (current) | The Android layer consumes the content URI; it does not derive a filesystem path or intentionally query provider/account identifiers | URI is captured only by the in-flight import task and is not placed in retained presentation state, recent history, or persistent storage; no persistent URI grant | None | Same explicit import action | Temporary URI grant | Confirm URI/path/provider identifiers remain absent from UI state, reports, logs, analytics, and crash uploads |
 | Complete imported save bytes (current) | Exact stream contents, only after a bounded complete read | Private task-local `ByteArray`, lent to the immediate inspection call and then eligible for disposal; never exposed as screen state or written by the app | None | Same explicit import action | In-process memory; no permission beyond temporary read grant | Maximum is 16 MiB. Reassess memory and disclosure posture if the limit or lifecycle changes |
@@ -56,9 +70,9 @@ summarizes their release/privacy consequences rather than replacing them.
 | Successful parsed campaign, merc profile, and roster presentation (current) | Save version/build/layout/family evidence; campaign day/time/sector/count/balance; verified roster names, nicknames, and core stats | Retained ephemerally in screen state; no database, file, recent-save record, or cloud persistence | No compatibility-report path is offered for success and Field Kit transmits nothing | Import a supported save | Local computation and UI | Gameplay/save-derived data remains on device. Screenshots or user copying selectable UI text are user/OS actions outside an app upload flow |
 | Compatibility-report safe input facts (current) | Entry category, actual byte count, source SHA-256, allow-listed format facts, and enumerated failure facts | Retained ephemerally only for a completed structured inspection failure; no serialized JSON yet | None before explicit export | Import must reach an eligible failure | Local computation | Excludes filename, declared size/timestamp, URI/path/provider identifiers, save bytes, campaign/roster data, free text, and parser internals |
 | Compatibility report Preview (current) | Safe inputs plus compiled app version | Exact deterministic JSON is generated only after **Compatibility report** is tapped and retained as one immutable in-memory preview | Preview itself causes no transmission | Explicit Preview tap after an eligible failure | Local UI only | Review the schema and visible privacy notice against the shipping implementation |
-| Copy report to clipboard (current) | Exact immutable preview text | Field Kit adds no separate copy; Android's clipboard may retain the text according to OS behavior | OS-mediated clipboard export, not Field Kit network transmission; another app/user may subsequently use it | Explicit **Copy report** tap | Android clipboard API; no declared permission | Disclose the clipboard handoff accurately and do not call it automatic upload |
+| Copy report to clipboard (current) | Exact immutable preview text | Field Kit adds no separate copy; Android's clipboard may retain the text according to OS behavior | OS-mediated clipboard export, not Field Kit network transmission; another app/user may subsequently use it | Explicit **Copy report** tap | Android clipboard API; no user runtime permission required | Disclose the clipboard handoff accurately and do not call it automatic upload |
 | Share report (current) | Exact immutable preview text | Field Kit adds no durable copy | OS-mediated `ACTION_SEND` handoff to a user-chosen receiver. That receiver may store or transmit it; Field Kit does not select a destination or use the network | Explicit **Share report** tap plus chooser selection | Android chooser, `text/plain` `EXTRA_TEXT`; no URI, attachment, `ClipData`, or grant flags | Data Safety and privacy text must distinguish this user-initiated transfer from app collection or automatic sharing |
-| Local storage and persistence (current) | No app database/preferences/file cache of saves or recent sources | No app-managed persistence. Normal Android/runtime/build artifacts are not a product data store | None | None | `allowBackup="false"`; no storage permission | Re-audit app storage APIs and backup behavior on the exact release artifact |
+| Local storage and persistence (current) | No app database/preferences/file cache of saves or recent sources | No app-managed persistence. Normal Android/runtime/build artifacts are not a product data store | None | None | `allowBackup="false"`; no user-granted broad storage permission | Re-audit app storage APIs and backup behavior on the exact release artifact |
 | Network (current) | None | None | No Field Kit network traffic | None | No `INTERNET` permission or network dependency | Any future network capability is a material posture change requiring inventory, threat-model, permission, privacy-policy, and Data Safety review |
 | Analytics and telemetry (current) | None | None | None | None | No analytics/telemetry SDK or permission | Play Console aggregate metrics, not an embedded SDK, are the install-base plan |
 | Crash or error upload (current) | Local bounded failure handling only | No crash/error upload queue or SDK | None | None | No crash-reporting SDK or network capability | Any future diagnostics upload requires a separate purpose, minimization, consent/disclosure, retention, and vendor review |
@@ -138,9 +152,14 @@ the review rather than selecting the most convenient description.
 
 ### Runtime, privacy, and permissions
 
-- [ ] Inspect the final merged manifest (including libraries and release
-  variants) and justify every permission, component, intent filter, exported
-  surface, and URI grant. Zero declared permissions is the current baseline.
+- [ ] Generate and inspect the actual final merged **release** manifest,
+  including library contributions; do not rely only on the source
+  `AndroidManifest.xml`. Justify every permission declaration and use,
+  component, intent filter, exported surface, and URI grant. The current source
+  baseline is zero `uses-permission` elements, while the current merged debug
+  baseline includes the AndroidX-injected package-scoped signature permission,
+  Startup provider, and DUMP-guarded ProfileInstaller receiver documented
+  above, with no `INTERNET` or user-granted broad storage permission.
 - [ ] Inspect the resolved release dependency graph and SDK behavior for
   network, tracking, identifier, analytics, telemetry, crash-reporting,
   advertising, background-work, storage, and account behavior. A dependency

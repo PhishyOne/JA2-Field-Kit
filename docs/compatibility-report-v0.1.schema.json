@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ja2-field-kit:compatibility-report:0.1",
+  "title": "JA2 Field Kit compatibility report v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "app_version", "source", "format", "failure"],
+  "properties": {
+    "schema_version": {"const": "ja2-field-kit.compatibility-report/0.1"},
+    "app_version": {
+      "type": "string",
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "actual_size_bytes", "sha256"],
+      "properties": {
+        "category": {"enum": ["document_picker", "open_with", "share_to"]},
+        "actual_size_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "format": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["save_version", "build", "layout", "compatibility", "producer"],
+      "properties": {
+        "save_version": {"type": ["integer", "null"], "minimum": 0},
+        "build": {"enum": ["04.12.02", null]},
+        "layout": {"enum": ["normal_non_linux_v103_build_041202", "unknown"]},
+        "compatibility": {
+          "enum": ["supported", "candidate", "truncated", "unsupported_variant", "inconsistent", "unknown"]
+        },
+        "producer": {"enum": ["ja2_reborn", "ja2_stracciatella", "classic_ja2", "unknown"]}
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "diagnostic"],
+      "properties": {
+        "kind": {
+          "enum": ["unknown_format", "unsupported_variant", "truncated_input", "inconsistent_input", "corrupt_input"]
+        },
+        "diagnostic": {
+          "enum": ["identity_incomplete", "identity_unknown", "identity_inconsistent", "header_truncated", "layout_truncated", "variant_unsupported", "content_ambiguous", "header_body_mismatch", "content_inconsistent", "content_corrupt", "detection_failed"]
+        }
+      }
+    }
+  }
+}

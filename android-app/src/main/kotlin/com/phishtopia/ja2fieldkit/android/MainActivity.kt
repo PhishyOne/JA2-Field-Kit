@@ -1,5 +1,8 @@
 package com.phishtopia.ja2fieldkit.android
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -22,6 +25,7 @@ import com.phishtopia.ja2fieldkit.android.presentation.CampaignPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.MercPresentation
+import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 
 class MainActivity : ComponentActivity() {
     private val model: InspectionViewModel by viewModels()
@@ -136,6 +140,16 @@ class MainActivity : ComponentActivity() {
                 content.addLabelValue("Diagnostic", screenState.diagnostic)
                 screenState.format?.let { content.addFormat(it) }
                 content.addBody("No save data was changed.")
+                screenState.compatibilityReportText?.let { reportText ->
+                    if (screenState.reportPreviewVisible) {
+                        content.addCompatibilityReportPreview(reportText)
+                    } else {
+                        content.addView(Button(this).apply {
+                            setText(R.string.preview_compatibility_report)
+                            setOnClickListener { model.showCompatibilityReportPreview() }
+                        }, matchWidth())
+                    }
+                }
                 content.addOpenButton(R.string.open_another_save)
             }
         }
@@ -243,8 +257,45 @@ class MainActivity : ComponentActivity() {
         addView(Button(this@MainActivity).apply {
             setText(label)
             setOnClickListener { openDocument.launch(arrayOf("*/*")) }
-        }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }, matchWidth())
     }
+
+    private fun LinearLayout.addCompatibilityReportPreview(reportText: String) {
+        val preview = CompatibilityReportPreview(reportText)
+        addHeading(getString(R.string.compatibility_report_preview))
+        addBody(getString(R.string.compatibility_report_privacy_notice))
+        addBody(preview.text)
+        addView(Button(this@MainActivity).apply {
+            setText(R.string.copy_compatibility_report)
+            setOnClickListener {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText(
+                        getString(R.string.compatibility_report_clip_label),
+                        preview.clipboardText,
+                    ),
+                )
+            }
+        }, matchWidth())
+        addView(Button(this@MainActivity).apply {
+            setText(R.string.share_compatibility_report)
+            setOnClickListener {
+                val payload = preview.share
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = payload.mimeType
+                    putExtra(Intent.EXTRA_TEXT, payload.text)
+                }
+                startActivity(
+                    Intent.createChooser(send, getString(R.string.share_compatibility_report)),
+                )
+            }
+        }, matchWidth())
+    }
+
+    private fun matchWidth(): ViewGroup.LayoutParams = ViewGroup.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT,
+    )
 
     private fun textView(text: String, size: Float): TextView = TextView(this).apply {
         this.text = text

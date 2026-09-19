@@ -19,6 +19,7 @@ import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionPresentationMapper
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.SourceFailureKind
+import com.phishtopia.ja2fieldkit.android.presentation.withCompatibilityReportPreview
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -71,6 +72,7 @@ class InspectionViewModel : ViewModel() {
                 InspectionPresentationMapper.map(
                     imported.provenance,
                     imported.inspectV01With(inspector),
+                    BuildConfig.VERSION_NAME,
                 )
             } catch (_: SaveTooLargeException) {
                 InspectionPresentationMapper.sourceFailure(SourceFailureKind.SIZE_LIMIT)
@@ -90,6 +92,11 @@ class InspectionViewModel : ViewModel() {
     fun showSourceFailure(kind: SourceFailureKind) {
         requestSequence.incrementAndGet()
         publish(InspectionPresentationMapper.sourceFailure(kind))
+    }
+
+    fun showCompatibilityReportPreview() {
+        val next = state.withCompatibilityReportPreview()
+        if (next !== state) publish(next)
     }
 
     private fun querySourceMetadata(

@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.android.presentation
 
 import com.phishtopia.ja2fieldkit.android.importing.ImportedSaveProvenance
+import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportFactory
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveFamily
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
@@ -28,6 +29,8 @@ sealed interface InspectionScreenState {
         val failureKind: String,
         val diagnostic: String,
         val format: FormatPresentation?,
+        val compatibilityReportText: String?,
+        val reportPreviewVisible: Boolean = false,
     ) : InspectionScreenState
 }
 
@@ -58,6 +61,7 @@ object InspectionPresentationMapper {
     fun map(
         source: ImportedSaveProvenance,
         result: SaveInspectionV01Result,
+        appVersion: String = "0.1.0",
     ): InspectionScreenState = when (result) {
         is SaveInspectionV01Result.Success -> InspectionScreenState.Success(
             source = source,
@@ -74,19 +78,31 @@ object InspectionPresentationMapper {
             roster = result.roster.map(::mapMerc),
         )
 
-        is SaveInspectionV01Result.Failure -> InspectionScreenState.Failure(
-            source = source,
-            title = when (result.failure.kind) {
-                SaveInspectionFailureKind.UNKNOWN_FORMAT -> "Unknown save format"
-                SaveInspectionFailureKind.UNSUPPORTED_VARIANT -> "Unsupported save variant"
-                SaveInspectionFailureKind.TRUNCATED_INPUT -> "Truncated save"
-                SaveInspectionFailureKind.INCONSISTENT_INPUT -> "Inconsistent save"
-                SaveInspectionFailureKind.CORRUPT_INPUT -> "Corrupt save"
-            },
-            failureKind = result.failure.kind.name,
-            diagnostic = result.failure.diagnostic.name,
-            format = mapFormat(result.format),
-        )
+        is SaveInspectionV01Result.Failure -> {
+            val format = mapFormat(result.format)
+            val failureKind = result.failure.kind.name
+            val diagnostic = result.failure.diagnostic.name
+            InspectionScreenState.Failure(
+                source = source,
+                title = when (result.failure.kind) {
+                    SaveInspectionFailureKind.UNKNOWN_FORMAT -> "Unknown save format"
+                    SaveInspectionFailureKind.UNSUPPORTED_VARIANT -> "Unsupported save variant"
+                    SaveInspectionFailureKind.TRUNCATED_INPUT -> "Truncated save"
+                    SaveInspectionFailureKind.INCONSISTENT_INPUT -> "Inconsistent save"
+                    SaveInspectionFailureKind.CORRUPT_INPUT -> "Corrupt save"
+                },
+                failureKind = failureKind,
+                diagnostic = diagnostic,
+                format = format,
+                compatibilityReportText = CompatibilityReportFactory.create(
+                    appVersion = appVersion,
+                    source = source,
+                    format = format,
+                    failureKind = failureKind,
+                    failureDiagnostic = diagnostic,
+                ).toJson(),
+            )
+        }
     }
 
     fun sourceFailure(
@@ -106,6 +122,7 @@ object InspectionPresentationMapper {
             else -> "CONTENT_URI_${kind.name}"
         },
         format = null,
+        compatibilityReportText = null,
     )
 
     private fun mapFormat(format: SaveInspectionFormat): FormatPresentation =
@@ -158,6 +175,13 @@ object InspectionPresentationMapper {
 
     private fun Int?.display(): String = this?.toString() ?: "Unknown"
 }
+
+fun InspectionScreenState.withCompatibilityReportPreview(): InspectionScreenState =
+    if (this is InspectionScreenState.Failure && compatibilityReportText != null) {
+        copy(reportPreviewVisible = true)
+    } else {
+        this
+    }
 
 /** Removes text controls at the boundary where save data becomes retained screen state. */
 private object PresentationTextSanitizer {

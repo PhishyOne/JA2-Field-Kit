@@ -19,6 +19,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class InspectionPresentationMapperTest {
     private val source = ImportedSaveProvenance(
@@ -140,6 +144,68 @@ class InspectionPresentationMapperTest {
         assertEquals(3, cases.map { it.failureKind }.toSet().size)
         assertEquals(3, cases.map { it.diagnostic }.toSet().size)
         assertNotEquals(cases[0], cases[1])
+        cases.forEach { assertNotNull(it.compatibilityReportText) }
+    }
+
+    @Test
+    fun unknownUnsupportedTruncatedAndCorruptReportsUseTheirExactBoundedCodes() {
+        val cases = listOf(
+            SaveInspectionFailureKind.UNKNOWN_FORMAT to SaveInspectionDiagnostic.IDENTITY_UNKNOWN,
+            SaveInspectionFailureKind.UNSUPPORTED_VARIANT to SaveInspectionDiagnostic.VARIANT_UNSUPPORTED,
+            SaveInspectionFailureKind.TRUNCATED_INPUT to SaveInspectionDiagnostic.LAYOUT_TRUNCATED,
+            SaveInspectionFailureKind.CORRUPT_INPUT to SaveInspectionDiagnostic.CONTENT_CORRUPT,
+        )
+
+        cases.forEach { (kind, diagnostic) ->
+            val state = assertIs<InspectionScreenState.Failure>(
+                InspectionPresentationMapper.map(source, failure(kind, diagnostic), "0.1.0"),
+            )
+            val report = assertNotNull(state.compatibilityReportText)
+            assertTrue(report.contains("\"kind\": \"${kind.name.lowercase()}\""))
+            assertTrue(report.contains("\"diagnostic\": \"${diagnostic.name.lowercase()}\""))
+        }
+    }
+
+    @Test
+    fun reportActionIsUnavailableWithoutCompleteSafeFailureContext() {
+        SourceFailureKind.entries.forEach { kind ->
+            val state = InspectionPresentationMapper.sourceFailure(kind)
+            assertNull(state.compatibilityReportText)
+            assertSame(state, state.withCompatibilityReportPreview())
+        }
+        val success = InspectionPresentationMapper.map(source, successResult())
+        assertSame(success, success.withCompatibilityReportPreview())
+    }
+
+    @Test
+    fun reportPreviewBecomesVisibleOnlyAfterExplicitTransition() {
+        val initial = assertIs<InspectionScreenState.Failure>(
+            InspectionPresentationMapper.map(
+                source,
+                failure(SaveInspectionFailureKind.TRUNCATED_INPUT, SaveInspectionDiagnostic.LAYOUT_TRUNCATED),
+            ),
+        )
+
+        assertFalse(initial.reportPreviewVisible)
+        val preview = assertIs<InspectionScreenState.Failure>(initial.withCompatibilityReportPreview())
+        assertTrue(preview.reportPreviewVisible)
+        assertEquals(initial.compatibilityReportText, preview.compatibilityReportText)
+    }
+
+    @Test
+    fun failureReportStateContainsNoRawBytesMercOrCampaignPresentation() {
+        val state = assertIs<InspectionScreenState.Failure>(
+            InspectionPresentationMapper.map(
+                source.copy(displayName = "Ira-secret-campaign.sav"),
+                failure(SaveInspectionFailureKind.CORRUPT_INPUT, SaveInspectionDiagnostic.CONTENT_CORRUPT),
+            ),
+        )
+        val report = assertNotNull(state.compatibilityReportText)
+
+        assertFalse(state.javaClass.declaredFields.any { it.type == ByteArray::class.java })
+        assertFalse(report.contains("Ira"))
+        assertFalse(report.contains("campaign"))
+        assertFalse(report.contains("slot01.sav"))
     }
 
     @Test
@@ -149,6 +215,7 @@ class InspectionPresentationMapperTest {
         assertEquals("SOURCE_SIZE_LIMIT", state.failureKind)
         assertEquals("MAXIMUM_16_MIB", state.diagnostic)
         assertEquals(null, state.format)
+        assertEquals(null, state.compatibilityReportText)
     }
 
     private fun failure(

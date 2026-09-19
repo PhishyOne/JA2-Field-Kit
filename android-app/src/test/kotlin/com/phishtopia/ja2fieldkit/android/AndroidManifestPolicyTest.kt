@@ -43,6 +43,37 @@ class AndroidManifestPolicyTest {
         assertEquals(setOf("content"), schemes.toSet())
     }
 
+    @Test
+    fun reportShareIsTextOnlyWithoutUriClipDataOrGrantFlags() {
+        val activity = File(
+            checkNotNull(System.getProperty("androidAppProjectDir")),
+            "src/main/kotlin/com/phishtopia/ja2fieldkit/android/MainActivity.kt",
+        ).readText()
+        val shareBlock = activity.substringAfter("val send = Intent(Intent.ACTION_SEND)")
+            .substringBefore("startActivity(")
+
+        assertTrue(shareBlock.contains("type = payload.mimeType"))
+        assertTrue(shareBlock.contains("putExtra(Intent.EXTRA_TEXT, payload.text)"))
+        assertFalse(shareBlock.contains("ClipData"))
+        assertFalse(shareBlock.contains("Uri"))
+        assertFalse(shareBlock.contains("flags"))
+        assertFalse(shareBlock.contains("FLAG_GRANT"))
+    }
+
+    @Test
+    fun clipboardWriteExistsOnlyInsideExplicitCopyClickHandler() {
+        val activity = File(
+            checkNotNull(System.getProperty("androidAppProjectDir")),
+            "src/main/kotlin/com/phishtopia/ja2fieldkit/android/MainActivity.kt",
+        ).readText()
+        val copyButton = activity.substringAfter("setText(R.string.copy_compatibility_report)")
+            .substringBefore("setText(R.string.share_compatibility_report)")
+
+        assertEquals(1, Regex("setPrimaryClip").findAll(activity).count())
+        assertTrue(copyButton.indexOf("setOnClickListener") < copyButton.indexOf("setPrimaryClip"))
+        assertTrue(copyButton.contains("preview.clipboardText"))
+    }
+
     companion object {
         private const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
     }

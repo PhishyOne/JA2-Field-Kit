@@ -15,10 +15,15 @@ class ProviderMetadataReaderTest {
             openable = OpenableSourceMetadata("slot01.sav", 24),
             timestampFailure = UnsupportedOperationException("unsupported column"),
         )
+        val imported = SaveImporter(BoundedSaveReader(64)).import(
+            ByteArrayInputStream(byteArrayOf(1, 2, 3)),
+            metadata,
+        )
 
-        assertEquals("slot01.sav", metadata.displayName)
-        assertEquals(24, metadata.declaredSizeBytes)
-        assertNull(metadata.lastModifiedEpochMillis)
+        assertEquals("slot01.sav", imported.provenance.displayName)
+        assertEquals(24, imported.provenance.declaredSizeBytes)
+        assertEquals(3, imported.provenance.actualSizeBytes)
+        assertNull(imported.provenance.lastModifiedEpochMillis)
     }
 
     @Test
@@ -27,17 +32,21 @@ class ProviderMetadataReaderTest {
             openable = OpenableSourceMetadata("slot02.sav", 31),
             lastModified = 1_725_000_000_000L,
         )
+        val imported = SaveImporter(BoundedSaveReader(64)).import(
+            ByteArrayInputStream(byteArrayOf(1, 2, 3)),
+            metadata,
+        )
 
-        assertEquals("slot02.sav", metadata.displayName)
-        assertEquals(31, metadata.declaredSizeBytes)
-        assertEquals(1_725_000_000_000L, metadata.lastModifiedEpochMillis)
+        assertEquals("slot02.sav", imported.provenance.displayName)
+        assertEquals(31, imported.provenance.declaredSizeBytes)
+        assertEquals(1_725_000_000_000L, imported.provenance.lastModifiedEpochMillis)
     }
 
     @Test
     fun rejectedOpenableQueryStillImportsWithFallbackNameAndNoDeclaredSize() {
         val metadata = read(
             openableFailure = IllegalArgumentException("unsupported projection"),
-            lastModified = 123L,
+            timestampFailure = UnsupportedOperationException("unsupported column"),
         )
 
         val imported = SaveImporter(BoundedSaveReader(64)).import(
@@ -48,7 +57,7 @@ class ProviderMetadataReaderTest {
         assertEquals("Selected save", imported.provenance.displayName)
         assertNull(imported.provenance.declaredSizeBytes)
         assertEquals(3, imported.provenance.actualSizeBytes)
-        assertEquals(123L, imported.provenance.lastModifiedEpochMillis)
+        assertNull(imported.provenance.lastModifiedEpochMillis)
     }
 
     @Test
@@ -67,6 +76,24 @@ class ProviderMetadataReaderTest {
 
         assertEquals(2, imported.provenance.declaredSizeBytes)
         assertEquals(3, imported.provenance.actualSizeBytes)
+    }
+
+    @Test
+    fun oversizedDeclaredSizeRemainsAdvisoryProvenance() {
+        val imported = SaveImporter(BoundedSaveReader(3)).import(
+            ByteArrayInputStream(byteArrayOf(4, 5, 6)),
+            read(openable = OpenableSourceMetadata("slot.sav", 4)),
+        )
+
+        assertEquals(4, imported.provenance.declaredSizeBytes)
+        assertEquals(3, imported.provenance.actualSizeBytes)
+    }
+
+    @Test
+    fun negativeDeclaredSizeDegradesToAbsent() {
+        val metadata = read(openable = OpenableSourceMetadata("slot.sav", -1))
+
+        assertNull(metadata.declaredSizeBytes)
     }
 
     @Test

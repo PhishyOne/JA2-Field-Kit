@@ -13,10 +13,7 @@ class BoundedSaveReader(
     }
 
     fun read(input: InputStream, declaredSizeBytes: Long?): CompleteBoundedRead {
-        if (declaredSizeBytes != null && declaredSizeBytes > maximumBytes) {
-            throw SaveTooLargeException(maximumBytes)
-        }
-
+        // Provider metadata is advisory; only measured stream bytes enforce the limit.
         val initialCapacity = declaredSizeBytes
             ?.takeIf { it in 1..maximumBytes.toLong() }
             ?.toInt()

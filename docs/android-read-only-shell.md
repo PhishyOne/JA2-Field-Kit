@@ -15,10 +15,11 @@ The input limit is **16 MiB**. The admitted real Android save recorded in the
 fixture manifest is 2,563,321 bytes, so the limit leaves more than six times
 the observed size for ordinary campaign growth while bounding memory use and
 hostile or mistaken provider responses. A provider-declared oversized value is
-rejected before stream reading; unknown or inaccurate sizes are still enforced
-while streaming. Actual byte count is authoritative when a provider's declared
-size differs. Size and lowercase hexadecimal SHA-256 provenance are published
-only for a complete accepted import, never for a rejected prefix.
+advisory only and cannot reject otherwise readable content; declared size is at
+most a safely capped allocation hint. The limit is enforced solely on bytes read,
+and actual byte count is authoritative when a provider's declared size differs.
+Size and lowercase hexadecimal SHA-256 provenance are published only for a
+complete accepted import, never for a rejected prefix.
 
 Display filenames are reduced to a leaf name, have control, format,
 line-separator, and paragraph-separator characters replaced with spaces, and

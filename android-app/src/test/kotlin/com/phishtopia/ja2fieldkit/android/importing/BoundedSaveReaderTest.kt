@@ -36,15 +36,27 @@ class BoundedSaveReaderTest {
     }
 
     @Test
-    fun rejectsOversizedProviderMetadataBeforeReading() {
-        val neverRead = object : InputStream() {
-            override fun read(): Int = error("stream must not be read")
-        }
+    fun oversizedProviderMetadataCannotRejectReadableContent() {
+        val result = BoundedSaveReader(4).read(
+            ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)),
+            Long.MAX_VALUE,
+        )
 
-        val error = assertFailsWith<SaveTooLargeException> {
-            BoundedSaveReader(4).read(neverRead, 5)
+        assertContentEquals(byteArrayOf(1, 2, 3, 4), result.bytes)
+        assertEquals(4, result.actualSizeBytes)
+    }
+
+    @Test
+    fun declaredSizeNeverLetsAnOversizedStreamThrough() {
+        listOf<Long?>(null, 1, Long.MAX_VALUE).forEach { declaredSize ->
+            val error = assertFailsWith<SaveTooLargeException> {
+                BoundedSaveReader(4).read(
+                    ByteArrayInputStream(byteArrayOf(1, 2, 3, 4, 5)),
+                    declaredSize,
+                )
+            }
+            assertEquals(4, error.maximumBytes)
         }
-        assertEquals(4, error.maximumBytes)
     }
 
     @Test

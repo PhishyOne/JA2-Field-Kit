@@ -37,6 +37,17 @@ class SaveImporterTest {
     }
 
     @Test
+    fun oversizedDeclaredSizeIsRetainedButCannotRejectContentWithinLimit() {
+        val imported = importer(maximumBytes = 4).import(
+            ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)),
+            metadata(declaredSizeBytes = Long.MAX_VALUE),
+        )
+
+        assertEquals(Long.MAX_VALUE, imported.provenance.declaredSizeBytes)
+        assertEquals(4, imported.provenance.actualSizeBytes)
+    }
+
+    @Test
     fun overLimitFailsWithoutAnImportedResultOrPartialProvenance() {
         var yielded: ImportedSave? = null
 

@@ -71,11 +71,13 @@ Owns Android Storage Access Framework integration, the document picker,
 content-URI reads, presentation mapping, and the screen. Its narrow importer
 collects a sanitized display name, source category, optional provider size, and
 optional provider last-modified timestamp, then reads a maximum of 16 MiB while
-counting and SHA-256 hashing the exact bytes. Only a private, task-local byte
-snapshot enters `Ja2SaveInspector.inspectV01`; URI and provider details never
-enter core. Presentation retains import provenance (including lowercase SHA-256
-for integrity diagnostics), but no save bytes, raw URI/path, provider-private
-identifier, offsets, rotation indexes, keys, ciphertext, or parser exceptions.
+counting and SHA-256 hashing the exact bytes. Provider-declared size is advisory:
+it cannot reject readable content or authorize bytes beyond that measured limit.
+Only a private, task-local byte snapshot enters `Ja2SaveInspector.inspectV01`;
+URI and provider details never enter core. Presentation retains import provenance
+(including lowercase SHA-256 for integrity diagnostics), but no save bytes, raw
+URI/path, provider-private identifier, offsets, rotation indexes, keys,
+ciphertext, or parser exceptions.
 
 Local/Downloads, USB-backed, and cloud-backed documents all use Storage Access
 Framework document providers. `ACTION_OPEN_DOCUMENT`, `ACTION_VIEW`, and

@@ -9,9 +9,12 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import com.phishtopia.ja2fieldkit.android.importing.DisplayNameSanitizer
+import com.phishtopia.ja2fieldkit.android.importing.OpenableSourceMetadata
+import com.phishtopia.ja2fieldkit.android.importing.ProviderMetadataReader
 import com.phishtopia.ja2fieldkit.android.importing.ProviderSaveMetadata
 import com.phishtopia.ja2fieldkit.android.importing.SaveImporter
 import com.phishtopia.ja2fieldkit.android.importing.SaveTooLargeException
+import com.phishtopia.ja2fieldkit.android.importing.SourceMetadataProvider
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionPresentationMapper
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
@@ -93,39 +96,36 @@ class InspectionViewModel : ViewModel() {
         resolver: ContentResolver,
         uri: Uri,
         provenance: SourceProvenance,
-    ): ProviderSaveMetadata {
-        var name: String? = null
-        var size: Long? = null
-        var lastModified: Long? = null
-        try {
-            resolver.query(
+    ): ProviderSaveMetadata = ProviderMetadataReader.read(
+        provider = object : SourceMetadataProvider {
+            override fun queryOpenableMetadata(): OpenableSourceMetadata? = resolver.query(
                 uri,
-                arrayOf(
-                    OpenableColumns.DISPLAY_NAME,
-                    OpenableColumns.SIZE,
-                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-                ),
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
                 null,
                 null,
                 null,
             )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    name = cursor.stringOrNull(OpenableColumns.DISPLAY_NAME)
-                    size = cursor.longOrNull(OpenableColumns.SIZE)?.takeIf { it >= 0 }
-                    lastModified = cursor.longOrNull(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-                        ?.takeIf { it > 0 }
-                }
+                if (!cursor.moveToFirst()) return@use null
+                OpenableSourceMetadata(
+                    displayName = cursor.stringOrNull(OpenableColumns.DISPLAY_NAME),
+                    declaredSizeBytes = cursor.integerOrNull(OpenableColumns.SIZE),
+                )
             }
-        } catch (_: RuntimeException) {
-            // Metadata is optional. Stream access remains the authority.
-        }
-        return ProviderSaveMetadata(
-            displayName = DisplayNameSanitizer.sanitize(name),
-            declaredSizeBytes = size,
-            lastModifiedEpochMillis = lastModified,
-            provenance = provenance,
-        )
-    }
+
+            // This document-only column is deliberately isolated from standard openable metadata.
+            override fun queryLastModifiedValue(): Any? = resolver.query(
+                uri,
+                arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                cursor.integerOrNull(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+            }
+        },
+        provenance = provenance,
+    )
 
     private fun post(request: Long, next: InspectionScreenState) {
         mainHandler.post {
@@ -149,7 +149,7 @@ private fun Cursor.stringOrNull(column: String): String? {
     return if (index < 0 || isNull(index)) null else getString(index)
 }
 
-private fun Cursor.longOrNull(column: String): Long? {
+private fun Cursor.integerOrNull(column: String): Long? {
     val index = getColumnIndex(column)
-    return if (index < 0 || isNull(index)) null else getLong(index)
+    return if (index < 0 || getType(index) != Cursor.FIELD_TYPE_INTEGER) null else getLong(index)
 }

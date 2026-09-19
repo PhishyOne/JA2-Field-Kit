@@ -231,6 +231,26 @@ class NormalNonLinuxRosterDecoderTest {
     }
 
     @Test
+    fun checksumAcceptsSyntheticSignedAndUnsignedBoundaryContributions() {
+        val boundaryFields: (ByteArray) -> Unit = { bytes ->
+            val statPairs = listOf(868 to 917, 880 to 840, 886 to 1377, 1372 to 916, 1378 to 849)
+            statPairs.forEachIndexed { index, (addend, multiplier) ->
+                bytes[addend] = if (index % 2 == 0) 0x80.toByte() else 0x7f.toByte()
+                bytes[multiplier] = if (index % 2 == 0) 0x7f.toByte() else 0x80.toByte()
+            }
+            repeat(19) { inventorySlot ->
+                bytes.putU16Le(12 + inventorySlot * 36, 0xffff - inventorySlot)
+                bytes[14 + inventorySlot * 36] = (0xff - inventorySlot).toByte()
+            }
+        }
+        val roster = NormalNonLinuxRosterDecoder.decodeBuild041202(
+            syntheticSave(mapOf(0 to SoldierSpec(7, beforeChecksum = boundaryFields)), 1),
+        )
+
+        assertEquals(listOf(7), roster.map { it.profileIndex })
+    }
+
+    @Test
     fun rejectsInvalidAndDuplicateNonVehicleProfileIds() {
         failure(
             RosterMembershipFailure.INVALID_PROFILE_ID,
@@ -336,25 +356,21 @@ class NormalNonLinuxRosterDecoderTest {
         bytes.putU32Le(2208, soldierChecksum(bytes))
     }
 
-    // Test-owned checksum oracle; production constants are intentionally not referenced.
+    // Test-owned recurrence over literal format offsets; production constants are not referenced.
     private fun soldierChecksum(bytes: ByteArray): Long {
-        var sum = 1L
+        val statPairs = listOf(868 to 917, 880 to 840, 886 to 1377, 1372 to 916, 1378 to 849)
         fun signed(offset: Int): Long = bytes[offset].toLong()
         fun wrap(value: Long): Long = value and 0xffff_ffffL
-        sum = wrap(sum + 1 + signed(868))
-        sum = wrap(sum * (1 + signed(917)))
-        sum = wrap(sum + 1 + signed(880))
-        sum = wrap(sum * (1 + signed(840)))
-        sum = wrap(sum + 1 + signed(886))
-        sum = wrap(sum * (1 + signed(1377)))
-        sum = wrap(sum + 1 + signed(1372))
-        sum = wrap(sum * (1 + signed(916)))
-        sum = wrap(sum + 1 + signed(1378))
-        sum = wrap(sum * (1 + signed(849)))
+        var sum = statPairs.fold(1L) { checksum, (addend, multiplier) ->
+            wrap((checksum + 1 + signed(addend)) * (1 + signed(multiplier)))
+        }
         sum = wrap(sum + 1 + (bytes[1825].toInt() and 0xff))
         repeat(19) { slot ->
-            sum = wrap(sum + bytes.u16Le(12 + slot * 36))
-            sum = wrap(sum + (bytes[14 + slot * 36].toInt() and 0xff))
+            sum = wrap(
+                sum +
+                    bytes.u16Le(12 + slot * 36) +
+                    (bytes[14 + slot * 36].toInt() and 0xff),
+            )
         }
         return sum
     }

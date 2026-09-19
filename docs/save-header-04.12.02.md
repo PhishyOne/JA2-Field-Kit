@@ -10,7 +10,7 @@ Reborn save.
 
 The map was re-derived for this change from two independent evidence lines:
 
-- the project's independently written
+- the project's project-authored expression of documented interoperability facts in
   [save-format research](https://github.com/PhishyOne/JA2-Field-Kit/blob/47afb4f8dc99f416bcf8d6f391d12254f4bb052f/docs/SAVE_FORMAT_RESEARCH.md)
   and
   [research provenance](https://github.com/PhishyOne/JA2-Field-Kit/blob/47afb4f8dc99f416bcf8d6f391d12254f4bb052f/docs/RESEARCH_PROVENANCE.md)

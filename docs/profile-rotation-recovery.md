@@ -98,8 +98,9 @@ The supplied interoperability facts cite immutable JA2 Reborn commit
 
 These paths are factual provenance, not copied implementation. This worker did
 not fetch those sources, rotation arrays, APK contents, private saves, or host
-research. The Kotlin and Python implementations are independently project-authored
-from the supplied mathematics; this is not a clean-room or legal-clearance claim.
+research. The Kotlin and Python implementations are project-authored expressions
+of the supplied interoperability mathematics; this is not a clean-room or
+legal-clearance claim.
 No project license is introduced.
 
 The banked independent Python probe reports 48 consistent residues across all

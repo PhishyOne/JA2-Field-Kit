@@ -30,20 +30,28 @@ class SaveEncryptionSelectorTest {
     }
 
     @Test
-    fun appliesOnlyTheDocumentedNestedRandomDivisibilityBonuses() {
+    fun appliesTheDocumentedDivisibilityContributionsAtTheirBoundaries() {
         val cases =
             listOf(
+                0L to 5,
                 1L to 0,
                 2L to 1,
+                13L to 0,
                 14L to 2,
+                15L to 0,
                 46L to 1,
                 158L to 1,
+                321L to 0,
                 322L to 3,
+                323L to 0,
+                1_105L to 0,
                 1_106L to 4,
+                1_107L to 0,
                 25_438L to 5,
                 7L to 0,
                 23L to 0,
                 79L to 0,
+                0xffff_ffffL to 0,
             )
 
         cases.forEach { (random, expectedIndex) ->
@@ -84,6 +92,20 @@ class SaveEncryptionSelectorTest {
         assertEquals(
             NormalRotationTableIndex(0),
             NormalSaveEncryptionSelector.select(inputs(balance = -1, loadScreenId = 1)),
+        )
+
+        // The maximum uint32 random value stays nonnegative and contributes nothing.
+        assertEquals(
+            NormalRotationTableIndex(5),
+            NormalSaveEncryptionSelector.select(
+                inputs(balance = -1, perSaveRandom = 0xffff_ffffL),
+            ),
+        )
+
+        // The r=0 contribution of five wraps a near-uint32 accumulator before modulo 19.
+        assertEquals(
+            NormalRotationTableIndex(3),
+            NormalSaveEncryptionSelector.select(inputs(balance = -2, perSaveRandom = 0)),
         )
     }
 

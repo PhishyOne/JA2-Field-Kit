@@ -5,10 +5,11 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.provider.DocumentsContract
-import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import com.phishtopia.ja2fieldkit.android.importing.DisplayNameSanitizer
+import com.phishtopia.ja2fieldkit.android.importing.ProviderMetadataQuery
+import com.phishtopia.ja2fieldkit.android.importing.ProviderMetadataReader
+import com.phishtopia.ja2fieldkit.android.importing.ProviderMetadataRow
 import com.phishtopia.ja2fieldkit.android.importing.ProviderSaveMetadata
 import com.phishtopia.ja2fieldkit.android.importing.SaveImporter
 import com.phishtopia.ja2fieldkit.android.importing.SaveTooLargeException
@@ -93,39 +94,22 @@ class InspectionViewModel : ViewModel() {
         resolver: ContentResolver,
         uri: Uri,
         provenance: SourceProvenance,
-    ): ProviderSaveMetadata {
-        var name: String? = null
-        var size: Long? = null
-        var lastModified: Long? = null
-        try {
+    ): ProviderSaveMetadata = ProviderMetadataReader.read(
+        query = ProviderMetadataQuery { projection, consume ->
             resolver.query(
                 uri,
-                arrayOf(
-                    OpenableColumns.DISPLAY_NAME,
-                    OpenableColumns.SIZE,
-                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-                ),
+                projection,
                 null,
                 null,
                 null,
             )?.use { cursor ->
                 if (cursor.moveToFirst()) {
-                    name = cursor.stringOrNull(OpenableColumns.DISPLAY_NAME)
-                    size = cursor.longOrNull(OpenableColumns.SIZE)?.takeIf { it >= 0 }
-                    lastModified = cursor.longOrNull(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-                        ?.takeIf { it > 0 }
+                    consume(AndroidProviderMetadataRow(cursor))
                 }
             }
-        } catch (_: RuntimeException) {
-            // Metadata is optional. Stream access remains the authority.
-        }
-        return ProviderSaveMetadata(
-            displayName = DisplayNameSanitizer.sanitize(name),
-            declaredSizeBytes = size,
-            lastModifiedEpochMillis = lastModified,
-            provenance = provenance,
-        )
-    }
+        },
+        provenance = provenance,
+    )
 
     private fun post(request: Long, next: InspectionScreenState) {
         mainHandler.post {
@@ -144,12 +128,16 @@ class InspectionViewModel : ViewModel() {
     }
 }
 
-private fun Cursor.stringOrNull(column: String): String? {
-    val index = getColumnIndex(column)
-    return if (index < 0 || isNull(index)) null else getString(index)
-}
+private class AndroidProviderMetadataRow(
+    private val cursor: Cursor,
+) : ProviderMetadataRow {
+    override fun stringOrNull(column: String): String? {
+        val index = cursor.getColumnIndex(column)
+        return if (index < 0 || cursor.isNull(index)) null else cursor.getString(index)
+    }
 
-private fun Cursor.longOrNull(column: String): Long? {
-    val index = getColumnIndex(column)
-    return if (index < 0 || isNull(index)) null else getLong(index)
+    override fun longOrNull(column: String): Long? {
+        val index = cursor.getColumnIndex(column)
+        return if (index < 0 || cursor.isNull(index)) null else cursor.getLong(index)
+    }
 }

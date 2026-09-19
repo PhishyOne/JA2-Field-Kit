@@ -77,6 +77,13 @@ enter core. Presentation retains import provenance (including lowercase SHA-256
 for integrity diagnostics), but no save bytes, raw URI/path, provider-private
 identifier, offsets, rotation indexes, keys, ciphertext, or parser exceptions.
 
+Provider metadata is non-authoritative and fail-soft. Display name and declared
+size use a base `OpenableColumns` query; the best-effort last-modified timestamp
+uses an independent query because generic providers need not support
+`DocumentsContract` fields. An unsupported or absent timestamp never erases a
+valid name or size, and metadata failure never replaces the stream and actual
+byte count as the import authority.
+
 Local/Downloads, USB-backed, and cloud-backed documents all use Storage Access
 Framework document providers. `ACTION_OPEN_DOCUMENT`, `ACTION_VIEW`, and
 `ACTION_SEND` converge on this same importer; there is no filesystem scanning,

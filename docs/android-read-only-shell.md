@@ -11,6 +11,15 @@ private byte snapshot only to the immediate inspection call, and discards it
 after presentation mapping. Core receives bytes only; it never receives the
 URI, source category, or provider metadata.
 
+Display name and declared size are requested together through the broadly
+supported `OpenableColumns` contract. The last-modified timestamp is separate,
+best-effort provider metadata: generic content providers may not implement
+`DocumentsContract` fields and may reject that projection. A missing or failed
+timestamp query therefore leaves the timestamp unknown without discarding a
+valid provider name or size. If the base `OpenableColumns` query itself fails,
+the app uses the safe display-name fallback with no declared size and still
+attempts the authoritative bounded stream read.
+
 The input limit is **16 MiB**. The admitted real Android save recorded in the
 fixture manifest is 2,563,321 bytes, so the limit leaves more than six times
 the observed size for ordinary campaign growth while bounding memory use and

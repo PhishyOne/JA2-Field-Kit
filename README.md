@@ -23,6 +23,9 @@ codes. Local/Downloads, USB, and cloud documents use Android Storage Access
 Framework providers; open-with and share-to converge on the same importer. It
 requests no storage permission, retains no URI grant or save bytes, performs no
 scanning/upload, and never writes, exports, or modifies a save.
+For a completed import that fails inspection, the user can explicitly preview,
+copy, or share a versioned privacy-bounded compatibility report; save
+contribution remains unimplemented.
 
 The core v0.1 presentation facade is
 `Ja2SaveInspector.inspectV01(ByteArray)`. It returns a sealed, sanitized result
@@ -48,6 +51,7 @@ See:
 - `docs/profile-decode-v0.1.md`
 - `docs/v0.1-scope.md`
 - `docs/android-read-only-shell.md`
+- `docs/compatibility-report-v0.1.md`
 - `fixtures/README.md`
 
 ## Build

@@ -96,7 +96,10 @@ declared Build Tools into the ephemeral runner directory. No SDK or generated
 wrapper binary is checked in.
 
 The UI uses platform views and no Compose, navigation, persistence, network,
-analytics, dependency-injection, or background-work dependency.
+analytics, dependency-injection, or background-work dependency. Its only
+outbound presentation action is the explicit text-only compatibility report
+described in [compatibility-report-v0.1.md](compatibility-report-v0.1.md); that
+action shares no save or source reference.
 
 The activity draws edge to edge and applies AndroidX system-bar and display-cutout
 insets on all four edges. Each inset dispatch is added to the fixed design

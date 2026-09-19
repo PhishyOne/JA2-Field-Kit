@@ -84,8 +84,11 @@ Framework document providers. `ACTION_OPEN_DOCUMENT`, `ACTION_VIEW`, and
 `ACTION_SEND` converge on this same importer; there is no filesystem scanning,
 provider SDK, persistent URI grant, account access, or automatic upload.
 
-The current shell has no permissions, persistence, network, analytics, write,
-export, or URI-to-filesystem-path code. Share/export remains future scope.
+The current shell has no permissions, persistence, network, analytics, save
+write/export, or URI-to-filesystem-path code. It can serialize an explicit,
+privacy-bounded compatibility report from safe retained provenance and
+`inspectV01` failure presentation, then preview and copy it or share only its
+text through Android's chooser. Save sharing/contribution remains future scope.
 
 ## Failure policy
 

@@ -52,6 +52,7 @@ See:
 - `docs/v0.1-scope.md`
 - `docs/android-read-only-shell.md`
 - `docs/compatibility-report-v0.1.md`
+- `docs/release-privacy-checklist.md`
 - `docs/licensing-boundary-review.md`
 - `fixtures/README.md`
 

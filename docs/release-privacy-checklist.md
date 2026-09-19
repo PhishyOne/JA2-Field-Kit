@@ -1,0 +1,198 @@
+# Release and privacy posture
+
+This document is the authoritative release/privacy inventory for JA2 Field Kit.
+It records the Android app audited at commit
+`069a272e06e95b51bb0f7a12ed55a098dab20273`; a release decision must audit the
+exact shipping commit again. It is a future-release gate, not evidence that a
+Play Console application, testing track, or release exists.
+
+Field Kit is currently a local, read-only Android save inspector. In this
+document, **local processing** means computation performed by Field Kit on the
+device, **ephemeral** means process/task memory rather than app-managed durable
+storage, **OS-mediated export** means an explicit user action that hands data to
+Android's clipboard or chooser, and **Field Kit transmission** means network
+traffic initiated by this app. OS-mediated export can let another chosen app
+retain or transmit data; it is not automatic collection or upload by Field Kit.
+
+## Audited current boundary
+
+- Application ID: `com.phishtopia.ja2fieldkit`.
+- The merged manifest declares zero Android permissions, including no
+  `INTERNET` permission. It declares no service or background scanner.
+- The dependency graph is `:core`, AndroidX Activity, Kotlin/JUnit test support,
+  and Android build tooling. It contains no network stack, analytics,
+  telemetry, crash-reporting, advertising, account, cloud-provider, database,
+  or background-work SDK.
+- All three import routes converge on the same bounded importer. It accepts one
+  temporary, user-granted `content://` stream, reads at most 16 MiB, and does
+  not request a persistable URI grant or derive a filesystem path.
+- Provider-declared size is advisory. The byte count measured while streaming
+  is authoritative, and a completed import receives a lowercase SHA-256 over
+  exactly those bytes.
+- Field Kit has no app-managed storage of saves, recent sources, reports, or
+  user data. The `ViewModel` retains presentation state in memory across an
+  activity configuration change; it does not persist that state to disk.
+- There is no save editing, generated-save write/export, PC bridge, account,
+  cloud relay, or Nomatoka link/card implementation.
+
+The implementation details and narrower contracts remain documented in
+[Architecture](architecture.md), [Android read-only shell](android-read-only-shell.md),
+and [Compatibility report v0.1](compatibility-report-v0.1.md). This inventory
+summarizes their release/privacy consequences rather than replacing them.
+
+## Data-flow inventory
+
+| Feature or state | Data accessed | Retained or persisted by Field Kit | Transmitted outside Field Kit | User action required | Android permission or capability | Release / Data Safety review note |
+|---|---|---|---|---|---|---|
+| Document picker import (current) | One user-selected provider `content://` stream | URI exists only for the immediate import; bytes are ephemeral as described below; no history or disk persistence | No Field Kit network transmission | Tap **Open save**, choose one document | `ACTION_OPEN_DOCUMENT` and a temporary provider grant; no declared permission and no persistable grant | Recheck that the shipping flow still selects one document and does not broaden storage access |
+| Open With import (current) | One `content://` URI delivered by another app | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | No Field Kit network transmission | Choose Field Kit from an Android Open With flow | `ACTION_VIEW`, narrowly advertised MIME/path filters, temporary sender grant; no declared permission | Treat as user-directed local input, not collection; preserve content-only URI policy |
+| Share To import (current) | Exactly one stream URI from `ClipData` or `EXTRA_STREAM`; multiple items are rejected | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | No Field Kit network transmission | Share one save to Field Kit | `ACTION_SEND` for `application/x-ja2-save`, temporary sender grant; no declared permission | Do not describe receipt from the Android share sheet as an upload by Field Kit |
+| Provider metadata (current) | Sanitized leaf display filename, nonnegative provider-declared size, optional positive last-modified timestamp, and import-route category | Retained ephemerally in presentation state after a complete import; filename may also appear while loading. No app-managed persistence | None unless a user separately exports visible information; filename, declared size, and timestamp are excluded from compatibility reports | Same explicit import action | Provider query through the temporary URI grant | Filename controls/separators are replaced, path components removed, and length capped at 120 code points. Declared size is advisory; actual streamed bytes govern the limit |
+| Content URI, path, and provider identifiers (current) | The Android layer consumes the content URI; it does not derive a filesystem path or intentionally query provider/account identifiers | URI is captured only by the in-flight import task and is not placed in retained presentation state, recent history, or persistent storage; no persistent URI grant | None | Same explicit import action | Temporary URI grant | Confirm URI/path/provider identifiers remain absent from UI state, reports, logs, analytics, and crash uploads |
+| Complete imported save bytes (current) | Exact stream contents, only after a bounded complete read | Private task-local `ByteArray`, lent to the immediate inspection call and then eligible for disposal; never exposed as screen state or written by the app | None | Same explicit import action | In-process memory; no permission beyond temporary read grant | Maximum is 16 MiB. Reassess memory and disclosure posture if the limit or lifecycle changes |
+| Measured byte count (current) | Count of bytes actually streamed | Retained ephemerally as source provenance; included in eligible compatibility-report inputs | Only through explicit clipboard/share export of a previewed report | Import; then Preview and Copy/Share for export | Local counting; optional OS-mediated export | This is authoritative even when provider-declared size differs |
+| Source SHA-256 (current) | Digest of the exact complete imported byte snapshot | Retained ephemerally as source provenance; included in eligible compatibility-report inputs | Only through explicit clipboard/share export of a previewed report | Import; then Preview and Copy/Share for export | Local hashing; optional OS-mediated export | A hash can still correlate identical saves. Keep it purpose-limited to integrity/compatibility diagnostics and disclose it in any actual export flow |
+| Parser and structured diagnostics (current) | Local format detection, bounded parsing, and enumerated failure kind/diagnostic | Sanitized logical results or codes are retained ephemerally in presentation state; raw exceptions, offsets, keys, rotation details, and byte fragments are not retained there | Only allow-listed failure facts can leave through explicit report export | Import; export requires Preview followed by Copy or Share | Local computation | Store declarations must describe actual shipped diagnostics behavior; adding automatic error/crash submission is a separate review |
+| Successful parsed campaign, merc profile, and roster presentation (current) | Save version/build/layout/family evidence; campaign day/time/sector/count/balance; verified roster names, nicknames, and core stats | Retained ephemerally in screen state; no database, file, recent-save record, or cloud persistence | No compatibility-report path is offered for success and Field Kit transmits nothing | Import a supported save | Local computation and UI | Gameplay/save-derived data remains on device. Screenshots or user copying selectable UI text are user/OS actions outside an app upload flow |
+| Compatibility-report safe input facts (current) | Entry category, actual byte count, source SHA-256, allow-listed format facts, and enumerated failure facts | Retained ephemerally only for a completed structured inspection failure; no serialized JSON yet | None before explicit export | Import must reach an eligible failure | Local computation | Excludes filename, declared size/timestamp, URI/path/provider identifiers, save bytes, campaign/roster data, free text, and parser internals |
+| Compatibility report Preview (current) | Safe inputs plus compiled app version | Exact deterministic JSON is generated only after **Compatibility report** is tapped and retained as one immutable in-memory preview | Preview itself causes no transmission | Explicit Preview tap after an eligible failure | Local UI only | Review the schema and visible privacy notice against the shipping implementation |
+| Copy report to clipboard (current) | Exact immutable preview text | Field Kit adds no separate copy; Android's clipboard may retain the text according to OS behavior | OS-mediated clipboard export, not Field Kit network transmission; another app/user may subsequently use it | Explicit **Copy report** tap | Android clipboard API; no declared permission | Disclose the clipboard handoff accurately and do not call it automatic upload |
+| Share report (current) | Exact immutable preview text | Field Kit adds no durable copy | OS-mediated `ACTION_SEND` handoff to a user-chosen receiver. That receiver may store or transmit it; Field Kit does not select a destination or use the network | Explicit **Share report** tap plus chooser selection | Android chooser, `text/plain` `EXTRA_TEXT`; no URI, attachment, `ClipData`, or grant flags | Data Safety and privacy text must distinguish this user-initiated transfer from app collection or automatic sharing |
+| Local storage and persistence (current) | No app database/preferences/file cache of saves or recent sources | No app-managed persistence. Normal Android/runtime/build artifacts are not a product data store | None | None | `allowBackup="false"`; no storage permission | Re-audit app storage APIs and backup behavior on the exact release artifact |
+| Network (current) | None | None | No Field Kit network traffic | None | No `INTERNET` permission or network dependency | Any future network capability is a material posture change requiring inventory, threat-model, permission, privacy-policy, and Data Safety review |
+| Analytics and telemetry (current) | None | None | None | None | No analytics/telemetry SDK or permission | Play Console aggregate metrics, not an embedded SDK, are the install-base plan |
+| Crash or error upload (current) | Local bounded failure handling only | No crash/error upload queue or SDK | None | None | No crash-reporting SDK or network capability | Any future diagnostics upload requires a separate purpose, minimization, consent/disclosure, retention, and vendor review |
+| Advertising (current) | None | None | None | None | No advertising SDK or identifier capability | Product posture is no third-party ads. A future first-party developer card is addressed separately below |
+| Identifiers and accounts (current) | No advertising ID, app-set ID, device/account identifier, login, or Field Kit account | None | None | None | No account/auth/provider SDK | Re-audit transitive SDK behavior and store declarations for every release |
+| Generated-save editing/export (deferred) | Would access original bytes, requested edits, generated bytes, integrity facts, and output destination | Not implemented | Not implemented | Future explicit edit and export actions | Undecided; must not turn the input grant into implicit in-place write access | **Issue [#12](https://github.com/PhishyOne/JA2-Field-Kit/issues/12) is a mandatory design gate.** Require transactional new-output creation, reread, verification, provenance, fail-closed support, and no default source overwrite before implementation |
+| Local PC bridge and LAN addresses (deferred) | Would access pairing/session material, local addresses, transfer metadata, save bytes, and integrity hashes | Not implemented | Not implemented; intended future transport is direct local network, not a cloud relay | Future explicit pairing and transfer actions | Undecided and subject to then-current Android local-network/network requirements | **Issue [#13](https://github.com/PhishyOne/JA2-Field-Kit/issues/13) is a mandatory protocol/threat-model gate.** Do not add network permission, discovery, background service, account, or relay in advance |
+| Nomatoka first-party link/card (deferred) | A future external link could expose the destination and normal browser request metadata after a user tap | Not implemented | None by Field Kit today. A future external-browser handoff is user-initiated; embedded content or app networking would be a different data flow | Future explicit tap | Prefer an external browser intent if approved; no ad SDK | Must be clearly labeled first-party developer promotion, not an ad-network integration. Review destination, wording, referrer behavior, listing policy, and disclosures before shipping |
+
+## Install-base decision for Issue #11
+
+Verified **2026-09-19** against Google's official
+[App statistics documentation](https://support.google.com/googleplay/android-developer/answer/139628):
+
+- **Installed Audience** is the primary user-level answer to “roughly how many
+  people currently have Field Kit installed?” It counts users who have the app
+  installed on at least one device and who have used that device (not
+  necessarily the app) in the past 30 days.
+- **Install base** is the device-level companion metric: active devices on
+  which the app is installed, where active means turned on at least once in the
+  past 30 days.
+- Total installs/acquisitions remain useful growth measures, but they do not
+  answer the current installed-audience question.
+- These are aggregate Google Play distribution metrics. Sideloaded and other
+  non-Play installs are not represented by Play install-base reporting.
+- Reporting may lag, and some breakdowns may be thresholded or otherwise
+  privacy-adjusted. Treat the values as aggregate estimates, not an app-owned
+  user ledger.
+- No Firebase or third-party analytics SDK is justified solely to recreate
+  these metrics. If future product analytics would answer a distinct product
+  question, it requires a separate privacy/value review before any SDK,
+  identifier, event, permission, or disclosure is introduced.
+
+## Future public Play release gate
+
+Every checkbox applies to the exact proposed release commit and artifact. Stop
+the release if documentation, the merged manifest, dependency graph, store
+declarations, or observed shipping behavior disagree; reconcile them and repeat
+the review rather than selecting the most convenient description.
+
+### Product identity and claims
+
+- [ ] Confirm ownership and long-term stability of application ID
+  `com.phishtopia.ja2fieldkit` before the first upload. Treat a package-name
+  change after distribution as a new product identity.
+- [ ] Present “JA2 Field Kit” as an independent utility and avoid implying
+  official JA2, JA2 Reborn, or JA2 Stracciatella affiliation. Re-review the
+  engineering and legal boundaries in
+  [Licensing-boundary review](licensing-boundary-review.md); do not infer a
+  project license from that review.
+- [ ] Tie listing compatibility and version claims only to save families,
+  layouts, and builds supported by evidence and tests on the release commit.
+  Distinguish supported, experimental/candidate, unsupported, and future work.
+- [ ] Ensure screenshots, description, privacy text, and other listing assets
+  show only UI and capabilities in the shipping artifact.
+
+### Source, build, signing, and artifact evidence
+
+- [ ] Record the exact reviewed source commit, reviewed base/integration
+  commit, CI run, test results, release version name/code, build environment,
+  and reviewer approval. Build from a clean, immutable commit.
+- [ ] Use pinned/reviewable toolchains and dependencies. Document the build
+  command and environment well enough to reproduce or independently review the
+  unsigned build; investigate unexplained output differences.
+- [ ] Record the identity and SHA-256 of each final release artifact, including
+  whether it is an Android App Bundle/APK and whether the hash was taken before
+  or after signing. Bind retained review evidence to that artifact and exact
+  commit.
+- [ ] Choose and document the
+  [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756)
+  strategy. Keep the Play-managed **app-signing key** concept distinct from the
+  developer-held **upload key** used to authenticate uploads. Establish secure
+  upload-key generation, least-access storage, offline backup, ownership,
+  rotation/recovery, and incident procedures. Recheck current official Play
+  signing and key-upgrade/recovery behavior immediately before the first
+  release; do not rely on this summary as operational instructions.
+
+### Runtime, privacy, and permissions
+
+- [ ] Inspect the final merged manifest (including libraries and release
+  variants) and justify every permission, component, intent filter, exported
+  surface, and URI grant. Zero declared permissions is the current baseline.
+- [ ] Inspect the resolved release dependency graph and SDK behavior for
+  network, tracking, identifier, analytics, telemetry, crash-reporting,
+  advertising, background-work, storage, and account behavior. A dependency
+  must not silently change this inventory.
+- [ ] Exercise the final artifact and update this data-flow table from actual
+  behavior. Derive the privacy policy and
+  [Data Safety declarations](https://support.google.com/googleplay/android-developer/answer/11150561)
+  from what ships, including SDK behavior and user-initiated exports, not from
+  intentions or an older build.
+- [ ] If any future feature needs sensitive data or permissions, reassess data
+  minimization and the current
+  [permission declaration](https://support.google.com/googleplay/android-developer/answer/9214102)
+  rules. Add prominent disclosure/consent where the then-current policy or the
+  feature's reasonable user expectations require it.
+- [ ] Keep Issue #12 as a mandatory design and verification gate before any
+  editing, write-back, or generated-save export implementation. Keep Issue #13
+  as a mandatory protocol and threat-model gate before any LAN bridge,
+  discovery, pairing, or transfer implementation.
+
+### Play readiness and release operation
+
+- [ ] Immediately before every public release, recheck the official
+  [Play Console requirements](https://support.google.com/googleplay/android-developer/answer/10788890)
+  and [prepare/roll-out guidance](https://support.google.com/googleplay/android-developer/answer/9859348),
+  plus linked current policy pages. Verify then-current account/identity
+  verification, testing-track eligibility, target-SDK, review, privacy,
+  permission, regional, and rollout requirements. These rules are time-sensitive;
+  do not freeze today's testing counts, durations, or policy dates here.
+- [ ] Use Installed Audience as the primary user-level current-install measure
+  and Install base as its device-level companion. Keep acquisitions/total
+  installs separate. Document that Play metrics omit sideloads and may lag or
+  apply thresholds/privacy adjustments. Do not add app analytics solely for
+  install counting.
+- [ ] Plan staged rollout/monitoring, support ownership, and a stop mechanism.
+  Preserve application/signing continuity and monotonically valid update
+  versioning. Treat rollback as a new reviewed update when required by the
+  distribution mechanism; never respond to a bad release by weakening parser
+  admission, generated-save verification, original-save protection, or the
+  Issue #12 safety gate.
+- [ ] Re-run all repository tests, fixture-policy regression tests, exact-commit
+  fixture admission, manifest/dependency/privacy audits, and artifact hashing
+  for the final release commit. A green earlier PR is not release evidence for
+  a different commit.
+
+## Official Google references
+
+These links are review inputs, not frozen policy text. Check them and their
+linked requirements immediately before each public release:
+
+- [App statistics: Installed Audience and Install base](https://support.google.com/googleplay/android-developer/answer/139628)
+- [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756)
+- [Data Safety](https://support.google.com/googleplay/android-developer/answer/11150561)
+- [Permission declarations](https://support.google.com/googleplay/android-developer/answer/9214102)
+- [Play Console requirements](https://support.google.com/googleplay/android-developer/answer/10788890)
+- [Prepare and roll out a release](https://support.google.com/googleplay/android-developer/answer/9859348)

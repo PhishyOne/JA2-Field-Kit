@@ -9,7 +9,10 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import com.phishtopia.ja2fieldkit.android.importing.DisplayNameSanitizer
+import com.phishtopia.ja2fieldkit.android.importing.ProviderMetadataProjection
+import com.phishtopia.ja2fieldkit.android.importing.ProviderMetadataQueryPolicy
 import com.phishtopia.ja2fieldkit.android.importing.ProviderSaveMetadata
+import com.phishtopia.ja2fieldkit.android.importing.QueriedProviderMetadata
 import com.phishtopia.ja2fieldkit.android.importing.SaveImporter
 import com.phishtopia.ja2fieldkit.android.importing.SaveTooLargeException
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
@@ -93,38 +96,29 @@ class InspectionViewModel : ViewModel() {
         resolver: ContentResolver,
         uri: Uri,
         provenance: SourceProvenance,
-    ): ProviderSaveMetadata {
-        var name: String? = null
-        var size: Long? = null
-        var lastModified: Long? = null
-        try {
-            resolver.query(
+    ): ProviderSaveMetadata = ProviderMetadataQueryPolicy.query(provenance) { projection ->
+        when (projection) {
+            ProviderMetadataProjection.STANDARD -> resolver.queryFirst(
                 uri,
-                arrayOf(
-                    OpenableColumns.DISPLAY_NAME,
-                    OpenableColumns.SIZE,
-                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-                ),
-                null,
-                null,
-                null,
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    name = cursor.stringOrNull(OpenableColumns.DISPLAY_NAME)
-                    size = cursor.longOrNull(OpenableColumns.SIZE)?.takeIf { it >= 0 }
-                    lastModified = cursor.longOrNull(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-                        ?.takeIf { it > 0 }
-                }
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+            ) { cursor ->
+                QueriedProviderMetadata(
+                    displayName = cursor.stringOrNull(OpenableColumns.DISPLAY_NAME),
+                    declaredSizeBytes = cursor.longOrNull(OpenableColumns.SIZE),
+                )
             }
-        } catch (_: RuntimeException) {
-            // Metadata is optional. Stream access remains the authority.
+
+            ProviderMetadataProjection.LAST_MODIFIED -> resolver.queryFirst(
+                uri,
+                arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+            ) { cursor ->
+                QueriedProviderMetadata(
+                    lastModifiedEpochMillis = cursor.longOrNull(
+                        DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                    ),
+                )
+            }
         }
-        return ProviderSaveMetadata(
-            displayName = DisplayNameSanitizer.sanitize(name),
-            declaredSizeBytes = size,
-            lastModifiedEpochMillis = lastModified,
-            provenance = provenance,
-        )
     }
 
     private fun post(request: Long, next: InspectionScreenState) {
@@ -144,12 +138,28 @@ class InspectionViewModel : ViewModel() {
     }
 }
 
+private fun <T> ContentResolver.queryFirst(
+    uri: Uri,
+    projection: Array<String>,
+    read: (Cursor) -> T,
+): T? = query(uri, projection, null, null, null)?.use { cursor ->
+    if (cursor.moveToFirst()) read(cursor) else null
+}
+
 private fun Cursor.stringOrNull(column: String): String? {
     val index = getColumnIndex(column)
-    return if (index < 0 || isNull(index)) null else getString(index)
+    return if (index < 0 || isNull(index) || getType(index) != Cursor.FIELD_TYPE_STRING) {
+        null
+    } else {
+        getString(index)
+    }
 }
 
 private fun Cursor.longOrNull(column: String): Long? {
     val index = getColumnIndex(column)
-    return if (index < 0 || isNull(index)) null else getLong(index)
+    return if (index < 0 || isNull(index) || getType(index) != Cursor.FIELD_TYPE_INTEGER) {
+        null
+    } else {
+        getLong(index)
+    }
 }

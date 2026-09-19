@@ -61,8 +61,12 @@ against the exact release build immediately before submission.
   or background-work SDK.
 - All three import routes converge on the same bounded importer. It accepts one
   temporary `content://` stream selected through the document picker or made
-  readable by a sender's URI grant, reads at most 16 MiB, and does not request
-  a persistable URI grant or derive a filesystem path.
+  readable by a sender's URI grant, and does not request a persistable URI grant
+  or derive a filesystem path. The maximum accepted and retained complete
+  payload is 16 MiB. For an oversized rejected stream, the implementation may
+  transiently read beyond that boundary by up to one current 64 KiB buffer read
+  before throwing `SaveTooLargeException`; the failed input is not retained as
+  an accepted save.
 - Provider-declared size is advisory. The byte count measured while streaming
   is authoritative, and a completed import receives a lowercase SHA-256 over
   exactly those bytes.
@@ -82,11 +86,11 @@ summarizes their release/privacy consequences rather than replacing them.
 | Feature or state | Data accessed | Retained or persisted by Field Kit | Transmitted outside Field Kit | User action required | Android permission or capability | Release / Data Safety review note |
 |---|---|---|---|---|---|---|
 | Document picker import (current) | One user-selected provider `content://` stream | URI exists only for the immediate import; bytes are ephemeral as described below; no history or disk persistence | No Field Kit network transmission | Tap **Open save**, choose one document | `ACTION_OPEN_DOCUMENT` and a temporary provider grant; no user runtime storage permission and no persistable grant | Recheck that the shipping flow still selects one document and does not broaden storage access. The merged manifest's AndroidX package-scoped signature permission does not provide save access |
-| Open With import (current) | One `content://` URI delivered by another app | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | Local processing only; no automatic network transmission by Field Kit | No confirmation is required by Field Kit. Invocation may come from normal user-mediated Android UI or another installed app explicitly launching the exported activity with `ACTION_VIEW` and the required temporary URI grant | Manifest filters advertise narrow MIME/path combinations, but an explicit intent can address the exported activity directly. The sender's temporary read grant bounds URI access; there is no user runtime storage permission, arbitrary filesystem/provider access, or persistent grant | Treat this as an exported, potentially sender-triggered input surface, not as necessarily user-directed. Content-only validation, the 16 MiB read bound, and importer/parser rejection of malformed or unsupported input remain fail-closed. The AndroidX package-scoped signature permission does not provide save access |
-| Share To import (current) | Exactly one `content://` stream URI from `ClipData` or `EXTRA_STREAM`; multiple items are rejected | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | Local processing only; no automatic network transmission by Field Kit | No confirmation is required by Field Kit. Invocation may come from normal user-mediated Android UI or another installed app explicitly launching the exported activity with `ACTION_SEND`, one stream URI, and the required temporary URI grant | The manifest advertises `application/x-ja2-save`, but an explicit intent can address the exported activity directly. The sender's temporary read grant bounds URI access; there is no user runtime storage permission, arbitrary filesystem/provider access, or persistent grant | Treat this as an exported, potentially sender-triggered input surface, not as necessarily user-directed or as an upload by Field Kit. Single-item/content-only validation, the 16 MiB read bound, and importer/parser rejection of malformed or unsupported input remain fail-closed. The AndroidX package-scoped signature permission does not provide save access |
+| Open With import (current) | One `content://` URI delivered by another app | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | Local processing only; no automatic network transmission by Field Kit | No confirmation is required by Field Kit. Invocation may come from normal user-mediated Android UI or another installed app explicitly launching the exported activity with `ACTION_VIEW` and the required temporary URI grant | Manifest filters advertise narrow MIME/path combinations, but an explicit intent can address the exported activity directly. The sender's temporary read grant bounds URI access; there is no user runtime storage permission, arbitrary filesystem/provider access, or persistent grant | Treat this as an exported, potentially sender-triggered input surface, not as necessarily user-directed. Content-only validation, the 16 MiB accepted-payload cap with the documented current 64 KiB oversize-read behavior, and importer/parser rejection of malformed or unsupported input remain fail-closed. The AndroidX package-scoped signature permission does not provide save access |
+| Share To import (current) | Exactly one `content://` stream URI from `ClipData` or `EXTRA_STREAM`; multiple items are rejected | Incoming source is consumed once and removed from the activity intent; no URI history or disk persistence | Local processing only; no automatic network transmission by Field Kit | No confirmation is required by Field Kit. Invocation may come from normal user-mediated Android UI or another installed app explicitly launching the exported activity with `ACTION_SEND`, one stream URI, and the required temporary URI grant | The manifest advertises `application/x-ja2-save`, but an explicit intent can address the exported activity directly. The sender's temporary read grant bounds URI access; there is no user runtime storage permission, arbitrary filesystem/provider access, or persistent grant | Treat this as an exported, potentially sender-triggered input surface, not as necessarily user-directed or as an upload by Field Kit. Single-item/content-only validation, the 16 MiB accepted-payload cap with the documented current 64 KiB oversize-read behavior, and importer/parser rejection of malformed or unsupported input remain fail-closed. The AndroidX package-scoped signature permission does not provide save access |
 | Provider metadata (current) | Sanitized leaf display filename, nonnegative provider-declared size, optional positive last-modified timestamp, and import-route category | Retained ephemerally in presentation state after a complete import; filename may also appear while loading. No app-managed persistence | None unless a user separately exports visible information; filename, declared size, and timestamp are excluded from compatibility reports | Document-picker access follows explicit selection; accepted Open With/Share To access may instead be sender-triggered | Provider query through the route's temporary URI grant | Filename controls/separators are replaced, path components removed, and length capped at 120 code points. Declared size is advisory; actual streamed bytes govern the limit |
 | Content URI, path, and provider identifiers (current) | The Android layer consumes the content URI; it does not derive a filesystem path or intentionally query provider/account identifiers | URI is captured only by the in-flight import task and is not placed in retained presentation state, recent history, or persistent storage; no persistent URI grant | None | Document-picker access follows explicit selection; accepted Open With/Share To access may instead be sender-triggered | Temporary URI grant | Confirm URI/path/provider identifiers remain absent from UI state, reports, logs, analytics, and crash uploads |
-| Complete imported save bytes (current) | Exact stream contents, only after a bounded complete read | Private task-local `ByteArray`, lent to the immediate inspection call and then eligible for disposal; never exposed as screen state or written by the app | None | Document-picker access follows explicit selection; accepted Open With/Share To access may instead be sender-triggered | In-process memory; no permission beyond the route's temporary read grant | Maximum is 16 MiB. Reassess memory and disclosure posture if the limit or lifecycle changes |
+| Complete imported save bytes (current) | Exact stream contents, only after a bounded complete read | Private task-local `ByteArray`, lent to the immediate inspection call and then eligible for disposal; never exposed as screen state or written by the app | None | Document-picker access follows explicit selection; accepted Open With/Share To access may instead be sender-triggered | In-process memory; no permission beyond the route's temporary read grant | Maximum accepted and retained complete payload is 16 MiB. An oversized rejected stream may be transiently read beyond that boundary by up to one current 64 KiB buffer read before rejection, but is not retained as an accepted save. Provider-declared size remains advisory; measured streamed bytes govern acceptance. Reassess memory and disclosure posture if the limit, buffer, or lifecycle changes |
 | Measured byte count (current) | Count of bytes actually streamed | Retained ephemerally as source provenance; included in eligible compatibility-report inputs | Only through explicit clipboard/share export of a previewed report | Import; then Preview and Copy/Share for export | Local counting; optional OS-mediated export | This is authoritative even when provider-declared size differs |
 | Source SHA-256 (current) | Digest of the exact complete imported byte snapshot | Retained ephemerally as source provenance; included in eligible compatibility-report inputs | Only through explicit clipboard/share export of a previewed report | Import; then Preview and Copy/Share for export | Local hashing; optional OS-mediated export | A hash can still correlate identical saves. Keep it purpose-limited to integrity/compatibility diagnostics and disclose it in any actual export flow |
 | Parser and structured diagnostics (current) | Local format detection, bounded parsing, and enumerated failure kind/diagnostic | Sanitized logical results or codes are retained ephemerally in presentation state; raw exceptions, offsets, keys, rotation details, and byte fragments are not retained there | Only allow-listed failure facts can leave through explicit report export | Import; export requires Preview followed by Copy or Share | Local computation | Store declarations must describe actual shipped diagnostics behavior; adding automatic error/crash submission is a separate review |
@@ -143,10 +147,14 @@ Verified **2026-09-19** from the linked official Google documentation. This is
 a dated planning snapshot, not a completed Play Console declaration or a
 substitute for checking the policies and the actual account at release time.
 
-- **Privacy policy:** Google says apps must provide a privacy policy. Publish a
-  final policy that accurately matches the exact shipping app's collection,
-  use, sharing, SDKs, and user-initiated exports; do not promote this inventory
-  itself as the final policy. See
+- **Privacy policy:** Google says apps must provide a privacy policy. A future
+  Play release must have both an active Play-facing privacy-policy URL/store
+  metadata as required and privacy-policy link or text accessible inside the
+  released app. Publish a final policy that accurately matches the exact
+  shipping app's collection, use, sharing, SDKs, and user-initiated exports; do
+  not promote this inventory itself as the final policy. The current app does
+  not implement an in-app privacy-policy UI or surface, and this documentation
+  PR does not add one. See
   [Prepare your app for review](https://support.google.com/googleplay/android-developer/answer/9859455).
 - **Ads declaration:** the current app posture is free with no ads and no
   advertising SDK. Play still requires declaring whether the app
@@ -241,6 +249,12 @@ the review rather than selecting the most convenient description.
   [Data Safety form declarations](https://support.google.com/googleplay/android-developer/answer/10787469)
   from what ships, including SDK behavior and user-initiated exports, not from
   intentions or an older build. Review each as its own release obligation.
+- [ ] Publish and activate the required Play-facing privacy-policy URL/store
+  metadata, and verify that privacy-policy link or text is accessible inside the
+  released app. Both surfaces must match the exact shipping behavior. The
+  current app does not implement the required in-app privacy-policy UI or
+  surface, and this documentation PR does not add it; a public release remains
+  gated on that implementation and verification.
 - [ ] If any future feature needs sensitive data or permissions, reassess data
   minimization and the current
   [permission declaration](https://support.google.com/googleplay/android-developer/answer/9214102)
@@ -297,7 +311,8 @@ complete it.
 | Source manifest + merged release manifest permissions/components | |
 | Network / analytics / ads observed | |
 | Resolved dependency / SDK audit | |
-| Privacy policy URL | |
+| Active Play-facing privacy-policy URL / store metadata | |
+| In-app privacy-policy link or text present and verified in released app | |
 | Data Safety completed against exact build | |
 | Signing / upload-key plan recorded | |
 | Store claims matched to tested compatibility | |
@@ -316,6 +331,7 @@ complete it.
 | No SDK or permission is added without a documented feature need | **Runtime, privacy, and permissions** requires source/merged-manifest and resolved-SDK review; Issues #12 and #13 remain explicit gates for write/export and bridge capabilities. |
 | Store claims distinguish tested support from experimental/future compatibility | **Product identity and claims** binds claims and screenshots to tested support on the exact release commit and requires supported, candidate/experimental, unsupported, and future states to remain distinct. |
 | Current Play requirements are re-verified from official Google documentation immediately before release | **Actual build identity**, **Current Play policy snapshot**, **Play readiness and release operation**, and the per-release record require a time-sensitive official-source recheck. |
+| Privacy-policy completion covers both required release surfaces | **Current Play policy snapshot** and **Runtime, privacy, and permissions** require an active Play-facing privacy-policy URL/store metadata and privacy-policy link or text accessible inside the released app; the per-release record verifies each separately and this document does not claim the currently absent in-app surface is complete. |
 
 ### Issue #11: install-base metrics without invasive analytics
 
@@ -327,9 +343,11 @@ complete it.
 
 The following lifecycle operations are intentionally deferred until an actual
 release: Play Console registration and actual-account verification; publication
-of the privacy-policy URL; Data Safety submission; tester and track execution;
-signing-key operational setup; store listing and screenshots; and production of
-the actual release artifact. None is claimed complete here. Issues #15 and #11
+of the Play-facing privacy-policy URL/store metadata; implementation and
+verification of privacy-policy link or text inside the released app; Data Safety
+submission; tester and track execution; signing-key operational setup; store
+listing and screenshots; and production of the actual release artifact. None is
+claimed complete here. Issues #15 and #11
 remain open until their lifecycle work and review are complete. Legal and
 licensing review remains a separate decision track, including the explicit
 non-conclusion recorded in the licensing-boundary review.

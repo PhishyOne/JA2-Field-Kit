@@ -14,6 +14,28 @@ Android's clipboard or chooser, and **Field Kit transmission** means network
 traffic initiated by this app. OS-mediated export can let another chosen app
 retain or transmit data; it is not automatic collection or upload by Field Kit.
 
+## Actual build identity
+
+Inspected from `android-app/build.gradle.kts` on **2026-09-19**:
+
+| Build property | Current value |
+|---|---|
+| `namespace` | `com.phishtopia.ja2fieldkit.android` |
+| `applicationId` | `com.phishtopia.ja2fieldkit` |
+| `minSdk` | 23 |
+| `targetSdk` | 37 |
+| `compileSdk` | 37 |
+| `versionCode` | 1 |
+| `versionName` | `0.1.0` |
+
+Starting **2026-08-31**, Google Play requires new Android mobile apps and app
+updates to target Android 16 / API 36 or higher. The current `targetSdk` 37
+meets that submission floor as of 2026-09-19. This requirement is
+time-sensitive: recheck the official
+[Play target API requirement](https://support.google.com/googleplay/android-developer/answer/11926878)
+and [Android target API guidance](https://developer.android.com/google/play/requirements/target-sdk)
+against the exact release build immediately before submission.
+
 ## Audited current boundary
 
 - Application ID: `com.phishtopia.ja2fieldkit`.
@@ -105,6 +127,47 @@ Verified **2026-09-19** against Google's official
   these metrics. If future product analytics would answer a distinct product
   question, it requires a separate privacy/value review before any SDK,
   identifier, event, permission, or disclosure is introduced.
+
+## Current Play policy snapshot
+
+Verified **2026-09-19** from the linked official Google documentation. This is
+a dated planning snapshot, not a completed Play Console declaration or a
+substitute for checking the policies and the actual account at release time.
+
+- **Privacy policy:** Google says apps must provide a privacy policy. Publish a
+  final policy that accurately matches the exact shipping app's collection,
+  use, sharing, SDKs, and user-initiated exports; do not promote this inventory
+  itself as the final policy. See
+  [Prepare your app for review](https://support.google.com/googleplay/android-developer/answer/9859455).
+- **Ads declaration:** the current app posture is free with no ads and no
+  advertising SDK. Play still requires declaring whether the app
+  contains ads; answer from the exact shipping behavior and presentation on
+  the same [app-review page](https://support.google.com/googleplay/android-developer/answer/9859455).
+- **App content review:** complete the content rating, target-audience,
+  privacy/security declarations, and reviewer-access instructions if access is
+  required. Validate every answer against the release candidate; the same
+  [app-review page](https://support.google.com/googleplay/android-developer/answer/9859455)
+  is the current entry point.
+- **Data Safety:** complete the form from the exact shipping behavior and
+  resolved SDKs. Do not pre-answer or submit that form in this documentation
+  PR; user-initiated OS handoffs and any SDK behavior must be classified under
+  the then-current instructions.
+- **Personal-account testing:** as of 2026-09-19, personal developer accounts
+  created after 2023-11-13 must run a closed test with at least 12 testers
+  continuously opted in for at least 14 days before applying for production
+  access. This does not apply to every account. Verify the actual account type,
+  creation date, eligibility, and the current
+  [testing policy](https://support.google.com/googleplay/android-developer/answer/14151465)
+  immediately before release; this document makes no account-specific claim.
+- **Play App Signing:** keep the developer-held upload key used to authenticate
+  uploads distinct from the Play-held app-signing key used to sign distributed
+  APKs. Record the release-time ownership, storage, recovery, and key-upgrade
+  decisions after checking the current
+  [Play App Signing guidance](https://support.google.com/googleplay/android-developer/answer/9842756).
+- **Requirements change:** the
+  [Play Console Requirements page](https://support.google.com/googleplay/android-developer/answer/10788890)
+  carries current requirements and policy updates. Recheck it and its linked
+  policy pages immediately before every real release.
 
 ## Future public Play release gate
 
@@ -207,12 +270,71 @@ the review rather than selecting the most convenient description.
   for the final release commit. A green earlier PR is not release evidence for
   a different commit.
 
+## Per-release verification record template
+
+Copy and fill this table for each real release. Empty cells mean unverified;
+this template is not a certification and this documentation PR does not
+complete it.
+
+| Verification field | Release record |
+|---|---|
+| Verification date | |
+| Exact release commit | |
+| Exact artifact SHA-256 (identify AAB/APK and signing stage) | |
+| Version code / version name | |
+| Target API requirement checked | |
+| Play policy pages checked | |
+| Actual-account testing requirement applicable? (`yes`/`no` + basis) | |
+| Source manifest + merged release manifest permissions/components | |
+| Network / analytics / ads observed | |
+| Resolved dependency / SDK audit | |
+| Privacy policy URL | |
+| Data Safety completed against exact build | |
+| Signing / upload-key plan recorded | |
+| Store claims matched to tested compatibility | |
+| Reviewer-access instructions needed? (`yes`/`no`) | |
+| Content rating / target audience completed | |
+| Final licensing / trademark review complete | |
+
+## Acceptance mapping for Issues #15 and #11
+
+### Issue #15: release and privacy posture
+
+| Acceptance criterion | Where this document addresses it |
+|---|---|
+| Release/privacy checklist exists before the first public Play build | **Future public Play release gate** and the **Per-release verification record template** define the pre-release work without claiming a release exists. |
+| Data-flow inventory matches actual app behavior | **Audited current boundary** and **Data-flow inventory** record current local import, ephemeral processing, explicit OS-mediated export, and absent network/analytics/ads behavior; each real release must repeat the audit. |
+| No SDK or permission is added without a documented feature need | **Runtime, privacy, and permissions** requires source/merged-manifest and resolved-SDK review; Issues #12 and #13 remain explicit gates for write/export and bridge capabilities. |
+| Store claims distinguish tested support from experimental/future compatibility | **Product identity and claims** binds claims and screenshots to tested support on the exact release commit and requires supported, candidate/experimental, unsupported, and future states to remain distinct. |
+| Current Play requirements are re-verified from official Google documentation immediately before release | **Actual build identity**, **Current Play policy snapshot**, **Play readiness and release operation**, and the per-release record require a time-sensitive official-source recheck. |
+
+### Issue #11: install-base metrics without invasive analytics
+
+| Acceptance criterion | Where this document addresses it |
+|---|---|
+| Identify the Play Console metrics for current installed audience/install base | **Install-base decision for Issue #11** names Installed Audience as the primary user-level current-installed metric and Install base as the active-device companion; acquisitions/total installs remain growth metrics and Play reporting omits sideloads. |
+| Require no analytics SDK solely for install counting | The same section explicitly rejects Firebase or other third-party analytics merely to recreate Play aggregate metrics. |
+| Require separate review if later product analytics are proposed | The same section requires a distinct privacy/value review before any later SDK, identifier, event, permission, or disclosure. |
+
+The following lifecycle operations are intentionally deferred until an actual
+release: Play Console registration and actual-account verification; publication
+of the privacy-policy URL; Data Safety submission; tester and track execution;
+signing-key operational setup; store listing and screenshots; and production of
+the actual release artifact. None is claimed complete here. Issues #15 and #11
+remain open until their lifecycle work and review are complete. Legal and
+licensing review remains a separate decision track, including the explicit
+non-conclusion recorded in the licensing-boundary review.
+
 ## Official Google references
 
 These links are review inputs, not frozen policy text. Check them and their
 linked requirements immediately before each public release:
 
 - [App statistics: Installed Audience and Install base](https://support.google.com/googleplay/android-developer/answer/139628)
+- [Target API level requirements for Google Play apps](https://support.google.com/googleplay/android-developer/answer/11926878)
+- [Android Developers: Meet Google Play's target API level requirement](https://developer.android.com/google/play/requirements/target-sdk)
+- [Prepare your app for review: privacy policy, ads, and App content](https://support.google.com/googleplay/android-developer/answer/9859455)
+- [Testing requirements for new personal developer accounts](https://support.google.com/googleplay/android-developer/answer/14151465)
 - [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756)
 - [Data Safety form: Provide information for Google Play's Data safety section](https://support.google.com/googleplay/android-developer/answer/10787469)
 - [Prominent disclosure and consent: Best practices](https://support.google.com/googleplay/android-developer/answer/11150561)

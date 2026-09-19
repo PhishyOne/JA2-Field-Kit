@@ -5,12 +5,13 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
-import com.phishtopia.ja2fieldkit.android.importing.BoundedSaveReader
 import com.phishtopia.ja2fieldkit.android.importing.DisplayNameSanitizer
+import com.phishtopia.ja2fieldkit.android.importing.ProviderSaveMetadata
+import com.phishtopia.ja2fieldkit.android.importing.SaveImporter
 import com.phishtopia.ja2fieldkit.android.importing.SaveTooLargeException
-import com.phishtopia.ja2fieldkit.android.importing.SourceMetadata
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionPresentationMapper
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
@@ -24,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong
 /** Retains only presentation state across configuration changes; save bytes stay task-local. */
 class InspectionViewModel : ViewModel() {
     private val inspector = Ja2SaveInspector()
-    private val reader = BoundedSaveReader()
+    private val importer = SaveImporter()
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val requestSequence = AtomicLong()
@@ -46,52 +47,64 @@ class InspectionViewModel : ViewModel() {
         provenance: SourceProvenance,
     ) {
         if (uri.scheme != ContentResolver.SCHEME_CONTENT) {
-            showSourceFailure(null, SourceFailureKind.NOT_CONTENT_URI)
+            showSourceFailure(SourceFailureKind.NOT_CONTENT_URI)
             return
         }
 
         val request = requestSequence.incrementAndGet()
         publish(InspectionScreenState.Loading(sourceName = null))
         executor.execute {
-            var source: SourceMetadata? = null
             val nextState = try {
-                source = querySourceMetadata(resolver, uri, provenance)
-                post(request, InspectionScreenState.Loading(source.displayName))
-                val bytes = resolver.openInputStream(uri)?.use { input ->
-                    reader.read(input, source.declaredSizeBytes)
+                val providerMetadata = querySourceMetadata(resolver, uri, provenance)
+                post(
+                    request,
+                    InspectionScreenState.Loading(
+                        DisplayNameSanitizer.sanitize(providerMetadata.displayName),
+                    ),
+                )
+                val imported = resolver.openInputStream(uri)?.use { input ->
+                    importer.import(input, providerMetadata)
                 } ?: throw FileNotFoundException()
-                InspectionPresentationMapper.map(source, inspector.inspectV01(bytes))
+                InspectionPresentationMapper.map(
+                    imported.provenance,
+                    imported.inspectV01With(inspector),
+                )
             } catch (_: SaveTooLargeException) {
-                InspectionPresentationMapper.sourceFailure(source, SourceFailureKind.SIZE_LIMIT)
+                InspectionPresentationMapper.sourceFailure(SourceFailureKind.SIZE_LIMIT)
             } catch (_: SecurityException) {
-                InspectionPresentationMapper.sourceFailure(source, SourceFailureKind.UNAVAILABLE)
+                InspectionPresentationMapper.sourceFailure(SourceFailureKind.UNAVAILABLE)
             } catch (_: FileNotFoundException) {
-                InspectionPresentationMapper.sourceFailure(source, SourceFailureKind.UNAVAILABLE)
+                InspectionPresentationMapper.sourceFailure(SourceFailureKind.UNAVAILABLE)
             } catch (_: IOException) {
-                InspectionPresentationMapper.sourceFailure(source, SourceFailureKind.READ_FAILED)
+                InspectionPresentationMapper.sourceFailure(SourceFailureKind.READ_FAILED)
             } catch (_: RuntimeException) {
-                InspectionPresentationMapper.sourceFailure(source, SourceFailureKind.READ_FAILED)
+                InspectionPresentationMapper.sourceFailure(SourceFailureKind.READ_FAILED)
             }
             post(request, nextState)
         }
     }
 
-    fun showSourceFailure(source: SourceMetadata?, kind: SourceFailureKind) {
+    fun showSourceFailure(kind: SourceFailureKind) {
         requestSequence.incrementAndGet()
-        publish(InspectionPresentationMapper.sourceFailure(source, kind))
+        publish(InspectionPresentationMapper.sourceFailure(kind))
     }
 
     private fun querySourceMetadata(
         resolver: ContentResolver,
         uri: Uri,
         provenance: SourceProvenance,
-    ): SourceMetadata {
+    ): ProviderSaveMetadata {
         var name: String? = null
         var size: Long? = null
+        var lastModified: Long? = null
         try {
             resolver.query(
                 uri,
-                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                arrayOf(
+                    OpenableColumns.DISPLAY_NAME,
+                    OpenableColumns.SIZE,
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                ),
                 null,
                 null,
                 null,
@@ -99,14 +112,17 @@ class InspectionViewModel : ViewModel() {
                 if (cursor.moveToFirst()) {
                     name = cursor.stringOrNull(OpenableColumns.DISPLAY_NAME)
                     size = cursor.longOrNull(OpenableColumns.SIZE)?.takeIf { it >= 0 }
+                    lastModified = cursor.longOrNull(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                        ?.takeIf { it > 0 }
                 }
             }
         } catch (_: RuntimeException) {
             // Metadata is optional. Stream access remains the authority.
         }
-        return SourceMetadata(
+        return ProviderSaveMetadata(
             displayName = DisplayNameSanitizer.sanitize(name),
             declaredSizeBytes = size,
+            lastModifiedEpochMillis = lastModified,
             provenance = provenance,
         )
     }

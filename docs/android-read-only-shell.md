@@ -3,22 +3,40 @@
 ## Operational boundary
 
 The Android app is a read-only consumer of
-`Ja2SaveInspector.inspectV01(ByteArray)`. It obtains one user-selected
-`content://` URI, queries only `OpenableColumns.DISPLAY_NAME` and `SIZE`, reads
-the stream into bounded bytes, closes the stream, and discards the bytes after
-inspection. It does not resolve a filesystem path and core never receives the
-URI or provider metadata.
+`Ja2SaveInspector.inspectV01(ByteArray)`. Its single importer accepts a stream
+from one user-granted `content://` URI and optional provider metadata: display
+name, declared size, and last-modified timestamp. It sanitizes the filename,
+counts and SHA-256 hashes the bytes while reading, closes the stream, lends the
+private byte snapshot only to the immediate inspection call, and discards it
+after presentation mapping. Core receives bytes only; it never receives the
+URI, source category, or provider metadata.
 
 The input limit is **16 MiB**. The admitted real Android save recorded in the
 fixture manifest is 2,563,321 bytes, so the limit leaves more than six times
 the observed size for ordinary campaign growth while bounding memory use and
 hostile or mistaken provider responses. A provider-declared oversized value is
 rejected before stream reading; unknown or inaccurate sizes are still enforced
-while streaming.
+while streaming. Actual byte count is authoritative when a provider's declared
+size differs. Size and lowercase hexadecimal SHA-256 provenance are published
+only for a complete accepted import, never for a rejected prefix.
 
-Display filenames are reduced to a leaf name, stripped of control characters,
-and limited to 120 Unicode code points. No URI, filesystem path, provider
-exception, save bytes, or parser-internal diagnostic reaches presentation.
+Display filenames are reduced to a leaf name, have control, format,
+line-separator, and paragraph-separator characters replaced with spaces, and
+are limited to 120 Unicode code points. Retained provenance is limited to that
+filename, entry category, actual size, optional provider-declared size, optional
+provider last-modified timestamp, and the SHA-256 of the exact imported bytes.
+No URI, filesystem path, provider/account identifier, provider exception, save
+bytes, or parser-internal diagnostic reaches presentation.
+
+## Local, USB, and cloud documents
+
+Local files and Downloads, USB storage exposed by an installed Android document
+provider, and cloud storage exposed by an installed Android document provider
+all enter through the same Storage Access Framework (SAF) document picker and
+the same importer. USB and cloud support therefore require the relevant storage
+or cloud app/provider to participate in SAF. Field Kit does not scan mounted
+filesystems, request broad storage access, sign in to cloud accounts, upload
+content, or integrate provider-specific SDKs.
 
 ## Intent and document-provider matrix
 
@@ -41,13 +59,21 @@ The manifest declares no permissions. The picker, open-with sender, or share
 sender grants temporary access to the chosen content URI. The app does not ask
 for `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`,
 `MANAGE_EXTERNAL_STORAGE`, folder access, or permanent/persistable URI access.
-It has no background service.
+The current read-only flow uses the explicit user grant only for the immediate
+import and does not call `takePersistableUriPermission` or retain URI history.
+It has no background scanner or service.
 
 ## Original and generated-save semantics
 
 v0.1 opens the provider stream in read mode and has no write, create-document,
 save-copy, export, or edit control. The original is never modified. This slice
 does not produce a generated save at all.
+
+Open-with (`ACTION_VIEW`) and share-to (`ACTION_SEND`) use the same bounded
+import/provenance result as the in-app `ACTION_OPEN_DOCUMENT` picker. Multiple
+shares remain unsupported. `ACTION_OPEN_DOCUMENT_TREE`, desktop/LAN transfer,
+QR or short-code pairing, recent-file databases, persistent grants, export, and
+write-back remain future work for issue #10.
 
 That boundary is compatible with the future import/save design tracked by
 issue #10: when generated saves are eventually introduced, they must be new

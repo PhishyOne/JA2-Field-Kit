@@ -69,10 +69,18 @@ not a roster model and carries no inferred hired/player-membership state.
 
 Owns Android Storage Access Framework integration, the document picker,
 content-URI reads, presentation mapping, and the screen. Its narrow importer
-collects a sanitized display name and optional provider size, then reads a
-maximum of 16 MiB. Only bytes enter `Ja2SaveInspector.inspectV01`; URI and
-provider details never enter core. Presentation state contains no offsets,
-rotation indexes, digests, keys, ciphertext, or parser exceptions.
+collects a sanitized display name, source category, optional provider size, and
+optional provider last-modified timestamp, then reads a maximum of 16 MiB while
+counting and SHA-256 hashing the exact bytes. Only a private, task-local byte
+snapshot enters `Ja2SaveInspector.inspectV01`; URI and provider details never
+enter core. Presentation retains import provenance (including lowercase SHA-256
+for integrity diagnostics), but no save bytes, raw URI/path, provider-private
+identifier, offsets, rotation indexes, keys, ciphertext, or parser exceptions.
+
+Local/Downloads, USB-backed, and cloud-backed documents all use Storage Access
+Framework document providers. `ACTION_OPEN_DOCUMENT`, `ACTION_VIEW`, and
+`ACTION_SEND` converge on this same importer; there is no filesystem scanning,
+provider SDK, persistent URI grant, account access, or automatic upload.
 
 The current shell has no permissions, persistence, network, analytics, write,
 export, or URI-to-filesystem-path code. Share/export remains future scope.

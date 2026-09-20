@@ -11,13 +11,17 @@ private byte snapshot only to the immediate inspection call, and discards it
 after presentation mapping. Core receives bytes only; it never receives the
 URI, source category, or provider metadata.
 
-The input limit is **16 MiB**. The admitted real Android save recorded in the
-fixture manifest is 2,563,321 bytes, so the limit leaves more than six times
-the observed size for ordinary campaign growth while bounding memory use and
-hostile or mistaken provider responses. A provider-declared oversized value is
-advisory only and cannot reject otherwise readable content; declared size is at
-most a safely capped allocation hint. The limit is enforced solely on bytes read,
-and actual byte count is authoritative when a provider's declared size differs.
+The maximum accepted and retained complete payload is **16 MiB**. The admitted
+real Android save recorded in the fixture manifest is 2,563,321 bytes, so the
+limit leaves more than six times the observed size for ordinary campaign growth
+while bounding memory use and hostile or mistaken provider responses. An
+oversized rejected provider stream may transiently read beyond that boundary by
+up to one current 64 KiB buffer read before `SaveTooLargeException`; the failed
+input is not retained as an accepted save. A provider-declared oversized value
+is advisory only and cannot reject otherwise readable content; declared size is
+at most a safely capped allocation hint. Acceptance is governed by measured
+streamed bytes, and actual byte count is authoritative when a provider's
+declared size differs.
 Size and lowercase hexadecimal SHA-256 provenance are published only for a
 complete accepted import, never for a rejected prefix.
 

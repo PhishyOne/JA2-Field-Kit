@@ -70,8 +70,11 @@ not a roster model and carries no inferred hired/player-membership state.
 Owns Android Storage Access Framework integration, the document picker,
 content-URI reads, presentation mapping, and the screen. Its narrow importer
 collects a sanitized display name, source category, optional provider size, and
-optional provider last-modified timestamp, then reads a maximum of 16 MiB while
-counting and SHA-256 hashing the exact bytes. Provider-declared size is advisory:
+optional provider last-modified timestamp, then accepts and retains a maximum
+complete payload of 16 MiB while counting and SHA-256 hashing the exact bytes.
+An oversized rejected stream may be transiently read beyond that boundary by up
+to one current 64 KiB buffer read before throwing `SaveTooLargeException` and is
+not retained as an accepted save. Provider-declared size is advisory:
 it cannot reject readable content or authorize bytes beyond that measured limit.
 Only a private, task-local byte snapshot enters `Ja2SaveInspector.inspectV01`;
 URI and provider details never enter core. Presentation retains import provenance
@@ -97,6 +100,12 @@ text through Android's chooser. Save sharing/contribution remains future scope.
 - Invalid stat/range: preserve evidence for diagnostics; do not silently clamp during parsing.
 - Editing (future): write a new file, reread it, verify requested logical changes, then report success.
 - Never overwrite the original save by default.
+
+The mandatory authority boundary, state machine, format enablement gate, and
+output-placement separation for any future editor are defined in
+[transactional-edit-safety.md](transactional-edit-safety.md). This is a design
+gate only; current `SUPPORTED` detection remains read-only support and does not
+authorize serialization or editing.
 
 ## What we are deliberately not building yet
 

@@ -90,12 +90,15 @@ copies or takes exclusive immutable ownership of the snapshot and computes its
 SHA-256 itself. Caller-supplied hashes and format labels are assertions to
 check, never authority.
 
-Admission requires an exact edit capability keyed by all format identity that
-can affect serialization, including layout and save version/build identity.
-That capability must have passed the no-op gate below. Unknown, candidate,
-truncated, inconsistent, read-only-supported, or otherwise unproven variants
-are rejected before mutation. A current read detector returning `SUPPORTED` is
-necessary where applicable but is not sufficient.
+Admission requires an exact edit capability keyed by all runtime-observable
+serialized identity that can affect serialization, including layout and save
+version/build identity. Producer labels may be retained as provenance or
+context, but they are assertions to check rather than enforcement authority
+when the runtime cannot distinguish them from the bytes. That capability must
+have passed the no-op gate below. Unknown, candidate, truncated, inconsistent,
+read-only-supported, or otherwise unproven variants are rejected before
+mutation. A current read detector returning `SUPPORTED` is necessary where
+applicable but is not sufficient.
 
 The admitted source is parsed once into an immutable logical baseline and a
 private format representation capable of preserving uninterpreted bytes. The
@@ -215,9 +218,16 @@ the exact byte regions and allowed relation, preserve every opaque byte, be
 independent of private fixture values, and have positive and negative tests.
 An undocumented or unexplained no-op mismatch keeps editing disabled.
 
-A capability is enabled only for the exact identities covered by its evidence.
-Passing for one version, platform layout, or producer claim does not enable a
-neighboring variant.
+A capability is enabled only for the exact runtime-observable serialized
+identities covered by its evidence. Producer claims that are
+byte-indistinguishable under the current admission and detection evidence form
+one edit-capability domain; evidence must justify editing across the whole
+indistinguishable set that the runtime would admit under that capability.
+Evidence for one version, platform layout, or other runtime-distinguishable
+identity does not enable a neighboring variant. If evidence cannot justify the
+whole indistinguishable domain, editing remains disabled until a reliable
+producer discriminator or a narrower observable serialized identity is
+established.
 
 ## Unknown-byte preservation
 

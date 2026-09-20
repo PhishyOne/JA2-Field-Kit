@@ -98,8 +98,13 @@ text through Android's chooser. Save sharing/contribution remains future scope.
 - Unknown version: return unsupported/unknown, not guessed data.
 - Truncated block: stop parsing that logical result and report a structured error.
 - Invalid stat/range: preserve evidence for diagnostics; do not silently clamp during parsing.
-- Editing (future): write a new file, reread it, verify requested logical changes, then report success.
+- Editing (future): read and parse the source, apply logical changes in memory, serialize
+  a transaction-private candidate, re-admit and reparse it, and verify requested
+  changes plus critical unchanged facts before producing a verified candidate.
+  A separate output-placement operation may then create a new file by default.
 - Never overwrite the original save by default.
+- Replacement remains a separate, explicit later operation with conflict,
+  backup, and rollback semantics.
 
 The mandatory authority boundary, state machine, format enablement gate, and
 output-placement separation for any future editor are defined in

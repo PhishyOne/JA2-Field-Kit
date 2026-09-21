@@ -27,15 +27,17 @@ Every future edit transaction must perform this sequence:
 ```text
 read original
   -> reject source above the core editor byte ceiling
+  -> structurally admit requests/assertions into an immutable bounded snapshot
   -> snapshot source and establish runtime-observable identity
   -> apply any tighter capability source bound
   -> admit exact format/version for editing
   -> parse source snapshot
+  -> semantically admit typed requests and bound/build the verification plan
   -> apply typed logical changes in memory
   -> serialize through a bounded transaction-private candidate writer
   -> admit and reparse candidate bytes
   -> verify requested changes and critical unchanged facts
-  -> produce a verified candidate
+  -> complete bounded provenance and produce a verified candidate
 ```
 
 The core transaction is the sole authority allowed to construct a successful
@@ -58,6 +60,10 @@ RECEIVED -- source above 16 MiB -----------------------------> FAILED
   | constant-time source byte-count check passes; no copy or proportional work
   v
 CORE_SIZE_ADMITTED
+  | bounded structural request/assertion admission and immutable snapshot
+  +-- missing required limit / structural budget failure ----> FAILED
+  v
+REQUEST_STRUCTURE_ADMITTED
   | snapshot bytes; compute SHA-256; establish observable identity
   v
 IDENTITY_ESTABLISHED
@@ -69,8 +75,15 @@ SOURCE_ADMITTED
   v
 SOURCE_PARSED ------ parse/integrity failure ----------------> FAILED
   | capture logical baseline, critical facts, and preservation map
+  | semantically admit operations, ranges, preconditions, and conflicts
+  +-- invalid/unsupported/conflicting request ---------------> FAILED
+  | bound plan expansion before construction; build fixed verification plan
+  +-- plan budget / complete-verification failure -----------> FAILED
   v
-MUTATED_IN_MEMORY -- invalid/unsupported/conflicting request -> FAILED
+REQUEST_AND_PLAN_ADMITTED
+  | apply typed logical changes to private working model
+  v
+MUTATED_IN_MEMORY -- mutation failure -----------------------> FAILED
   | serialize through strictest-bound transaction-private writer
   +-- bound/serialization/layout failure --------------------> FAILED
   v
@@ -81,7 +94,8 @@ CANDIDATE_REPARSED -- admission/parse/integrity failure -----> FAILED
   | mandatory verifier evaluates the fixed plan
   v
 VERIFIED ----------- any mismatch ---------------------------> FAILED
-  |
+  | complete bounded report/provenance; check internal references
+  +-- budget / provenance failure ---------------------------> FAILED
   v
 VERIFIED_CANDIDATE
 ```
@@ -90,6 +104,10 @@ VERIFIED_CANDIDATE
 failed transaction back to success using the same candidate. Retrying starts a
 new transaction from source bytes. Destination placement is deliberately not a
 state in this machine.
+
+Any resource-budget failure at any stage is terminal, including report growth
+during verification. The structural gate precedes caller-proportional editor
+work other than the bounded admission traversal defined below.
 
 ## Future public editor contract
 
@@ -145,6 +163,64 @@ private format representation capable of preserving uninterpreted bytes. The
 transaction records the admitted identity rather than trusting that a later
 candidate has the same identity.
 
+### Structural request admission
+
+Core owns structural request admission alongside source-byte admission. The
+16 MiB source/candidate ceiling does not bound edit collections, caller-added
+assertions, typed values, canonicalization, plans, reports, or provenance.
+Before bulk copying caller collections or values, hashing/canonicalization,
+verification-plan construction, mutation, execution, or other work proportional
+to caller-controlled input, core must structurally admit the input under finite
+core-owned limits. Required resource limits cover:
+
+- raw edit operation count and caller-added assertion count, counting every
+  duplicate before deduplication;
+- every variable-sized typed component, including target identifiers,
+  preconditions, requested and expected values, and strings, byte values, or
+  collections if future types permit them; nested collection count/depth and
+  numeric precision must also be bounded where applicable;
+- aggregate admitted-input size and canonical-representation size; and
+- the total expanded verification plan and verification-report/provenance
+  sizes, including mandatory capability checks and observed-value
+  representations.
+
+Admission itself must be bounded. Use trustworthy constant-time lengths where
+available, otherwise bounded traversal with early termination; never
+materialize an unlimited collection, string, or encoding merely to measure it.
+Use overflow-safe accounting before allocation or growth. Produce an immutable
+admitted input snapshot whose exact contents satisfy every limit: bounded
+incremental capture may occur only after checking the applicable component and
+aggregate budgets. A check followed by an unchecked copy of mutable caller data
+does not qualify. Later caller mutation must not alter admitted inputs or bypass
+checks; all subsequent work uses the admitted snapshot.
+
+Structural admission must bound canonical size by bounded measurement or a safe
+upper bound before encoding or hashing. After capability selection and parsing,
+the total expansion budgets must also be enforced before constructing the plan
+or allocating report/provenance growth, as specified below.
+
+The future public editor implementation contract must fix concrete finite
+values for every required limit before any edit capability may be enabled.
+Values must be justified by supported workloads, worst-case expansion, and
+memory/CPU evidence, including adversarial processing cost. This design does
+not invent numeric operation/assertion/value budgets. Any unspecified required
+limit keeps editing disabled. Core owns and enforces these limits; callers and
+adapters cannot raise them, and capabilities may only tighten them. The existing
+16 MiB source/candidate hard ceiling remains unchanged.
+
+Structural admission is not semantic edit admission. After observable identity
+and capability selection and necessary parsing, core enforces any tighter
+capability limits and the capability's supported operations, logical ranges,
+preconditions, conflicts, and ability to verify the complete edit before
+mutation. Passing structural limits never authorizes an edit.
+
+Duplicates count before deduplication. Ambiguous or contradictory duplicates
+fail closed; accepted duplicates must remain represented in canonical
+provenance, including their multiplicity, even if execution can safely coalesce
+them. Canonical hashing does not waive size or computation limits. Any budget
+failure terminates the transaction with bounded diagnostics and no candidate
+success; it must not drop mandatory checks or truncate success evidence.
+
 ### Typed request and in-memory mutation
 
 An edit request set is a closed collection of typed logical operations defined
@@ -189,7 +265,9 @@ is not authorized by this issue.
 
 ### Verification plan and report
 
-The core constructs the verification plan before mutation from three sources:
+After structural and semantic request admission, core bounds the total expanded
+verification plan before constructing it and before mutation. It includes three
+sources:
 
 1. Every typed edit operation contributes mandatory requested-change
    assertions, including target identity and expected post-edit value.
@@ -197,6 +275,13 @@ The core constructs the verification plan before mutation from three sources:
    assertions and structural/integrity checks.
 3. A caller or test may add typed unchanged-field assertions for logical facts
    it cares about.
+
+Expansion accounting includes all three sources, even checks not supplied by
+the caller. Report and provenance growth, including expected/observed value
+representations and canonical encodings, must be bounded before allocation.
+Use overflow-safe accounting throughout construction and execution; inability
+to fit the complete plan or evidence is a terminal failure, never permission to
+omit a check or shorten evidence into a successful result.
 
 Caller assertions are additive. No caller, adapter, or UI may remove requested
 change checks or format-mandated unchanged checks. At minimum, the capability's
@@ -256,6 +341,9 @@ reviewed and tested for that capability:
    reparse.
 5. Critical unchanged facts and every enabled edit operation have complete,
    typed verification rules.
+6. The public editor contract fixes all finite structural resource limits, with
+   workload, worst-case expansion, and memory/CPU evidence; core enforcement
+   and any tighter capability limits pass the resource-admission tests below.
 
 The default no-op requirement is byte identity:
 
@@ -331,10 +419,51 @@ a verified-candidate result.
 ### Create-new output
 
 The default destination operation, when separately designed, is create-new
-output. It must use create-without-overwrite semantics, not an
-exists-check-then-write sequence, and must verify the placed bytes against the
-verified candidate. An existing destination fails that operation; it does not
-implicitly authorize replacement.
+output (including Save As). It consumes only a verified candidate; core
+candidate creation remains completely separate from placement. The adapter must:
+
+1. Write the exact candidate bytes to **private staging** in a location/domain
+   that supports the qualified final publication semantics.
+2. Verify staged byte size and SHA-256 against candidate provenance before
+   publication. Protect the staged object from modification between this
+   verification and publication.
+3. Atomically bind the complete staged object to an **absent destination**, using
+   qualified no-replace publication or a proven platform-equivalent operation.
+   Refuse an existing or concurrently-created destination without changing it;
+   neither case implicitly authorizes replacement.
+4. After atomic publication, verify published bytes against candidate size/hash
+   and verify the destination name/object binding. Establish the adapter's
+   required data and namespace durability and record the outcome before
+   reporting placement success.
+
+No direct streaming into the final destination, exists-check-then-write,
+overwrite-capable fallback, partial copy into the final name, copy/delete
+fallback, or destructive fallback qualifies. Qualification must address actual
+filesystem/provider constraints, including whether staging and final destination
+must share a filesystem or transactional provider domain. Cross-filesystem or
+cross-provider transfer must stage in the destination domain or prove equivalent
+semantics; a generic "move" is insufficient. If atomic no-replace publication or
+a platform-equivalent operation cannot be proven, create-new/Save As is
+**unsupported and fails closed**. No particular OS/API primitive is qualified
+here.
+
+Atomic visibility and durability are separate requirements. Each adapter must
+define its supported interruption/crash model and the required data plus
+namespace durability guarantees, including the ordering of persistence steps
+around publication. Atomic publication alone is not proof of crash durability.
+
+Before publication, failure leaves the final destination absent or untouched by
+this operation and may clean only staging proven to belong to this operation.
+Once publication may have occurred, failed verification, durability, or outcome
+recording is an **uncertain placement** outcome. Preserve available staging and
+recovery evidence and reconcile the actual destination before any further
+mutation. No blind retry, deletion, overwrite, or cleanup of a possibly competing
+final object is allowed. Uncertainty must remain reported until reconciliation
+establishes the actual outcome; verified-candidate success does not resolve it.
+
+Create-new does not replace an expected original. Replacement's expected-original
+comparison, continuous qualified guard, independent backup, and guarded
+restoration remain separate requirements below.
 
 ### Qualified replacement
 
@@ -350,7 +479,8 @@ provide continuous exclusion.
 
 If the adapter cannot provide qualified guarded replacement, replacement is
 unsupported and fails closed. A separate create-new/Save As operation may remain
-available. Java `FileLock`, atomic move/rename, or a pre-commit recheck alone
+available only if it independently meets the create-new qualification above.
+Java `FileLock`, atomic move/rename, or a pre-commit recheck alone
 does not establish generic portable replacement safety. No particular OS/API
 primitive is qualified or implemented here; platform-specific adapter
 qualification requires later evidence.
@@ -380,7 +510,7 @@ The required replacement order is:
 8. Record the outcome and recovery evidence while still guarded.
 9. Release the guard.
 
-### Failure and recovery
+### Replacement failure and recovery
 
 Before the first destination mutation, rejection must leave the destination
 untouched. An uncertain post-commit outcome, including failure to verify the
@@ -431,6 +561,28 @@ Required resource-boundary coverage includes:
 - every oversize failure being terminal and exposing no candidate success
   bytes.
 
+Required structural request/assertion resource coverage includes:
+
+- exact-limit and one-over-limit raw operation counts;
+- exact-limit and over-limit caller-added assertion counts;
+- oversized individual variable values and nested components, including
+  collection count/depth and numeric precision where applicable;
+- aggregate admitted-input and canonical-encoding budget overflow;
+- total verification-plan expansion overflow, including mandatory capability
+  checks, and report/provenance expansion overflow, including observed values;
+- duplicate and contradictory inputs counting before deduplication, with
+  accepted duplicates retained in canonical provenance;
+- mutable caller inputs during admission and after snapshot capture;
+- overflow-safe accounting before every allocation/growth boundary; and
+- adversarial processing-cost cases, including bounded admission traversal and
+  canonicalization.
+
+Instrumentation must prove refusal before forbidden copying, allocation,
+hashing/canonicalization, plan construction, or other proportional work. Tests
+must also prove bounded failure diagnostics, no omitted mandatory checks or
+truncated success evidence on budget failure, and disabled editing when any
+required implementation-contract limit is unspecified.
+
 Additional required negative coverage includes:
 
 - unsupported or merely read-supported format/version;
@@ -450,10 +602,28 @@ artifacts.
 
 ### Future output-adapter evidence
 
-Placement evidence is separate from core transaction tests: a replacement
+Placement evidence is separate from core transaction tests: a placement
 refusal does not invalidate the already verified candidate or imply placement
-success. Create-new evidence must prove create-without-overwrite behavior when
-a competing creator claims the destination and verification of placed bytes.
+success. Before a create-new adapter is supported, platform-specific evidence
+must exercise:
+
+- an existing destination and a concurrent creator;
+- namespace substitution as applicable, including destination binding checks;
+- staged-byte tampering between verification and publication;
+- concurrent reader observations, which must never expose a partial final file;
+- interruption/crash throughout staging and publication under the declared model;
+- publication succeeding but verification, durability, or outcome recording
+  failing;
+- required data and namespace durability, as applicable;
+- orphan staging recovery/cleanup with proof of operation ownership;
+- unsupported filesystems/providers and cross-domain publication attempts.
+
+The required result is a complete published candidate or an untouched existing
+or absent final destination, preserving any competing object's data. After an
+ambiguous publication outcome, preserve uncertainty and recovery evidence until
+the actual destination is reconciled; tests must reject blind retry and unsafe
+cleanup. Platform qualification must establish both visibility and the declared
+durability guarantees, not infer one from the other.
 
 Before a replacement adapter is supported, its platform-specific qualification
 must exercise:

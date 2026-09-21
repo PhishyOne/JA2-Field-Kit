@@ -98,23 +98,36 @@ text through Android's chooser. Save sharing/contribution remains future scope.
 - Unknown version: return unsupported/unknown, not guessed data.
 - Truncated block: stop parsing that logical result and report a structured error.
 - Invalid stat/range: preserve evidence for diagnostics; do not silently clamp during parsing.
-- Editing (future): enforce core-owned source admission before snapshot copying
-  or proportional work, read and parse the admitted source, apply logical
+- Editing (future): enforce core-owned source-byte and structural
+  request/assertion admission before bulk copying or proportional work, using
+  bounded admission to capture immutable inputs. Establish observable identity,
+  enforce tighter capability limits, parse the admitted source, semantically
+  admit requests, bound and build the complete verification plan, apply logical
   changes in memory, serialize through a bounded transaction-private writer,
   re-admit and reparse the candidate, and verify requested changes plus critical
   unchanged facts before producing a verified candidate. The initial hard
   source/candidate ceiling is 16 MiB; a format capability or predicted layout
-  may tighten but never raise it. Byte-size admission does not grant format/edit
-  admission.
+  may tighten but never raise it. Core must also enforce finite counts, typed
+  component and aggregate input/canonical budgets, and expanded plan and
+  report/provenance budgets. Duplicates count before deduplication; admission
+  does not grant semantic edit approval. Required limits must have concrete,
+  evidence-backed values in the future public editor contract before any edit
+  capability is enabled; callers/adapters cannot raise them.
   A separate output-placement operation may then create a new file by default,
-  using create-without-overwrite semantics and verifying placement.
+  using protected private staging verified against candidate provenance,
+  qualified atomic no-replace publication of the complete object, and subsequent
+  byte/binding verification plus required data/namespace durability. Unsupported
+  publication semantics fail closed; cross-domain transfer requires destination
+  staging or proven equivalent semantics. Ambiguous publication preserves
+  uncertainty and recovery evidence until reconciliation before further mutation.
 - Never overwrite the original save by default.
 - Replacement remains a separate, explicit later operation, supported only
   with a qualified guard covering relevant competing writers and destination
   content/name binding continuously from final expected-original comparison
   through atomic commit, post-commit verification, and outcome recording.
   Otherwise it is unsupported and fails closed; separate create-new/Save As
-  may remain available. Independent backup and guarded recovery are required;
+  may remain available only with its own qualified publication contract.
+  Independent backup and guarded recovery are required;
   uncertain outcomes never authorize blind retry or restoration.
 
 The mandatory authority boundary, state machine, format enablement gate, and

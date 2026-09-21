@@ -29,6 +29,8 @@ enum class SaveCompatibility {
 
 /** A bounded reason code; messages and input bytes are deliberately not retained. */
 enum class SaveDetectionReason {
+    DETECTION_FAILED,
+    DETECTOR_MUTATED_INPUT,
     SELECTOR_BODY_ROTATION_MATCH,
     ROTATION_DIGEST_ORACLE_MISSING,
     ROTATION_DIGEST_MISMATCH,

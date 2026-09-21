@@ -70,6 +70,30 @@ class Ja2SaveInspectorV01Test {
     }
 
     @Test
+    fun retainedDetectorArraysCannotChangeParsedResultsOrLaterInterpretations() {
+        val save = syntheticSave(listOf(7, 42))
+        val original = save.copyOf()
+        var retained: ByteArray? = null
+        val inspector = Ja2SaveInspector.withDetectorForTesting { snapshot ->
+            retained?.fill(0) // A previous detector call no longer owns any parser input.
+            retained = snapshot
+            SaveFormatDetector.detect(snapshot, admittedOracle())
+        }
+        val expected = admittedInspector()
+        val result = inspector.inspectV01(save)
+        retained!!.fill(0)
+        assertEquals(expected.inspectV01(save), result)
+        assertEquals(expected.parseBuild041202Header(save), inspector.parseBuild041202Header(save))
+        assertEquals(expected.parseBuild041202NormalNonLinuxProfiles(save), inspector.parseBuild041202NormalNonLinuxProfiles(save))
+        assertEquals(expected.parseBuild041202NormalNonLinuxRoster(save), inspector.parseBuild041202NormalNonLinuxRoster(save))
+        val frame = inspector.frameBuild041202NormalNonLinuxProfiles(save)
+        retained!!.fill(0)
+        assertContentEquals(expected.frameBuild041202NormalNonLinuxProfiles(save).encryptedProfileBytes, frame.encryptedProfileBytes)
+        assertEquals(expected.inspectV01(save), result)
+        assertContentEquals(original, save)
+    }
+
+    @Test
     fun unknownUnsupportedTruncatedAndHeaderBodyMismatchAreSanitizedFailures() {
         val unsupported = header.copyOf().also { it[303] = 2 }
         val mismatch = syntheticSave(listOf(7, 42))

@@ -10,6 +10,7 @@ import com.phishtopia.ja2fieldkit.core.format.RosterMembershipFailure
 import com.phishtopia.ja2fieldkit.core.format.RotationDigestOracle
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveDetectionReason
+import com.phishtopia.ja2fieldkit.core.format.SaveFamily
 import com.phishtopia.ja2fieldkit.core.format.SaveFormatDetection
 import com.phishtopia.ja2fieldkit.core.format.SaveFormatDetector
 import com.phishtopia.ja2fieldkit.core.format.SaveHeader
@@ -55,7 +56,7 @@ class Ja2SaveInspector private constructor(
     fun probe(bytes: ByteArray): HeaderProbe = SaveHeaderProbe.probe(bytes)
 
     /** Detect compatibility without retaining or mutating caller-owned bytes. */
-    fun detect(bytes: ByteArray): SaveFormatDetection = detector(bytes)
+    fun detect(bytes: ByteArray): SaveFormatDetection = checkedDetection(bytes).detection
 
     /**
      * Run the complete read-only v0.1 flow against one private snapshot of [bytes].
@@ -64,10 +65,10 @@ class Ja2SaveInspector private constructor(
      * failures are returned as bounded presentation codes rather than parser exceptions.
      */
     fun inspectV01(bytes: ByteArray): SaveInspectionV01Result {
-        val snapshot = bytes.copyOf()
-        val detection = try {
-            detector(snapshot)
-        } catch (_: RuntimeException) {
+        val (snapshot, detection) = checkedDetection(bytes)
+        if (detection.reason == SaveDetectionReason.DETECTION_FAILED ||
+            detection.reason == SaveDetectionReason.DETECTOR_MUTATED_INPUT
+        ) {
             return SaveInspectionV01Result.Failure(
                 format = unknownInspectionFormat(),
                 failure = SaveInspectionFailure(
@@ -152,8 +153,7 @@ class Ja2SaveInspector private constructor(
         }
 
     private fun <T> admitted(bytes: ByteArray, parse: (ByteArray) -> T): T {
-        val snapshot = bytes.copyOf()
-        val detection = detector(snapshot)
+        val (snapshot, detection) = checkedDetection(bytes)
         if (
             detection.compatibility != SaveCompatibility.SUPPORTED ||
             detection.layout != SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX
@@ -166,6 +166,30 @@ class Ja2SaveInspector private constructor(
         }
         return parse(snapshot)
     }
+
+    /** Detector evidence is accepted only for the exact, untouched parse snapshot. */
+    private fun checkedDetection(bytes: ByteArray): CheckedDetection {
+        val parseSnapshot = bytes.copyOf()
+        val detectorSnapshot = parseSnapshot.copyOf()
+        val detection = try {
+            detector(detectorSnapshot)
+        } catch (_: RuntimeException) {
+            return CheckedDetection(parseSnapshot, failedDetection(SaveDetectionReason.DETECTION_FAILED))
+        }
+        if (!detectorSnapshot.contentEquals(parseSnapshot)) {
+            return CheckedDetection(parseSnapshot, failedDetection(SaveDetectionReason.DETECTOR_MUTATED_INPUT))
+        }
+        return CheckedDetection(parseSnapshot, detection)
+    }
+
+    private data class CheckedDetection(val parseSnapshot: ByteArray, val detection: SaveFormatDetection)
+
+    private fun failedDetection(reason: SaveDetectionReason) = SaveFormatDetection(
+        layout = SaveLayout.UNKNOWN,
+        compatibility = SaveCompatibility.UNKNOWN,
+        family = SaveFamily.UNKNOWN,
+        reason = reason,
+    )
 
     private fun SaveFormatDetection.toInspectionFormat(): SaveInspectionFormat =
         SaveInspectionFormat(
@@ -188,6 +212,8 @@ class Ja2SaveInspector private constructor(
                 SaveCompatibility.SUPPORTED -> SaveInspectionFailureKind.INCONSISTENT_INPUT
             },
             diagnostic = when (reason) {
+                SaveDetectionReason.DETECTION_FAILED,
+                SaveDetectionReason.DETECTOR_MUTATED_INPUT -> SaveInspectionDiagnostic.DETECTION_FAILED
                 SaveDetectionReason.TOO_SHORT_FOR_HEADER_IDENTITY ->
                     SaveInspectionDiagnostic.IDENTITY_INCOMPLETE
                 SaveDetectionReason.UNKNOWN_HEADER_IDENTITY ->

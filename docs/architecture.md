@@ -4,7 +4,7 @@
 
 The parser/editor is the product core. Android is a presentation and file-access layer on top of it.
 
-For v0.1, `core` must remain a plain Kotlin/JVM module with no Android SDK dependency. That keeps parsing testable on CI and reusable by future desktop/CLI tooling if useful.
+For v0.1, `core` must remain a plain Kotlin/Java JVM module with no Android SDK dependency. That keeps parsing testable on CI and reusable by future desktop/CLI tooling if useful.
 
 ## Read-only data flow
 
@@ -34,10 +34,21 @@ commit/blob, and recovered rotation data is scoped to one inspection. Every
 layout-specific interpretation method on the public inspector enforces that
 same detector result before returning parsed data.
 The presentation boundary is `Ja2SaveInspector.inspectV01`: it snapshots the
-input, detects once, and returns a sealed sanitized success/failure result. Its
+input, detects once against a separate detector copy, rejects detector mutation
+or runtime failure with fixed codes, and parses only the untouched snapshot.
+The same checked-detection pattern guards public detection and every admitted
+interpretation method; no inspector-wide size limit is introduced. It returns
+a sealed sanitized success/failure result. Its
 models contain logical format facts, a minimal campaign summary, and roster
 stats only; structural offsets and cryptographic internals remain below the
 boundary.
+
+The separate [Issue #36 marksmanship kernel](marksmanship-edit-kernel.md) can
+construct verified in-memory candidates under privileged synthetic test evidence.
+A Java 21 sealed result view and bytecode-private editor transaction/constructors
+guard authority; tests must explicitly suppress reflection access checks.
+Its production capability is disabled. `Ja2SaveInspector` and Android remain
+read-only; there is no save output, placement, or replacement path.
 
 ## Planned boundaries
 

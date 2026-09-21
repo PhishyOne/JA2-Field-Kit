@@ -40,8 +40,12 @@ The same checked-detection pattern guards public detection and every admitted
 interpretation method; no inspector-wide size limit is introduced. It returns
 a sealed sanitized success/failure result. Its
 models contain logical format facts, a minimal campaign summary, and roster
-stats only; structural offsets and cryptographic internals remain below the
+stats; structural offsets and cryptographic internals remain below the
 boundary.
+The separate read-only `inspectLiveInventory` API uses the same checked detection,
+sanitized failures, and shared validated roster scan to expose 19 immutable live
+inventory slots per merc. Payload classification defaults to Unknown until reviewed
+item metadata exists; see [live-inventory-model.md](live-inventory-model.md).
 
 The separate [Issue #36 marksmanship kernel](marksmanship-edit-kernel.md) can
 construct verified in-memory candidates under privileged synthetic test evidence.
@@ -71,7 +75,7 @@ Do not create separate adapters until fixture evidence shows the formats actuall
 
 ### `core.model`
 
-Immutable logical data consumed by UI: campaign summary, roster, merc stats, and later condition/inventory/economy models.
+Immutable logical data consumed by UI: campaign summary, roster, merc stats, live inventory, and later condition/economy models.
 
 The current `MercProfile` model is an exact 170-entry profile-table view. It is
 not a roster model and carries no inferred hired/player-membership state.
@@ -166,8 +170,8 @@ authorize serialization or editing.
 
 ## What we are deliberately not building yet
 
-- inventory/item databases
-- active soldier decoding
+- full item databases
+- broader active soldier state decoding
 - save rewriting
 - 1.13 compatibility
 - a generic binary-schema framework

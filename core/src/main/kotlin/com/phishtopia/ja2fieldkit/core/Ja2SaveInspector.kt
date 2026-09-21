@@ -19,6 +19,7 @@ import com.phishtopia.ja2fieldkit.core.format.SaveHeaderProbe
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
 import com.phishtopia.ja2fieldkit.core.model.CampaignSector
 import com.phishtopia.ja2fieldkit.core.model.CampaignSummaryV01
+import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionDiagnostic
@@ -64,14 +65,57 @@ class Ja2SaveInspector private constructor(
      * Detection runs once. Only the exact admitted layout is interpreted, and all input-driven
      * failures are returned as bounded presentation codes rather than parser exceptions.
      */
-    fun inspectV01(bytes: ByteArray): SaveInspectionV01Result {
+    fun inspectV01(bytes: ByteArray): SaveInspectionV01Result = inspectReadOnly(
+        bytes,
+        failure = SaveInspectionV01Result::Failure,
+    ) { snapshot, format ->
+        val header = SaveHeaderParser.parseBuild041202(snapshot)
+        val roster = NormalNonLinuxRosterDecoder.decodeBuild041202(snapshot)
+        SaveInspectionV01Result.Success.create(
+            format = format,
+            campaign = CampaignSummaryV01(
+                day = header.day,
+                hour = header.hour,
+                minute = header.minute,
+                sector = CampaignSector(
+                    x = header.sector.x,
+                    y = header.sector.y,
+                    z = header.sector.z,
+                ),
+                playerMercCount = header.playerMercCount,
+                balance = header.balance,
+            ),
+            roster = roster,
+        )
+    }
+
+    /**
+     * Read the 19 live inventory slots of each validated roster merc in the admitted layout.
+     * No catalog or classifier is accepted at this presentation boundary. Nonempty payloads
+     * remain Unknown until independently reviewed item metadata is available.
+     */
+    fun inspectLiveInventory(bytes: ByteArray): LiveInventoryInspectionResult = inspectReadOnly(
+        bytes,
+        failure = LiveInventoryInspectionResult::Failure,
+    ) { snapshot, format ->
+        LiveInventoryInspectionResult.Success(
+            format,
+            NormalNonLinuxRosterDecoder.decodeInventoriesBuild041202(snapshot),
+        )
+    }
+
+    private fun <T> inspectReadOnly(
+        bytes: ByteArray,
+        failure: (SaveInspectionFormat, SaveInspectionFailure) -> T,
+        success: (ByteArray, SaveInspectionFormat) -> T,
+    ): T {
         val (snapshot, detection) = checkedDetection(bytes)
         if (detection.reason == SaveDetectionReason.DETECTION_FAILED ||
             detection.reason == SaveDetectionReason.DETECTOR_MUTATED_INPUT
         ) {
-            return SaveInspectionV01Result.Failure(
-                format = unknownInspectionFormat(),
-                failure = SaveInspectionFailure(
+            return failure(
+                unknownInspectionFormat(),
+                SaveInspectionFailure(
                     kind = SaveInspectionFailureKind.CORRUPT_INPUT,
                     diagnostic = SaveInspectionDiagnostic.DETECTION_FAILED,
                 ),
@@ -82,40 +126,16 @@ class Ja2SaveInspector private constructor(
             detection.compatibility != SaveCompatibility.SUPPORTED ||
             detection.layout != SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX
         ) {
-            return SaveInspectionV01Result.Failure(
-                format = format,
-                failure = detection.toInspectionFailure(),
-            )
+            return failure(format, detection.toInspectionFailure())
         }
-
         return try {
-            val header = SaveHeaderParser.parseBuild041202(snapshot)
-            val roster = NormalNonLinuxRosterDecoder.decodeBuild041202(snapshot)
-            SaveInspectionV01Result.Success.create(
-                format = format,
-                campaign = CampaignSummaryV01(
-                    day = header.day,
-                    hour = header.hour,
-                    minute = header.minute,
-                    sector = CampaignSector(
-                        x = header.sector.x,
-                        y = header.sector.y,
-                        z = header.sector.z,
-                    ),
-                    playerMercCount = header.playerMercCount,
-                    balance = header.balance,
-                ),
-                roster = roster,
-            )
+            success(snapshot, format)
         } catch (error: RosterMembershipException) {
-            SaveInspectionV01Result.Failure(
-                format = format,
-                failure = error.toInspectionFailure(),
-            )
+            failure(format, error.toInspectionFailure())
         } catch (_: RuntimeException) {
-            SaveInspectionV01Result.Failure(
-                format = format,
-                failure = SaveInspectionFailure(
+            failure(
+                format,
+                SaveInspectionFailure(
                     kind = SaveInspectionFailureKind.CORRUPT_INPUT,
                     diagnostic = SaveInspectionDiagnostic.CONTENT_CORRUPT,
                 ),

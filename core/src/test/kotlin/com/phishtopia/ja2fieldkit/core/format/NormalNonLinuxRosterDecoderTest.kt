@@ -2,12 +2,14 @@ package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
 import com.phishtopia.ja2fieldkit.core.SaveInterpretationAdmissionException
+import com.phishtopia.ja2fieldkit.core.model.*
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.test.assertIs
 
 /** Whole saves use only manifested project-generated resources and test-owned serialization. */
 class NormalNonLinuxRosterDecoderTest {
@@ -16,6 +18,85 @@ class NormalNonLinuxRosterDecoderTest {
     private val key = vector.copyOfRange(0, 49)
     private val profilePlaintext = withSyntheticNames(vector.copyOfRange(49, 121_769))
     private val encryptedProfiles = encryptRecords(profilePlaintext, 716)
+
+    @Test
+    fun liveInventoriesBindEverySentinelToItsRosterProfileAndPreserveInput() {
+        fun sentinel(player: Int, slot: Int) = ByteArray(36) { byte ->
+            (player * 43 + slot * 17 + byte * 7).toByte()
+        }.also {
+            it.putU16Le(0, 50_000 + player * 100 + slot)
+            it[2] = (slot + 1).toByte()
+        }
+        fun inventory(player: Int): (ByteArray) -> Unit = { soldier ->
+            repeat(19) { slot -> sentinel(player, slot).copyInto(soldier, 12 + 36 * slot) }
+        }
+        val save = syntheticSave(
+            mapOf(
+                0 to SoldierSpec(42, pathNodeCount = 2, hasKeyring = true, beforeChecksum = inventory(1)),
+                5 to SoldierSpec(7, beforeChecksum = inventory(2)),
+                19 to SoldierSpec(255, vehicle = true, hasKeyring = true),
+            ),
+            2,
+        )
+        val original = save.copyOf()
+        val inspector = admittedInspector()
+        val roster = inspector.parseBuild041202NormalNonLinuxRoster(save)
+        val result = assertIs<LiveInventoryInspectionResult.Success>(inspector.inspectLiveInventory(save))
+        assertEquals(listOf(42, 7), result.inventories.map { it.profileIndex })
+        assertEquals(roster.map { it.name }, result.inventories.map { it.name })
+        assertEquals(roster.map { it.nickname }, result.inventories.map { it.nickname })
+        val roles = listOf("HELMET", "VEST", "LEGS", "HEAD_1", "HEAD_2", "MAIN_HAND", "OFF_HAND",
+            "BIG_POCKET_1", "BIG_POCKET_2", "BIG_POCKET_3", "BIG_POCKET_4", "SMALL_POCKET_1",
+            "SMALL_POCKET_2", "SMALL_POCKET_3", "SMALL_POCKET_4", "SMALL_POCKET_5",
+            "SMALL_POCKET_6", "SMALL_POCKET_7", "SMALL_POCKET_8")
+        result.inventories.forEachIndexed { player, merc ->
+            assertEquals(19, merc.slots.size)
+            assertEquals(roles, merc.slots.map { it.role.name })
+            assertEquals((0..18).toList(), merc.slots.map { it.role.slotIndex })
+            merc.slots.forEachIndexed { slot, entry ->
+                assertContentEquals(sentinel(player + 1, slot), entry.objectRecord.rawRecord)
+                assertIs<InventoryPayload.Unknown>(entry.objectRecord.payload)
+                entry.objectRecord.rawRecord.fill(0)
+                assertContentEquals(sentinel(player + 1, slot), entry.objectRecord.rawRecord)
+            }
+            assertFailsWith<UnsupportedOperationException> { (merc.slots as MutableList).clear() }
+        }
+        assertFailsWith<UnsupportedOperationException> { (result.inventories as MutableList).clear() }
+        assertEquals(roster, inspector.parseBuild041202NormalNonLinuxRoster(save))
+        assertEquals(roster, assertIs<SaveInspectionV01Result.Success>(inspector.inspectV01(save)).roster)
+        assertContentEquals(original, save)
+        save.fill(0)
+        assertContentEquals(sentinel(1, 0), result.inventories[0].slots[0].objectRecord.rawRecord)
+    }
+
+    @Test
+    fun liveInventoryPublicFailuresAreSanitizedAndUseTheSameAdmission() {
+        val save = syntheticSave(mapOf(0 to SoldierSpec(7), 19 to SoldierSpec(42, hasKeyring = true)), 2)
+        val truncated = save.copyOf(save.size - 1)
+        val original = truncated.copyOf()
+        val inspector = admittedInspector()
+        val result = assertIs<LiveInventoryInspectionResult.Failure>(inspector.inspectLiveInventory(truncated))
+        assertEquals(SaveInspectionFailureKind.TRUNCATED_INPUT, result.failure.kind)
+        assertEquals(SaveInspectionDiagnostic.LAYOUT_TRUNCATED, result.failure.diagnostic)
+        assertEquals(assertIs<SaveInspectionV01Result.Failure>(inspector.inspectV01(truncated)).failure, result.failure)
+        assertContentEquals(original, truncated)
+        val production = Ja2SaveInspector()
+        val denied = assertIs<LiveInventoryInspectionResult.Failure>(production.inspectLiveInventory(save))
+        assertEquals(production.detect(save).compatibility, denied.format.compatibility)
+        assertEquals(assertIs<SaveInspectionV01Result.Failure>(production.inspectV01(save)).failure, denied.failure)
+    }
+
+    @Test
+    fun liveInventoryKeepsCanonicalEmptyEvenWithOpaqueResidualBytes() {
+        val save = syntheticSave(mapOf(0 to SoldierSpec(7, beforeChecksum = { soldier ->
+            soldier.fill(0, 12, 696)
+            soldier[16] = 99
+        })), 1)
+        val merc = NormalNonLinuxRosterDecoder.decodeInventoriesBuild041202(save).single()
+        assertEquals(19, merc.slots.size)
+        assertTrue(merc.slots.all { it.objectRecord.payload == InventoryPayload.Empty })
+        assertEquals(99, merc.slots[0].objectRecord.rawRecord[4].toInt())
+    }
 
     @Test
     fun sparseSlotsJoinByProfileIndexAndEveryEncryptedRecordResets() {
@@ -411,6 +492,12 @@ class NormalNonLinuxRosterDecoderTest {
         }.also {
             assertEquals(reason, it.reason)
             assertEquals(slot, it.slotIndex)
+            val original = save.copyOf()
+            val inventoryError = assertFailsWith<RosterMembershipException> {
+                NormalNonLinuxRosterDecoder.decodeInventoriesBuild041202(save)
+            }
+            assertEquals(it.message, inventoryError.message)
+            assertContentEquals(original, save)
         }
 
     private fun assertTruncation(

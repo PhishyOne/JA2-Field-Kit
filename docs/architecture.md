@@ -106,10 +106,16 @@ text through Android's chooser. Save sharing/contribution remains future scope.
   source/candidate ceiling is 16 MiB; a format capability or predicted layout
   may tighten but never raise it. Byte-size admission does not grant format/edit
   admission.
-  A separate output-placement operation may then create a new file by default.
+  A separate output-placement operation may then create a new file by default,
+  using create-without-overwrite semantics and verifying placement.
 - Never overwrite the original save by default.
-- Replacement remains a separate, explicit later operation with conflict,
-  backup, and rollback semantics.
+- Replacement remains a separate, explicit later operation, supported only
+  with a qualified guard covering relevant competing writers and destination
+  content/name binding continuously from final expected-original comparison
+  through atomic commit, post-commit verification, and outcome recording.
+  Otherwise it is unsupported and fails closed; separate create-new/Save As
+  may remain available. Independent backup and guarded recovery are required;
+  uncertain outcomes never authorize blind retry or restoration.
 
 The mandatory authority boundary, state machine, format enablement gate, and
 output-placement separation for any future editor are defined in

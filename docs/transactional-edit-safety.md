@@ -325,25 +325,85 @@ No generic "allow resize" or caller-controlled bypass is permitted.
 
 Core transaction success means only that verified candidate bytes and their
 provenance exist. It does not mean a file was created, exported, transferred,
-or installed. The default destination operation, when separately designed, is
-to create a new file without overwriting any existing path.
+or installed. Output placement is a separate adapter concern and consumes only
+a verified-candidate result.
 
-Replacement is a later, explicit adapter operation and is not part of core edit
-success. It must consume only a verified-candidate result and independently:
+### Create-new output
 
-- require explicit replacement intent and an exact destination;
-- re-read or otherwise strongly identify the current source/destination and
-  compare it with the provenance source hash to detect changes since editing;
-- refuse a conflict, missing identity check, or unexpected existing target;
-- stage the exact candidate bytes separately and verify the staged hash;
-- provide platform-appropriate atomic commit where available; and
-- define backup and rollback semantics before altering the existing file,
-  retaining the original if commit or post-commit verification fails.
+The default destination operation, when separately designed, is create-new
+output. It must use create-without-overwrite semantics, not an
+exists-check-then-write sequence, and must verify the placed bytes against the
+verified candidate. An existing destination fails that operation; it does not
+implicitly authorize replacement.
+
+### Qualified replacement
+
+Replacement of an expected original is a later, explicit adapter operation,
+separate from core edit success. It requires explicit replacement intent, an
+exact destination, and a continuous qualified guard from the final
+expected-original comparison through commit, post-commit verification, and
+outcome recording. The guard must cover relevant competing writers and protect
+both destination content and its name/object binding as required by the
+platform. Advisory app-only locking is insufficient unless every relevant
+writer is proven cooperative. Process-list checks and user confirmation do not
+provide continuous exclusion.
+
+If the adapter cannot provide qualified guarded replacement, replacement is
+unsupported and fails closed. A separate create-new/Save As operation may remain
+available. Java `FileLock`, atomic move/rename, or a pre-commit recheck alone
+does not establish generic portable replacement safety. No particular OS/API
+primitive is qualified or implemented here; platform-specific adapter
+qualification requires later evidence.
+
+The required replacement order is:
+
+1. Receive the core's verified candidate and locally held provenance.
+2. Prepare private staging with the exact candidate bytes and verify its size
+   and hash against that provenance.
+3. Acquire the qualified guard.
+4. Compare the current original with the expected state using locally held
+   provenance plus platform-appropriate identity/content evidence sufficient
+   for that adapter, including the provenance source size and hash. A path,
+   display name, timestamp, or remote assertion alone is not overwrite
+   authority. Refuse missing evidence, a changed original, or an unexpected
+   destination object even at the same name.
+5. Preserve and verify an independent backup of the original before any
+   destination mutation. It must independently preserve the original bytes;
+   another name or handle for the same mutable object is not enough.
+6. Atomically commit the staged candidate while the guard remains effective.
+   Atomic commit is mandatory for supported replacement; no destructive
+   fallback sequence is permitted. The guard cannot be released merely to
+   make the commit API work. If commit cannot occur under the required
+   protection, the adapter does not qualify.
+7. Verify the installed result against the candidate, its destination binding,
+   and the adapter's required durability guarantees while still guarded.
+8. Record the outcome and recovery evidence while still guarded.
+9. Release the guard.
+
+### Failure and recovery
+
+Before the first destination mutation, rejection must leave the destination
+untouched. An uncertain post-commit outcome, including failure to verify the
+installed result, durability, or outcome recording, must preserve the original
+backup, remaining staging, and evidence and report uncertainty. It must not
+trigger a blind retry or restore.
+
+Restoration is itself a replacement: it requires the same qualified guard and
+proof that the current destination is the exact state authorized for
+replacement, with atomic commit, verification, and outcome recording under that
+guard. Backup existence alone is not overwrite authority. After a crash or lost
+guard, reacquire a qualified guard and reconcile the actual destination with
+retained evidence before any further mutation. If authority or the actual
+outcome cannot be established, refuse mutation and preserve competing data and
+recovery evidence.
 
 A source-conflict failure does not invalidate the already verified in-memory
 candidate, but it must fail that replacement attempt and must never silently
 overwrite the changed source. Android document placement, desktop return, and
 bridge transport require their own later designs under Issues #10 and #13.
+The future Issue #13 PC bridge resolves destinations locally; a remote path or
+assertion cannot authorize local replacement. This gate adds no bridge or
+runtime output implementation.
 
 ## Test obligations
 
@@ -380,14 +440,40 @@ Additional required negative coverage includes:
 - requested-change mismatch;
 - critical or caller-requested unchanged-field drift;
 - source/candidate hash or provenance mismatch;
-- unexpected size, boundary, record-count, or opaque-byte drift;
-- no-op byte, logical, integrity, or preservation mismatch; and
-- source conflict before a later replacement operation.
+- unexpected size, boundary, record-count, or opaque-byte drift; and
+- no-op byte, logical, integrity, or preservation mismatch.
 
 Each injected failure must demonstrate a terminal failure result with no
 candidate bytes exposed as a successful product. Private real save bytes remain
 local-only and must never enter the repository, logs, test output, caches, or
 artifacts.
+
+### Future output-adapter evidence
+
+Placement evidence is separate from core transaction tests: a replacement
+refusal does not invalidate the already verified candidate or imply placement
+success. Create-new evidence must prove create-without-overwrite behavior when
+a competing creator claims the destination and verification of placed bytes.
+
+Before a replacement adapter is supported, its platform-specific qualification
+must exercise:
+
+- a competing writer before the final expected-original comparison;
+- a competing writer in the comparison-to-commit window;
+- guard bypass, alternate handles, or namespace substitution as applicable;
+- a same-length content change;
+- destination object replacement at the same name;
+- a competing Field Kit instance;
+- a crash or uncertain outcome around commit, including reconciliation after
+  guard loss; and
+- a competing writer before restoration.
+
+Evidence must establish continuous guard coverage through atomic commit,
+post-commit verification, and outcome recording, independent preservation of
+original backup bytes, and guarded restoration only from an authorized current
+state. The required outcome is either a protected commit or fail-closed refusal
+preserving competing data, never silent lost progress. Uncertain outcomes must
+retain recovery evidence and remain reported as uncertain until reconciled.
 
 ## Design gate
 

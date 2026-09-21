@@ -416,6 +416,13 @@ provenance exist. It does not mean a file was created, exported, transferred,
 or installed. Output placement is a separate adapter concern and consumes only
 a verified-candidate result.
 
+For every placement artifact, evidence authorizes a transition only while the
+verified bytes, object identity, and required namespace binding remain
+continuously protected from verification until that transition consumes them.
+Verification is not continuous protection: a later byte change, object
+replacement, or namespace substitution invalidates that authority. Protection
+must carry across handoffs without a gap.
+
 ### Create-new output
 
 The default destination operation, when separately designed, is create-new
@@ -425,8 +432,9 @@ candidate creation remains completely separate from placement. The adapter must:
 1. Write the exact candidate bytes to **private staging** in a location/domain
    that supports the qualified final publication semantics.
 2. Verify staged byte size and SHA-256 against candidate provenance before
-   publication. Protect the staged object from modification between this
-   verification and publication.
+   publication. Continuously protect the staged bytes, object identity, and
+   required namespace binding from modification or substitution between this
+   verification and publication, as required by the shared artifact invariant.
 3. Atomically bind the complete staged object to an **absent destination**, using
    qualified no-replace publication or a proven platform-equivalent operation.
    Refuse an existing or concurrently-created destination without changing it;
@@ -470,12 +478,24 @@ restoration remain separate requirements below.
 Replacement of an expected original is a later, explicit adapter operation,
 separate from core edit success. It requires explicit replacement intent, an
 exact destination, and a continuous qualified guard from the final
-expected-original comparison through commit, post-commit verification, and
-outcome recording. The guard must cover relevant competing writers and protect
-both destination content and its name/object binding as required by the
-platform. Advisory app-only locking is insufficient unless every relevant
-writer is proven cooperative. Process-list checks and user confirmation do not
-provide continuous exclusion.
+expected-original comparison through backup creation/verification/durability,
+atomic commit, installed verification/durability, persisted outcome/recovery
+recording, and release. The guard must cover relevant competing writers and
+protect both destination content and its name/object binding as required by
+the platform, including across the change from original to installed candidate.
+Advisory app-only locking is insufficient unless every relevant writer is
+proven cooperative. Process-list checks and user confirmation do not provide
+continuous exclusion.
+
+The adapter must declare its supported interruption/crash model and separately
+qualify each obligation: verification is not continuous protection; destination
+exclusion is not staging protection; atomic commit is not durability; backup
+existence or verification is not durable recovery authority; and a successful
+API return is not terminal durable success. Before any destination mutation,
+every recovery artifact relied upon must already be independently verified,
+durably recoverable under that model, and bound to the exact guarded expected
+original. Required data and namespace persistence, including transaction-record
+ordering, must be established for the supported filesystem/provider.
 
 If the adapter cannot provide qualified guarded replacement, replacement is
 unsupported and fails closed. A separate create-new/Save As operation may remain
@@ -487,45 +507,106 @@ qualification requires later evidence.
 
 The required replacement order is:
 
-1. Receive the core's verified candidate and locally held provenance.
-2. Prepare private staging with the exact candidate bytes and verify its size
-   and hash against that provenance.
-3. Acquire the qualified guard.
-4. Compare the current original with the expected state using locally held
-   provenance plus platform-appropriate identity/content evidence sufficient
-   for that adapter, including the provenance source size and hash. A path,
-   display name, timestamp, or remote assertion alone is not overwrite
-   authority. Refuse missing evidence, a changed original, or an unexpected
-   destination object even at the same name.
-5. Preserve and verify an independent backup of the original before any
-   destination mutation. It must independently preserve the original bytes;
-   another name or handle for the same mutable object is not enough.
-6. Atomically commit the staged candidate while the guard remains effective.
-   Atomic commit is mandatory for supported replacement; no destructive
-   fallback sequence is permitted. The guard cannot be released merely to
-   make the commit API work. If commit cannot occur under the required
-   protection, the adapter does not qualify.
-7. Verify the installed result against the candidate, its destination binding,
-   and the adapter's required durability guarantees while still guarded.
-8. Record the outcome and recovery evidence while still guarded.
-9. Release the guard.
+1. Consume only the core's immutable verified candidate and locally held
+   provenance, with explicit replacement intent and exact destination authority.
+2. Create operation-owned **private staging** with the exact candidate bytes in
+   a domain that supports the qualified commit. Establish staging object
+   identity and ownership; prevent writable aliases or namespace substitution
+   from invalidating that object.
+3. While staging is protected, verify its byte size and SHA-256 against candidate
+   provenance and verify its object/binding. Maintain staging protection and
+   immutability continuously from this verification through atomic installation
+   of that exact object. There must be no verification-to-commit gap, including
+   at the handoff to destination protection; acquiring the destination guard
+   does not by itself protect staging.
+4. Acquire the **qualified destination guard** and retain continuous protection
+   of destination content and name/object binding through every remaining step
+   until release. Staging protection must remain effective during acquisition.
+5. Under the guard, compare the current destination with the expected original
+   using locally held source size/SHA-256 and sufficient platform identity and
+   binding evidence. Establish the exact expected original identity for this
+   operation. A path, display name, timestamp, or remote assertion alone is not
+   overwrite authority. Refuse mismatch, missing authority, or an unexpected
+   object even at the same name.
+6. **While the destination guard is held**, create an independent operation-owned
+   backup **from the guarded original**. A pre-guard copy does not qualify.
+   The backup must independently preserve the original bytes; another name or
+   handle for the same mutable object is not enough.
+7. Under protection, independently verify backup bytes, size, and SHA-256 against
+   the guarded original and locally held source provenance, and verify backup
+   object identity and recoverable binding. Bind the recovery record to the
+   **exact expected original identity established in step 5**, the backup
+   identity/binding, and this transaction; earlier bytes, path, or name alone
+   do not establish that association.
+8. Protect backup bytes, object identity, and recoverable binding continuously
+   against modification/substitution from verification for as long as recovery
+   obligations remain. Establish **backup data and namespace durability before
+   the first destination mutation**, including sufficient durable transaction
+   association to independently identify and recover that backup and its exact
+   original after restart. Protect the required transaction/recovery evidence
+   against modification or substitution for the same recovery lifetime. Failure
+   to complete any of these prerequisites prevents commit and leaves the
+   destination untouched by this operation.
+9. Apply any candidate persistence prerequisites required by the qualified
+   crash model, then atomically commit the exact protected staging object while
+   the destination guard remains effective. No destructive, copy-over, or
+   delete-first fallback qualifies. The guard cannot be released merely to
+   make the commit API work. If staging protection and destination protection
+   cannot both remain effective through installation, the adapter does not
+   qualify.
+10. While guarded, verify installed candidate bytes against candidate size/SHA-256
+    and verify the destination binding to the installed object. Then establish
+    the required **installed data and namespace durability**. Protection must
+    keep this evidence valid through outcome recording and release.
+11. Complete and persist the adapter's required outcome and recovery record while
+    still guarded. Report replacement success only after installed byte/binding
+    verification, installed data/namespace durability, and this recording have
+    all completed under the effective guard. Commit API success alone cannot
+    establish that terminal state.
+12. Release protection only after the terminal state is established; involuntary
+    guard loss follows the uncertainty/reconciliation rules below. Retain backup
+    protection while recovery obligations remain. Clean up only artifacts whose
+    operation ownership and disposal authority are proven and protected through
+    disposal, so substitution cannot cause deletion of a competing object or
+    required evidence. Successful replacement does **not** automatically
+    authorize backup deletion: the adapter contract must separately prove safe
+    cleanup and that no recovery obligation remains. UNCERTAIN outcomes retain
+    the durable backup and available staging/evidence as applicable.
 
 ### Replacement failure and recovery
 
-Before the first destination mutation, rejection must leave the destination
-untouched. An uncertain post-commit outcome, including failure to verify the
-installed result, durability, or outcome recording, must preserve the original
-backup, remaining staging, and evidence and report uncertainty. It must not
-trigger a blind retry or restore.
+Before the first destination mutation, any failure must leave the destination
+untouched by this operation; an incomplete or non-durable backup is never
+recovery authority. If the backup is durable but a crash precedes commit, the
+operation has left the destination untouched and the exact original backup
+must remain independently recoverable and identifiable. Competing changes
+after guard loss still require reconciliation.
 
-Restoration is itself a replacement: it requires the same qualified guard and
-proof that the current destination is the exact state authorized for
-replacement, with atomic commit, verification, and outcome recording under that
-guard. Backup existence alone is not overwrite authority. After a crash or lost
-guard, reacquire a qualified guard and reconcile the actual destination with
-retained evidence before any further mutation. If authority or the actual
-outcome cannot be established, refuse mutation and preserve competing data and
-recovery evidence.
+Once commit may have occurred, uncertainty about actual commit or any failure
+of installed verification, installed durability, or outcome/recovery recording
+(including torn persistence) is an **UNCERTAIN replacement** outcome, never
+success or proof that commit failed. Preserve the durable original backup and
+available staging/evidence; do not blindly retry, restore, delete, or clean up.
+A crash immediately after commit must not destroy the durable original backup
+or allow success to be inferred before the installed candidate and required
+records are durable. Missing evidence cannot authorize another mutation.
+
+After a crash, guard loss, or restart, reacquire a qualified destination guard
+and reconcile actual destination, staging, and backup identities/bindings and
+hashes with persisted transaction/outcome evidence and any competing changes
+before mutation. Re-establish required artifact protection before relying on
+that evidence. If authority or the actual outcome cannot be established, refuse
+mutation and preserve competing data and recovery evidence. Uncertainty remains
+reported until reconciliation establishes the outcome; recording uncertainty
+does not waive any requirement for success or authorize disposal.
+
+Restoration remains a separate guarded conditional replacement. It requires
+durable verified backup authority bound to the exact original, the same
+qualified guard, and proof that the current destination is the exact state
+authorized for replacement. Its staging, preservation of the authorized current
+state, atomic commit, installed verification/data and namespace durability, and
+persisted outcome/recovery recording must meet the same lifecycle obligations
+under the guard. Backup existence alone is not overwrite authority.
 
 A source-conflict failure does not invalidate the already verified in-memory
 candidate, but it must fail that replacement attempt and must never silently
@@ -609,7 +690,9 @@ must exercise:
 
 - an existing destination and a concurrent creator;
 - namespace substitution as applicable, including destination binding checks;
-- staged-byte tampering between verification and publication;
+- staged-byte tampering, staged-object/identity replacement, or staging namespace
+  substitution between verification and publication; none may publish an
+  unverified object or bytes;
 - concurrent reader observations, which must never expose a partial final file;
 - interruption/crash throughout staging and publication under the declared model;
 - publication succeeding but verification, durability, or outcome recording
@@ -634,16 +717,45 @@ must exercise:
 - a same-length content change;
 - destination object replacement at the same name;
 - a competing Field Kit instance;
-- a crash or uncertain outcome around commit, including reconciliation after
-  guard loss; and
+- staging alternate-handle writes, object replacement, or namespace substitution
+  after verification; such tampering must prevent unverified bytes or a
+  substituted object from committing;
+- staging-protection/destination-guard handoff with no gap through installation;
+- backup creation from the guarded original, exact original/transaction binding,
+  and backup byte tampering, object replacement, or namespace substitution;
+- backup created and verified but data/namespace durability or durable
+  transaction association incomplete: no destination mutation;
+- backup durable but crash before commit: destination untouched by the operation
+  and exact original backup independently recoverable and identifiable;
+- crash immediately after commit before installed candidate durability: durable
+  original backup survives, actual destination must be reconciled, and no
+  success is inferred;
+- installed candidate durability failure after commit: UNCERTAIN outcome with
+  durable backup and available staging/evidence retained;
+- outcome/recovery record failure or torn persistence: no reported success and
+  reconciliation possible without assuming commit failed;
+- crash, guard loss, or restart: reacquire the qualified guard and reconcile all
+  destination/staging/backup identities, bindings, hashes, persisted evidence,
+  and competing changes before mutation, or refuse mutation;
+- crash during cleanup or release: no deletion of a competing object or required
+  recovery evidence, including a backup with outstanding recovery obligations;
+- actual content and namespace persistence, including backup, installed
+  candidate, and required transaction/outcome records, under the declared crash
+  model on each supported filesystem/provider; and
 - a competing writer before restoration.
 
-Evidence must establish continuous guard coverage through atomic commit,
-post-commit verification, and outcome recording, independent preservation of
-original backup bytes, and guarded restoration only from an authorized current
-state. The required outcome is either a protected commit or fail-closed refusal
-preserving competing data, never silent lost progress. Uncertain outcomes must
-retain recovery evidence and remain reported as uncertain until reconciled.
+Evidence must establish continuous artifact protection from verification through
+consumption, destination guard coverage from final expected-original comparison
+through backup preparation, commit, installed verification/durability, persisted
+outcome/recovery recording, and release, independent durable recovery authority
+before mutation, and guarded restoration only from an authorized current state.
+A successful API return or post-commit hash alone is insufficient. Success
+requires installed byte/binding verification,
+installed data/namespace durability, and persisted outcome/recovery recording
+while guarded. Before mutation, failure must preserve the destination; once
+commit may have occurred, missing evidence requires UNCERTAIN replacement with
+durable backup and available staging/evidence retained until reconciliation.
+No result permits silent lost progress or blind retry, restoration, or cleanup.
 
 ## Design gate
 

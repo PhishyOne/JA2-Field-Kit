@@ -122,13 +122,30 @@ text through Android's chooser. Save sharing/contribution remains future scope.
   uncertainty and recovery evidence until reconciliation before further mutation.
 - Never overwrite the original save by default.
 - Replacement remains a separate, explicit later operation, supported only
-  with a qualified guard covering relevant competing writers and destination
-  content/name binding continuously from final expected-original comparison
-  through atomic commit, post-commit verification, and outcome recording.
+  with immutable core candidate/provenance, exact destination authority, and
+  operation-owned private staging whose verified bytes, identity, and binding
+  stay protected through atomic installation, without a gap at the destination
+  guard handoff. A qualified guard must cover relevant competing writers and
+  destination content/name binding continuously from final expected-original
+  comparison through backup creation/verification/durability, atomic commit,
+  installed verification/durability, persisted outcome/recovery recording, and
+  release. Create the independent backup from the guarded original; verify and
+  protect its bytes/object/binding, bind it to that exact original and transaction,
+  and establish backup data/namespace durability plus recoverable transaction
+  association before any destination mutation. Success requires installed
+  byte/binding verification, installed data/namespace durability, and persisted
+  outcome/recovery recording while guarded; atomic commit alone is insufficient.
   Otherwise it is unsupported and fails closed; separate create-new/Save As
   may remain available only with its own qualified publication contract.
-  Independent backup and guarded recovery are required;
-  uncertain outcomes never authorize blind retry or restoration.
+  Pre-mutation failures leave the destination untouched by the operation. Once
+  commit may have occurred, missing evidence means UNCERTAIN: retain durable
+  backup and available staging/evidence; never blindly retry, restore, delete,
+  or clean up. After crash/guard loss, reacquire the guard and reconcile all
+  artifact identities/hashes, persisted evidence, and competing changes before
+  mutation. Restoration is a separate guarded conditional replacement requiring
+  durable verified backup authority bound to the exact original. Cleanup needs
+  proven ownership and disposal authority protected through disposal; success
+  alone does not authorize backup deletion or end recovery obligations.
 
 The mandatory authority boundary, state machine, format enablement gate, and
 output-placement separation for any future editor are defined in

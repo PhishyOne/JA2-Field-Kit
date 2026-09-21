@@ -134,14 +134,39 @@ unsigned bytes, with no inferred meaning or normalization.
 
 These narrow slot/field/payload tables and their Kotlin interpretation are
 project-authored from the supplied Issue #38 interoperability fact specification,
-which reports independent research against current Stracciatella and pinned
-JA2-Reborn. No upstream implementation, comments, control flow, item table,
-names, descriptions, or assets were fetched or copied for this construction.
+which reports independent research against Stracciatella and JA2-Reborn at the
+immutable revisions recorded below. No upstream implementation, comments, control
+flow, item table, names, descriptions, or assets were fetched or copied for this
+construction.
+
+The completed follow-on source-expression audit examined these exact revisions:
+
+- `RealTommyGreen/JA2-Reborn`: `743f38a6ca86c81893376c2576277db660320170`.
+- `ja2-stracciatella/ja2-stracciatella`: `8883ac43dc1b2b95a76286476f690526bc858565`
+  (the current active revision used by the audit).
+
+The following paths and symbols were examined in both repositories at those
+revisions. These are evidence references, not incorporated source:
+
+- `src/game/Tactical/LoadSaveObjectType.cc`: `ExtractObject`, `InjectObject`,
+  and invalid-item handling.
+- `src/game/Tactical/Item_Types.h`: `OBJECTTYPE`, its payload union, and
+  attachment fields.
+- `src/game/Tactical/Soldier_Control.h`: `InvSlotPos`.
+- `src/game/Tactical/LoadSaveSoldierType.cc`: `ExtractSoldierType`,
+  `InjectSoldierType`, and `MercChecksum`.
+
+The audit found identical Git blob IDs for the relevant object/soldier structure
+sources between these revisions: the source blobs supporting these inventory
+facts are unchanged. Stracciatella's `SaveLoadGame.cc` at the audited revision
+contains v104+ profile-extension framing drift, outside this v103-gated slice;
+the reviewed 36-byte object and SOLDIERTYPE facts remain stable.
 
 The source-derived factual tables and interpretation require a separate
 **Issue-8-style licensing review before merge**, under
 [licensing-boundary-review.md](licensing-boundary-review.md). Construction and
 synthetic tests do not satisfy that review or imply a license determination.
+The engineering review is not legal clearance or formal clean-room evidence.
 
 ## Construction validation
 

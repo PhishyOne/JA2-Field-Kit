@@ -98,9 +98,14 @@ text through Android's chooser. Save sharing/contribution remains future scope.
 - Unknown version: return unsupported/unknown, not guessed data.
 - Truncated block: stop parsing that logical result and report a structured error.
 - Invalid stat/range: preserve evidence for diagnostics; do not silently clamp during parsing.
-- Editing (future): read and parse the source, apply logical changes in memory, serialize
-  a transaction-private candidate, re-admit and reparse it, and verify requested
-  changes plus critical unchanged facts before producing a verified candidate.
+- Editing (future): enforce core-owned source admission before snapshot copying
+  or proportional work, read and parse the admitted source, apply logical
+  changes in memory, serialize through a bounded transaction-private writer,
+  re-admit and reparse the candidate, and verify requested changes plus critical
+  unchanged facts before producing a verified candidate. The initial hard
+  source/candidate ceiling is 16 MiB; a format capability or predicted layout
+  may tighten but never raise it. Byte-size admission does not grant format/edit
+  admission.
   A separate output-placement operation may then create a new file by default.
 - Never overwrite the original save by default.
 - Replacement remains a separate, explicit later operation with conflict,

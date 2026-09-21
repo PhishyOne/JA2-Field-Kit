@@ -12,7 +12,9 @@ The current public core boundary remains the read-only
 [architecture.md](architecture.md). Its `SUPPORTED` detector result means only
 that the current read path may inspect the evidenced layout. Read support does
 not imply edit support. Producer family also remains unknown where the detector
-cannot prove it.
+cannot prove it. That facade currently copies an arbitrary caller-owned
+`ByteArray` before inspection; the future-editor resource contract below does
+not change or harden that existing behavior.
 
 Issue #10 owns the broader import and desktop-return workflow. Issue #13 owns
 the local PC bridge protocol. Neither is part of this design. Core remains a
@@ -24,10 +26,13 @@ Every future edit transaction must perform this sequence:
 
 ```text
 read original
+  -> reject source above the core editor byte ceiling
+  -> snapshot source and establish runtime-observable identity
+  -> apply any tighter capability source bound
   -> admit exact format/version for editing
   -> parse source snapshot
   -> apply typed logical changes in memory
-  -> serialize candidate bytes
+  -> serialize through a bounded transaction-private candidate writer
   -> admit and reparse candidate bytes
   -> verify requested changes and critical unchanged facts
   -> produce a verified candidate
@@ -49,19 +54,27 @@ exception payload.
 ## State machine
 
 ```text
-RECEIVED
-  | snapshot bytes; compute source size and SHA-256
+RECEIVED -- source above 16 MiB -----------------------------> FAILED
+  | constant-time source byte-count check passes; no copy or proportional work
   v
-SOURCE_ADMITTED ---- rejection ------------------------------> FAILED
-  | exact edit capability for detected format/version
+CORE_SIZE_ADMITTED
+  | snapshot bytes; compute SHA-256; establish observable identity
+  v
+IDENTITY_ESTABLISHED
+  +-- no exact edit capability / tighter source bound fails -> FAILED
+  | exact edit capability and tighter source bound pass
+  v
+SOURCE_ADMITTED
+  | parse immutable source snapshot
   v
 SOURCE_PARSED ------ parse/integrity failure ----------------> FAILED
   | capture logical baseline, critical facts, and preservation map
   v
 MUTATED_IN_MEMORY -- invalid/unsupported/conflicting request -> FAILED
-  | serialize only into transaction-private memory
+  | serialize through strictest-bound transaction-private writer
+  +-- bound/serialization/layout failure --------------------> FAILED
   v
-CANDIDATE_SERIALIZED -- serialization/layout failure --------> FAILED
+CANDIDATE_SERIALIZED
   | compute candidate size and SHA-256
   v
 CANDIDATE_REPARSED -- admission/parse/integrity failure -----> FAILED
@@ -86,9 +99,36 @@ or an implementation commitment.
 ### Source admission
 
 The editor accepts a byte snapshot plus a typed logical edit request set. It
-copies or takes exclusive immutable ownership of the snapshot and computes its
-SHA-256 itself. Caller-supplied hashes and format labels are assertions to
-check, never authority.
+has an initial core-owned hard source and candidate ceiling of **16 MiB
+(16,777,216 bytes)**. Before copying or taking ownership, hashing, parsing,
+format detection or admission, or performing any other work proportional to
+the source length, the transaction must read the `ByteArray` length and reject
+a source above that ceiling. This cannot recover memory already allocated by an
+external caller, but it prevents the editor from duplicating or processing an
+oversized source. Only after this constant-time check may the editor make its
+immutable source snapshot and compute SHA-256 itself. Caller-supplied hashes and
+format labels are assertions to check, never authority.
+
+The 16 MiB ceiling is part of the future core editor contract. Core owns and
+enforces it without an Android dependency. Android's current
+`BoundedSaveReader` independently accepts and retains payloads up to the same
+size, which is supporting product alignment rather than authority for core.
+This design does not change `BoundedSaveReader` or the current read-only
+`Ja2SaveInspector` behavior. Raising the core ceiling requires a separately
+reviewed contract change; no adapter, capability, caller, or platform layer may
+raise it.
+
+After enough bounded work has established runtime-observable serialized
+identity, the matching format/edit capability may impose a tighter maximum on
+source and candidate bytes. The transaction must enforce that tighter source
+maximum before format/edit admission or full parsing. A capability cannot use a
+producer assertion or other non-observable label to select the limit.
+
+Byte-size admission and format/edit admission are distinct gates. Passing the
+core and capability byte limits only permits further admission work; it does
+not establish that the source is valid, supported, or editable. Any source or
+candidate byte-limit refusal is a terminal bounded failure; it cannot produce
+or expose candidate bytes as a successful result.
 
 Admission requires an exact edit capability keyed by all runtime-observable
 serialized identity that can affect serialization, including layout and save
@@ -121,10 +161,24 @@ mutated.
 
 ### Candidate serialization and mandatory reparse
 
-Serialization writes to transaction-private candidate bytes, never to the
-source or a destination. The format capability must preserve all required
-opaque regions and report the layout effects it expected from this exact edit
-set. A serialization error or incomplete preservation proof is terminal.
+Serialization writes only to a bounded, transaction-private sink or writer,
+never to the source or a destination. That writer is the sole candidate byte
+accumulator; a serializer cannot first construct an unbounded candidate or
+intermediate candidate buffer and then pass it to the writer. Before accepting
+each growth operation, the writer must use overflow-safe accounting and refuse
+any write that would exceed the strictest applicable bound:
+
+- the core hard ceiling of 16 MiB;
+- the admitted capability's tighter candidate maximum, when present; and
+- the exact or predicted candidate size/layout bound for this edit request.
+
+The bound check must occur before growing or copying into the candidate buffer;
+serializing first and rejecting the completed array is insufficient. The format
+capability must preserve all required opaque regions and report the layout
+effects it expected from this exact edit set. A bound refusal, serialization
+error, predicted-size mismatch, or incomplete preservation proof is terminal.
+No partially serialized candidate may escape through a callback, exception, or
+failure value.
 
 The candidate is hashed, passed through the normal fail-closed format admission
 path, and parsed from its serialized bytes. Verification must use this reparsed
@@ -259,6 +313,12 @@ again after reparse, observed layout must match that prediction exactly. Any
 unaccounted byte, shifted boundary, changed count, trailing-byte change, or
 candidate-size difference fails the transaction.
 
+These layout rules also supply a candidate-writer bound. If an exact candidate
+size is known, it is the bound. If the reviewed rule permits a range or maximum,
+its predicted maximum is the bound. This request-specific bound can be stricter
+than the generic capability maximum and can never relax either the capability
+maximum or the core hard ceiling.
+
 No generic "allow resize" or caller-controlled bypass is permitted.
 
 ## Output placement and later replacement
@@ -298,11 +358,24 @@ Required positive coverage includes no-op round trips, each enabled edit kind,
 all mandatory unchanged facts, opaque-byte preservation, integrity regeneration,
 deterministic provenance, and every declared size/layout exception.
 
-Required negative coverage includes:
+Required resource-boundary coverage includes:
+
+- a source exactly at the 16 MiB core limit proceeding to further admission,
+  subject to independent format validity;
+- a source one byte over the core limit being rejected before snapshot copying,
+  hashing, parsing, detection, or other proportional editor work;
+- a capability-specific tighter source and candidate bound;
+- a candidate writer accepting an exact-limit candidate;
+- a candidate writer refusing an attempted one-byte overflow before growth;
+- a predicted layout/size bound stricter than the generic capability bound; and
+- every oversize failure being terminal and exposing no candidate success
+  bytes.
+
+Additional required negative coverage includes:
 
 - unsupported or merely read-supported format/version;
 - source parse or integrity failure;
-- serialization failure;
+- serialization or bounded-writer failure;
 - candidate admission or reparse failure;
 - requested-change mismatch;
 - critical or caller-requested unchanged-field drift;

@@ -41,6 +41,10 @@ class Ja2SaveInspectorDetectionTest {
                 null, null), result.format)
             assertEquals(SaveInspectionFailureKind.CORRUPT_INPUT, result.failure.kind)
             assertEquals(SaveInspectionDiagnostic.DETECTION_FAILED, result.failure.diagnostic)
+            val inventory = assertIs<LiveInventoryInspectionResult.Failure>(inspector.inspectLiveInventory(caller))
+            assertEquals(result.format, inventory.format)
+            assertEquals(result.failure, inventory.failure)
+            assertContentEquals(original, caller)
             val interpreters: List<(ByteArray) -> Any> = listOf(
                 inspector::parseBuild041202Header,
                 inspector::frameBuild041202NormalNonLinuxProfiles,
@@ -56,7 +60,7 @@ class Ja2SaveInspectorDetectionTest {
                 assertFalse(error.toString().contains("PAYLOAD"))
                 assertContentEquals(original, caller)
             }
-            assertEquals(6, calls)
+            assertEquals(7, calls)
         }
     }
 

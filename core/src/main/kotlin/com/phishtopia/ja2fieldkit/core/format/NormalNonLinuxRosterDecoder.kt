@@ -1,6 +1,9 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.io.LittleEndianReader
+import com.phishtopia.ja2fieldkit.core.model.InventorySlot
+import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
+import com.phishtopia.ja2fieldkit.core.model.MercInventoryEntry
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
 import com.phishtopia.ja2fieldkit.core.model.MercStats
@@ -59,19 +62,43 @@ class RosterMembershipException(
 )
 
 /**
- * Membership-only crossing into the first 20 normal SOLDIERTYPE slots.
+ * Shared validated traversal of the first 20 normal SOLDIERTYPE slots.
  *
- * Soldier condition, assignments, sectors, inventory, paths, and keys remain uninterpreted. The
- * selected stat and inventory bytes are read only to reproduce the mandatory source checksum.
+ * Roster and live inventory use identical membership, checksum, and tail-framing authority.
+ * Soldier condition, assignments, sectors, paths, and keys remain uninterpreted.
  */
 object NormalNonLinuxRosterDecoder {
-    fun decodeBuild041202(saveBytes: ByteArray): List<MercRosterEntry> {
+    fun decodeBuild041202(saveBytes: ByteArray): List<MercRosterEntry> =
+        Collections.unmodifiableList(scanBuild041202(saveBytes).map { it.rosterEntry })
+
+    internal fun decodeInventoriesBuild041202(saveBytes: ByteArray): List<MercInventoryEntry> =
+        Collections.unmodifiableList(scanBuild041202(saveBytes).map { soldier ->
+            MercInventoryEntry(
+                profileIndex = soldier.rosterEntry.profileIndex,
+                name = soldier.rosterEntry.name,
+                nickname = soldier.rosterEntry.nickname,
+                slots = soldier.inventorySlots(),
+            )
+        })
+
+    /** Only a narrow private inventory snapshot survives validation; no full soldier escapes. */
+    private class ValidatedPlayer(val rosterEntry: MercRosterEntry, inventory: ByteArray) {
+        private val inventory = inventory.copyOf()
+
+        fun inventorySlots(): List<InventorySlot> = InventorySlotRole.entries.map { role ->
+            val start = role.slotIndex * INVENTORY_RECORD_SIZE
+            InventorySlot(role, InventoryObjectParser.parse(inventory.copyOfRange(start, start + INVENTORY_RECORD_SIZE)))
+        }
+    }
+
+    private fun scanBuild041202(saveBytes: ByteArray): List<ValidatedPlayer> {
         val context = NormalNonLinuxProfileDecoder.decodeContextBuild041202(saveBytes)
         validateCanonicalPlayerTeamRange(saveBytes)
 
         var offset = context.frame.profileEndExclusive.toLong()
         val profileIds = ArrayList<Int>()
         val uniqueProfileIds = HashSet<Int>()
+        val players = ArrayList<ValidatedPlayer>()
 
         repeat(PLAYER_SLOT_COUNT) { slotIndex ->
             requireAvailable(
@@ -109,7 +136,17 @@ object NormalNonLinuxRosterDecoder {
                 expectedBlockSize = SOLDIER_RECORD_SIZE,
                 rotationTable = context.rotation,
             )
+            val previousCount = profileIds.size
             validateSoldier(decrypted, slotIndex, saveBytes.size, profileIds, uniqueProfileIds)
+            if (profileIds.size != previousCount) {
+                players += ValidatedPlayer(
+                    context.profiles[profileIds.last()].toRosterEntry(),
+                    decrypted.copyOfRange(
+                        INVENTORY_START_OFFSET,
+                        INVENTORY_START_OFFSET + INVENTORY_SLOT_COUNT * INVENTORY_RECORD_SIZE,
+                    ),
+                )
+            }
             offset = soldierEnd
 
             val pathCountEnd = checkedAdd(offset, PATH_COUNT_SIZE.toLong())
@@ -179,9 +216,7 @@ object NormalNonLinuxRosterDecoder {
             )
         }
 
-        return Collections.unmodifiableList(
-            profileIds.map { profileId -> context.profiles[profileId].toRosterEntry() },
-        )
+        return Collections.unmodifiableList(players)
     }
 
     private fun validateCanonicalPlayerTeamRange(saveBytes: ByteArray) {

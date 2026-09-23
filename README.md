@@ -10,7 +10,7 @@ The project has a first read-only Android shell over the v0.1 core.
 
 Milestone v0.1 is deliberately narrow:
 
-`open .sav -> detect format/version -> campaign summary -> roster -> merc stats`
+`open .sav -> detect format/version -> campaign summary -> roster -> merc stats + live inventory`
 
 No save-writing API exists yet. Editing will only be added after reliable parse/rewrite/reread validation exists.
 
@@ -18,10 +18,11 @@ The `android-app/` shell can select a save with Android's document picker and
 accept narrowly advertised open-with/share-to content URIs. It accepts and
 retains complete payloads up to 16 MiB; an oversized rejected stream may be
 transiently read beyond that boundary by up to one current 64 KiB buffer read
-and is not retained as an accepted save. It passes only a byte snapshot to
-`inspectV01`, and displays the source filename, actual and optional provider
-sizes, optional provider timestamp,
-lowercase SHA-256, format, campaign summary, roster, stats, or sanitized failure
+and is not retained as an accepted save. It lends one task-local byte snapshot
+to `inspectV01` and `inspectLiveInventory`, and displays the source filename,
+actual and optional provider sizes, optional provider timestamp,
+lowercase SHA-256, format, campaign summary, roster, stats, 19-slot read-only
+live inventory, or sanitized failure
 codes. Local/Downloads, USB, and cloud documents use Android Storage Access
 Framework providers; open-with and share-to converge on the same importer. It
 requests no storage permission, retains no URI grant or save bytes, performs no

@@ -3,13 +3,17 @@
 ## Operational boundary
 
 The Android app is a read-only consumer of
-`Ja2SaveInspector.inspectV01(ByteArray)`. Its single importer accepts a stream
+`Ja2SaveInspector.inspectV01(ByteArray)` and
+`Ja2SaveInspector.inspectLiveInventory(ByteArray)`. Its single importer accepts
+a stream
 from one user-granted `content://` URI and optional provider metadata: display
 name, declared size, and last-modified timestamp. It sanitizes the filename,
 counts and SHA-256 hashes the bytes while reading, closes the stream, lends the
-private byte snapshot only to the immediate inspection call, and discards it
-after presentation mapping. Core receives bytes only; it never receives the
-URI, source category, or provider metadata.
+private byte snapshot only to the two immediate inspection calls, and discards it
+after presentation mapping. The mapper requires an exact one-to-one profile-index
+match and all 19 canonical slots before presenting roster inventory; it retains
+only slot labels, empty state, numeric item IDs, and object counts. Core receives
+bytes only; it never receives the URI, source category, or provider metadata.
 
 The maximum accepted and retained complete payload is **16 MiB**. The admitted
 real Android save recorded in the fixture manifest is 2,563,321 bytes, so the

@@ -103,10 +103,9 @@ class ProviderMetadataReaderTest {
             ByteArrayInputStream(byteArrayOf()),
             read(openable = OpenableSourceMetadata(rawIdentifier, 0)),
         )
-        val state = InspectionPresentationMapper.map(
-            imported.provenance,
-            imported.inspectV01With(Ja2SaveInspector()),
-        )
+        val state = imported.inspectWith(Ja2SaveInspector()) { inspection, inventory ->
+            InspectionPresentationMapper.map(imported.provenance, inspection, inventory)
+        }
 
         assertEquals("slot.sav", imported.provenance.displayName)
         assertFalse(state.toString().contains(rawIdentifier))

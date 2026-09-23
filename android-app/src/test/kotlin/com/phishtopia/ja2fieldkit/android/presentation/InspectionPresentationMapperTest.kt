@@ -39,7 +39,7 @@ class InspectionPresentationMapperTest {
         val result = successResult()
 
         val state = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(source, result),
+            map(result),
         )
 
         assertEquals("slot01.sav", state.source.displayName)
@@ -62,7 +62,7 @@ class InspectionPresentationMapperTest {
     @Test
     fun mappedPresentationStateHasNoSaveByteContainer() {
         val state = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(source, successResult()),
+            map(successResult()),
         )
 
         assertFalse(state.javaClass.declaredFields.any { it.type == ByteArray::class.java })
@@ -76,7 +76,7 @@ class InspectionPresentationMapperTest {
         val rawNickname = "F\u202Eox\n\u2066\u2069"
 
         val state = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(source, successResult(rawName, rawNickname)),
+            map(successResult(rawName, rawNickname)),
         )
 
         assertEquals("I    ra  ", state.roster.single().name)
@@ -89,7 +89,7 @@ class InspectionPresentationMapperTest {
     @Test
     fun preservesOrdinaryAccentedAndNonLatinMercText() {
         val state = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(source, successResult("Zoë 李", "Éclair・猫")),
+            map(successResult("Zoë 李", "Éclair・猫")),
         )
 
         assertEquals("Zoë 李", state.roster.single().name)
@@ -99,10 +99,10 @@ class InspectionPresentationMapperTest {
     @Test
     fun substitutesFallbackForBlankOrAllUnsafeMercNames() {
         val unsafe = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(source, successResult("\n\u202E\u2066\u2069", "\t")),
+            map(successResult("\n\u202E\u2066\u2069", "\t")),
         )
         val blank = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(source, successResult("   ", null)),
+            map(successResult("   ", null)),
         )
 
         assertEquals("Unknown merc", unsafe.roster.single().name)
@@ -114,13 +114,12 @@ class InspectionPresentationMapperTest {
     @Test
     fun sanitizesSaveDerivedBuildLabelWithDeterministicFallback() {
         val sanitized = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(
-                source,
+            map(
                 successResult(buildLabel = "04.12\n\u202E\u2066\u2069.02"),
             ),
         )
         val fallback = assertIs<InspectionScreenState.Success>(
-            InspectionPresentationMapper.map(source, successResult(buildLabel = "\r\t\u202E")),
+            map(successResult(buildLabel = "\r\t\u202E")),
         )
 
         assertEquals("04.12    .02", sanitized.format.build)
@@ -136,7 +135,7 @@ class InspectionPresentationMapperTest {
             SaveInspectionFailureKind.CORRUPT_INPUT to SaveInspectionDiagnostic.CONTENT_CORRUPT,
         ).map { (kind, diagnostic) ->
             assertIs<InspectionScreenState.Failure>(
-                InspectionPresentationMapper.map(source, failure(kind, diagnostic)),
+                map(failure(kind, diagnostic)),
             )
         }
 
@@ -161,7 +160,7 @@ class InspectionPresentationMapperTest {
 
         cases.forEach { (kind, diagnostic) ->
             val state = assertIs<InspectionScreenState.Failure>(
-                InspectionPresentationMapper.map(source, failure(kind, diagnostic)),
+                map(failure(kind, diagnostic)),
             )
             assertNull(state.compatibilityReportPreview)
             val preview = assertIs<InspectionScreenState.Failure>(
@@ -181,15 +180,14 @@ class InspectionPresentationMapperTest {
             assertNull(state.compatibilityReportPreview)
             assertSame(state, state.withCompatibilityReportPreview("0.1.0"))
         }
-        val success = InspectionPresentationMapper.map(source, successResult())
+        val success = map(successResult())
         assertSame(success, success.withCompatibilityReportPreview("0.1.0"))
     }
 
     @Test
     fun reportPreviewBecomesVisibleOnlyAfterExplicitTransition() {
         val initial = assertIs<InspectionScreenState.Failure>(
-            InspectionPresentationMapper.map(
-                source,
+            map(
                 failure(SaveInspectionFailureKind.TRUNCATED_INPUT, SaveInspectionDiagnostic.LAYOUT_TRUNCATED),
             ),
         )
@@ -212,9 +210,9 @@ class InspectionPresentationMapperTest {
     @Test
     fun failureReportStateContainsNoRawBytesMercOrCampaignPresentation() {
         val state = assertIs<InspectionScreenState.Failure>(
-            InspectionPresentationMapper.map(
-                source.copy(displayName = "Ira-secret-campaign.sav"),
+            map(
                 failure(SaveInspectionFailureKind.CORRUPT_INPUT, SaveInspectionDiagnostic.CONTENT_CORRUPT),
+                source.copy(displayName = "Ira-secret-campaign.sav"),
             ),
         )
         val inputs = assertNotNull(state.compatibilityReportInputs)
@@ -245,6 +243,15 @@ class InspectionPresentationMapperTest {
     ) = SaveInspectionV01Result.Failure(
         format = format(SaveCompatibility.UNSUPPORTED_VARIANT),
         failure = SaveInspectionFailure(kind, diagnostic),
+    )
+
+    private fun map(
+        result: SaveInspectionV01Result,
+        mappedSource: ImportedSaveProvenance = source,
+    ): InspectionScreenState = InspectionPresentationMapper.map(
+        mappedSource,
+        result,
+        inventorySuccess(result),
     )
 
     private fun successResult(

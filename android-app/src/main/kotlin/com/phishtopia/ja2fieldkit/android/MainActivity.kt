@@ -24,6 +24,7 @@ import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.CampaignPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
+import com.phishtopia.ja2fieldkit.android.presentation.InventoryContentsPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.MercPresentation
 import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 
@@ -233,6 +234,15 @@ class MainActivity : ComponentActivity() {
             ?: merc.name
         addHeading(displayName, 19f)
         addBody(merc.stats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
+        addHeading("Inventory", 17f)
+        merc.inventory.forEach { slot ->
+            val contents = when (val item = slot.contents) {
+                InventoryContentsPresentation.Empty -> "Empty"
+                is InventoryContentsPresentation.Occupied ->
+                    "Item #${item.itemId} · Count ${item.objectCount}"
+            }
+            addLabelValue(slot.label, contents)
+        }
     }
 
     private fun LinearLayout.addTitle(text: String) {

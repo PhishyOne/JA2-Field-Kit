@@ -7,7 +7,13 @@ import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveFamily
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
+import com.phishtopia.ja2fieldkit.core.model.InventoryPayload
+import com.phishtopia.ja2fieldkit.core.model.InventorySlot
+import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
+import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionDiagnostic
+import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailure
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFormat
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailureKind
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
@@ -55,16 +61,55 @@ data class MercPresentation(
     val name: String,
     val nickname: String?,
     val stats: List<StatPresentation>,
+    val inventory: List<InventorySlotPresentation>,
 )
 
 data class StatPresentation(val label: String, val value: String)
+
+data class InventorySlotPresentation(
+    val label: String,
+    val contents: InventoryContentsPresentation,
+)
+
+sealed interface InventoryContentsPresentation {
+    data object Empty : InventoryContentsPresentation
+    data class Occupied(val itemId: Int, val objectCount: Int) : InventoryContentsPresentation
+}
 
 object InspectionPresentationMapper {
     fun map(
         source: ImportedSaveProvenance,
         result: SaveInspectionV01Result,
+        inventoryResult: LiveInventoryInspectionResult,
     ): InspectionScreenState = when (result) {
-        is SaveInspectionV01Result.Success -> InspectionScreenState.Success(
+        is SaveInspectionV01Result.Success -> mapSuccess(source, result, inventoryResult)
+
+        is SaveInspectionV01Result.Failure -> mapFailure(source, result.format, result.failure)
+    }
+
+    private fun mapSuccess(
+        source: ImportedSaveProvenance,
+        result: SaveInspectionV01Result.Success,
+        inventoryResult: LiveInventoryInspectionResult,
+    ): InspectionScreenState {
+        if (inventoryResult is LiveInventoryInspectionResult.Failure) {
+            return mapFailure(source, inventoryResult.format, inventoryResult.failure)
+        }
+        inventoryResult as LiveInventoryInspectionResult.Success
+        val rosterIds = result.roster.map { it.profileIndex }
+        val inventoryIds = inventoryResult.inventories.map { it.profileIndex }
+        val canonicalRoles = InventorySlotRole.entries
+        val coherent = result.format == inventoryResult.format &&
+            rosterIds.size == rosterIds.toSet().size &&
+            inventoryIds.size == inventoryIds.toSet().size &&
+            rosterIds.toSet() == inventoryIds.toSet() &&
+            inventoryResult.inventories.all { entry ->
+                entry.slots.map { it.role } == canonicalRoles
+            }
+        if (!coherent) return coherenceFailure(source, result.format)
+
+        val inventoriesByProfile = inventoryResult.inventories.associateBy { it.profileIndex }
+        return InspectionScreenState.Success(
             source = source,
             format = mapFormat(result.format),
             campaign = CampaignPresentation(
@@ -76,16 +121,35 @@ object InspectionPresentationMapper {
                     "(${result.campaign.playerMercCount} recorded)",
                 balance = result.campaign.balance.toString(),
             ),
-            roster = result.roster.map(::mapMerc),
+            roster = result.roster.map { merc ->
+                mapMerc(merc, inventoriesByProfile.getValue(merc.profileIndex).slots)
+            },
         )
+    }
 
-        is SaveInspectionV01Result.Failure -> {
-            val format = mapFormat(result.format)
-            val failureKind = result.failure.kind.name
-            val diagnostic = result.failure.diagnostic.name
-            InspectionScreenState.Failure(
+    private fun coherenceFailure(
+        source: ImportedSaveProvenance,
+        format: SaveInspectionFormat,
+    ): InspectionScreenState = mapFailure(
+        source,
+        format,
+        SaveInspectionFailure(
+            SaveInspectionFailureKind.INCONSISTENT_INPUT,
+            SaveInspectionDiagnostic.CONTENT_INCONSISTENT,
+        ),
+    )
+
+    private fun mapFailure(
+        source: ImportedSaveProvenance,
+        inspectionFormat: SaveInspectionFormat,
+        failure: SaveInspectionFailure,
+    ): InspectionScreenState.Failure {
+        val format = mapFormat(inspectionFormat)
+        val failureKind = failure.kind.name
+        val diagnostic = failure.diagnostic.name
+        return InspectionScreenState.Failure(
                 source = source,
-                title = when (result.failure.kind) {
+                title = when (failure.kind) {
                     SaveInspectionFailureKind.UNKNOWN_FORMAT -> "Unknown save format"
                     SaveInspectionFailureKind.UNSUPPORTED_VARIANT -> "Unsupported save variant"
                     SaveInspectionFailureKind.TRUNCATED_INPUT -> "Truncated save"
@@ -102,7 +166,6 @@ object InspectionPresentationMapper {
                     failureDiagnostic = diagnostic,
                 ),
             )
-        }
     }
 
     fun sourceFailure(
@@ -153,7 +216,10 @@ object InspectionPresentationMapper {
             },
         )
 
-    private fun mapMerc(merc: MercRosterEntry): MercPresentation = MercPresentation(
+    private fun mapMerc(
+        merc: MercRosterEntry,
+        inventory: List<InventorySlot>,
+    ): MercPresentation = MercPresentation(
         name = PresentationTextSanitizer.sanitize(merc.name)
             .takeUnless(String::isBlank)
             ?: "Unknown merc",
@@ -171,9 +237,44 @@ object InspectionPresentationMapper {
             StatPresentation("Explosives", merc.stats.explosives.display()),
             StatPresentation("Medical", merc.stats.medical.display()),
         ),
+        inventory = inventory.map { slot ->
+            InventorySlotPresentation(
+                label = slot.role.displayLabel(),
+                contents = if (slot.objectRecord.payload is InventoryPayload.Empty) {
+                    InventoryContentsPresentation.Empty
+                } else {
+                    InventoryContentsPresentation.Occupied(
+                        itemId = slot.objectRecord.itemId,
+                        objectCount = slot.objectRecord.objectCount,
+                    )
+                },
+            )
+        },
     )
 
     private fun Int?.display(): String = this?.toString() ?: "Unknown"
+
+    private fun InventorySlotRole.displayLabel(): String = when (this) {
+        InventorySlotRole.HELMET -> "Helmet"
+        InventorySlotRole.VEST -> "Vest"
+        InventorySlotRole.LEGS -> "Legs"
+        InventorySlotRole.HEAD_1 -> "Head 1"
+        InventorySlotRole.HEAD_2 -> "Head 2"
+        InventorySlotRole.MAIN_HAND -> "Main hand"
+        InventorySlotRole.OFF_HAND -> "Off hand"
+        InventorySlotRole.BIG_POCKET_1 -> "Big pocket 1"
+        InventorySlotRole.BIG_POCKET_2 -> "Big pocket 2"
+        InventorySlotRole.BIG_POCKET_3 -> "Big pocket 3"
+        InventorySlotRole.BIG_POCKET_4 -> "Big pocket 4"
+        InventorySlotRole.SMALL_POCKET_1 -> "Small pocket 1"
+        InventorySlotRole.SMALL_POCKET_2 -> "Small pocket 2"
+        InventorySlotRole.SMALL_POCKET_3 -> "Small pocket 3"
+        InventorySlotRole.SMALL_POCKET_4 -> "Small pocket 4"
+        InventorySlotRole.SMALL_POCKET_5 -> "Small pocket 5"
+        InventorySlotRole.SMALL_POCKET_6 -> "Small pocket 6"
+        InventorySlotRole.SMALL_POCKET_7 -> "Small pocket 7"
+        InventorySlotRole.SMALL_POCKET_8 -> "Small pocket 8"
+    }
 }
 
 fun InspectionScreenState.withCompatibilityReportPreview(appVersion: String): InspectionScreenState {

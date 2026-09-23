@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.android.importing
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
+import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
 import java.io.InputStream
 
@@ -44,8 +45,14 @@ class ImportedSave internal constructor(
     private val exactBytes: ByteArray,
     val provenance: ImportedSaveProvenance,
 ) {
-    internal fun inspectV01With(inspector: Ja2SaveInspector): SaveInspectionV01Result =
-        inspector.inspectV01(exactBytes)
+    /** Runs both read-only views while the imported bytes remain task-local. */
+    internal fun <T> inspectWith(
+        inspector: Ja2SaveInspector,
+        transform: (SaveInspectionV01Result, LiveInventoryInspectionResult) -> T,
+    ): T = transform(
+        inspector.inspectV01(exactBytes),
+        inspector.inspectLiveInventory(exactBytes),
+    )
 }
 
 /** The one source-agnostic stream boundary shared by every Android content-URI entry point. */

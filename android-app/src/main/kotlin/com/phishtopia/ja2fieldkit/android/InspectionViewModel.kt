@@ -69,10 +69,9 @@ class InspectionViewModel : ViewModel() {
                 val imported = resolver.openInputStream(uri)?.use { input ->
                     importer.import(input, providerMetadata)
                 } ?: throw FileNotFoundException()
-                InspectionPresentationMapper.map(
-                    imported.provenance,
-                    imported.inspectV01With(inspector),
-                )
+                imported.inspectWith(inspector) { inspection, inventory ->
+                    InspectionPresentationMapper.map(imported.provenance, inspection, inventory)
+                }
             } catch (_: SaveTooLargeException) {
                 InspectionPresentationMapper.sourceFailure(SourceFailureKind.SIZE_LIMIT)
             } catch (_: SecurityException) {

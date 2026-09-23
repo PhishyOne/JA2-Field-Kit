@@ -5,7 +5,7 @@
     <string name="open_save">Open save</string>
     <string name="open_another_save">Open another save</string>
     <string name="loading_save">Reading and inspecting save…</string>
-    <string name="no_save_selected">Select a JA2 .sav file to inspect its campaign and roster.</string>
+    <string name="no_save_selected">Select a JA2 .sav file to inspect its campaign, roster, and live inventory.</string>
     <string name="preview_compatibility_report">Compatibility report</string>
     <string name="compatibility_report_preview">Compatibility report preview</string>
     <string name="compatibility_report_privacy_notice">Review the exact report below. Nothing is copied or shared until you choose an action.</string>

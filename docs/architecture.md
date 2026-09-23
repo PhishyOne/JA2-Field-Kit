@@ -40,12 +40,21 @@ The same checked-detection pattern guards public detection and every admitted
 interpretation method; no inspector-wide size limit is introduced. It returns
 a sealed sanitized success/failure result. Its
 models contain logical format facts, a minimal campaign summary, and roster
-stats; structural offsets and cryptographic internals remain below the
+profile/base stats; structural offsets and cryptographic internals remain below the
 boundary.
 The separate read-only `inspectLiveInventory` API uses the same checked detection,
 sanitized failures, and shared validated roster scan to expose 19 immutable live
 inventory slots per merc. Payload classification defaults to Unknown until reviewed
 item metadata exists; see [live-inventory-model.md](live-inventory-model.md).
+
+`inspectLiveMercState` combines the ten existing signed-byte soldier checksum
+stat facts and the same 19 inventory slots in one validated traversal. Its result
+contains only profile identity, numeric stats, and role/item ID/count inventory
+facts; no raw records or opaque bytes. Android calls `inspectV01` plus this
+combined surface, requiring equal format, equal unique profile identity sets,
+and canonical slot order. Live/current and Profile/base stats are separate;
+leadership and wisdom remain profile/base only. See
+[live-inventory-model.md](live-inventory-model.md) for provenance and boundaries.
 
 The separate [Issue #36 marksmanship kernel](marksmanship-edit-kernel.md) can
 construct verified in-memory candidates under privileged synthetic test evidence.
@@ -91,7 +100,7 @@ An oversized rejected stream may be transiently read beyond that boundary by up
 to one current 64 KiB buffer read before throwing `SaveTooLargeException` and is
 not retained as an accepted save. Provider-declared size is advisory:
 it cannot reject readable content or authorize bytes beyond that measured limit.
-Only a private, task-local byte snapshot enters `Ja2SaveInspector.inspectV01`;
+Only a private, task-local byte snapshot enters `inspectV01` and `inspectLiveMercState`;
 URI and provider details never enter core. Presentation retains import provenance
 (including lowercase SHA-256 for integrity diagnostics), but no save bytes, raw
 URI/path, provider-private identifier, offsets, rotation indexes, keys,

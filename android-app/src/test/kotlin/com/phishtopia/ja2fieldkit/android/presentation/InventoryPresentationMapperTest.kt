@@ -8,7 +8,7 @@ import com.phishtopia.ja2fieldkit.core.format.SaveLayout
 import com.phishtopia.ja2fieldkit.core.model.InventoryObject
 import com.phishtopia.ja2fieldkit.core.model.InventoryPayload
 import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
-import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStateInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionDiagnostic
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailure
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailureKind
@@ -81,6 +81,8 @@ class InventoryPresentationMapperTest {
             InspectionPresentationMapper.map(source, inspection, inventory),
         )
 
+        assertEquals("4", state.roster[0].liveStats.first().value)
+        assertEquals("9", state.roster[1].liveStats.first().value)
         assertEquals(
             InventoryContentsPresentation.Occupied(104, 1),
             state.roster[0].inventory[0].contents,
@@ -122,7 +124,7 @@ class InventoryPresentationMapperTest {
     @Test
     fun inventoryInspectionFailureCannotProduceSuccessOrPartialInventory() {
         val inspection = inspectionSuccess(format, listOf(7))
-        val failure = LiveInventoryInspectionResult.Failure(
+        val failure = LiveMercStateInspectionResult.Failure(
             format,
             SaveInspectionFailure(
                 SaveInspectionFailureKind.CORRUPT_INPUT,
@@ -152,6 +154,24 @@ class InventoryPresentationMapperTest {
             ),
         )
 
+        // Walk actual retained values, including list elements, rather than only erased field types.
+        fun assertSafe(value: Any?) {
+            when (value) {
+                null, is String, is Number, is Boolean, is Enum<*> -> return
+                is List<*> -> value.forEach(::assertSafe)
+                else -> {
+                    assertFalse(value is ByteArray || value is InventoryObject || value is InventoryPayload)
+                    value.javaClass.declaredFields.filter {
+                        !java.lang.reflect.Modifier.isStatic(it.modifiers)
+                    }.forEach { field ->
+                        field.isAccessible = true
+                        assertSafe(field.get(value))
+                    }
+                }
+            }
+        }
+        assertSafe(state)
+
         val retainedTypes = listOf(
             state.javaClass,
             state.roster.single().javaClass,
@@ -163,6 +183,33 @@ class InventoryPresentationMapperTest {
         assertFalse(retainedTypes.contains(InventoryPayload.Unknown::class.java))
         assertFalse(state.toString().contains("rawRecord"))
         assertFalse(state.toString().contains("rawPayload"))
+    }
+
+    @Test
+    fun formatAndNoncanonicalSlotOrderFailClosed() {
+        val inspection = inspectionSuccess(format, listOf(7))
+        val slots = InventorySlotRole.entries.map { inventorySlot(it, 0, 0) }
+        for (invalid in listOf(slots.reversed(), slots.dropLast(1), slots + slots.first(),
+            slots.dropLast(1) + slots.first())) {
+            assertCoherenceFailure(InspectionPresentationMapper.map(source, inspection,
+                inventorySuccess(format, listOf(inventoryEntry(7, invalid)))))
+        }
+        assertCoherenceFailure(InspectionPresentationMapper.map(source, inspection,
+            inventorySuccess(format.copy(buildLabel = "different"), listOf(inventoryEntry(7)))))
+    }
+
+    @Test
+    fun liveAndProfileStatsStayDistinctAndPreserveSignedValues() {
+        val inspection = inspectionSuccess(format, listOf(7))
+        val merc = assertIs<InspectionScreenState.Success>(InspectionPresentationMapper.map(
+            source, inspection, inventorySuccess(inspection))).roster.single()
+        assertEquals(listOf("Life", "Max life", "Agility", "Dexterity", "Strength", "Experience",
+            "Marksmanship", "Mechanical", "Explosives", "Medical"), merc.liveStats.map { it.label })
+        assertEquals(listOf("7", "99", "-128", "-2", "127", "-3", "-4", "-5", "-6", "-7"),
+            merc.liveStats.map { it.value })
+        assertEquals(listOf("84", "85"), merc.profileStats.filter {
+            it.label in listOf("Leadership", "Wisdom") }.map { it.value })
+        assertEquals("80", merc.profileStats.first().value)
     }
 
     private fun assertCoherenceFailure(state: InspectionScreenState) {

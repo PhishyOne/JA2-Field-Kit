@@ -20,6 +20,38 @@ class NormalNonLinuxRosterDecoderTest {
     private val encryptedProfiles = encryptRecords(profilePlaintext, 716)
 
     @Test
+    fun combinedLiveStatePreservesAllTenSignedFactsAndProfileBinding() {
+        val offsets = listOf(868, 917, 880, 840, 886, 849, 1377, 916, 1378, 1372)
+        val values = listOf(-128, 127, -3, -4, -5, -6, -7, -8, -9, -10)
+        val save = syntheticSave(mapOf(
+            0 to SoldierSpec(42, pathNodeCount = 2, hasKeyring = true, beforeChecksum = { bytes ->
+                offsets.zip(values).forEach { (offset, value) -> bytes[offset] = value.toByte() }
+            }),
+            5 to SoldierSpec(7),
+            19 to SoldierSpec(255, vehicle = true, hasKeyring = true),
+        ), 2)
+        val original = save.copyOf()
+        val inspector = admittedInspector()
+        val result = assertIs<LiveMercStateInspectionResult.Success>(inspector.inspectLiveMercState(save))
+        assertEquals(listOf(42, 7), result.mercs.map { it.profileIndex })
+        assertEquals(LiveMercStats(-128, 127, -3, -4, -5, -6, -7, -8, -9, -10), result.mercs[0].stats)
+        assertEquals(LiveMercStats(55, 65, 45, 35, 40, 7, 50, 30, 20, 25), result.mercs[1].stats)
+        val inventories = assertIs<LiveInventoryInspectionResult.Success>(inspector.inspectLiveInventory(save))
+        assertEquals(inventories.format, result.format)
+        result.mercs.zip(inventories.inventories).forEach { (live, inventory) ->
+            assertEquals(inventory.profileIndex, live.profileIndex)
+            assertEquals(inventory.slots.map { LiveInventorySlot(it.role, it.objectRecord.itemId,
+                it.objectRecord.objectCount) }, live.slots)
+        }
+        assertContentEquals(original, save)
+        save.fill(0)
+        assertEquals(-128, result.mercs.first().stats.life)
+        assertEquals(300, result.mercs.first().slots.first().itemId)
+        assertFailsWith<UnsupportedOperationException> { (result.mercs as MutableList).clear() }
+        assertFailsWith<UnsupportedOperationException> { (result.mercs.first().slots as MutableList).clear() }
+    }
+
+    @Test
     fun liveInventoriesBindEverySentinelToItsRosterProfileAndPreserveInput() {
         fun sentinel(player: Int, slot: Int) = ByteArray(36) { byte ->
             (player * 43 + slot * 17 + byte * 7).toByte()
@@ -83,6 +115,9 @@ class NormalNonLinuxRosterDecoderTest {
         val production = Ja2SaveInspector()
         val denied = assertIs<LiveInventoryInspectionResult.Failure>(production.inspectLiveInventory(save))
         assertEquals(production.detect(save).compatibility, denied.format.compatibility)
+        val liveDenied = assertIs<LiveMercStateInspectionResult.Failure>(production.inspectLiveMercState(save))
+        assertEquals(denied.format, liveDenied.format)
+        assertEquals(denied.failure, liveDenied.failure)
         assertEquals(assertIs<SaveInspectionV01Result.Failure>(production.inspectV01(save)).failure, denied.failure)
     }
 
@@ -497,6 +532,14 @@ class NormalNonLinuxRosterDecoderTest {
                 NormalNonLinuxRosterDecoder.decodeInventoriesBuild041202(save)
             }
             assertEquals(it.message, inventoryError.message)
+            val liveError = assertFailsWith<RosterMembershipException> {
+                NormalNonLinuxRosterDecoder.decodeLiveMercStatesBuild041202(save)
+            }
+            assertEquals(it.message, liveError.message)
+            val inspector = admittedInspector()
+            val liveFailure = assertIs<LiveMercStateInspectionResult.Failure>(inspector.inspectLiveMercState(save))
+            assertEquals(assertIs<LiveInventoryInspectionResult.Failure>(
+                inspector.inspectLiveInventory(save)).failure, liveFailure.failure)
             assertContentEquals(original, save)
         }
 

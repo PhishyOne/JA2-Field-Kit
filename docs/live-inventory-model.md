@@ -4,7 +4,7 @@ This slice reads the live SOLDIERTYPE inventory of each hired, non-vehicle
 player merc in the supported normal non-Linux v103 / Build 04.12.02 domain.
 It does not read inventory from the profile table. There is no editing or write
 capability, inventory serialization, checksum regeneration, output placement,
-bridge, Android UI change, item catalog, or 1.13/NIV support.
+bridge, item catalog, or 1.13/NIV support.
 
 ## API and validation authority
 
@@ -25,12 +25,40 @@ The inspector uses the same checked detection and supported-layout gate as
 `inspectV01`, against an untouched private input snapshot. Both presentation
 methods share failure sanitization. `NormalNonLinuxRosterDecoder` contains one
 private scan used by roster and inventory reads. It retains only existing roster
-identity and a private, owned 684-byte inventory snapshot per validated merc.
+identity, the ten existing checksum stat facts, and a private, owned 684-byte
+inventory snapshot per validated merc.
 No result is returned until all 20 player slots, the existing identity/checksum
 checks, path/keyring framing, duplicate-profile rules, vehicle exclusion, and
 header-count cross-check have succeeded. The checksum formula and membership
 semantics are unchanged. Each call performs one scan; asking for roster and
 inventory separately performs a scan for each call.
+
+## Combined live state (Issue #42)
+
+`Ja2SaveInspector.inspectLiveMercState(bytes)` returns
+`LiveMercStateInspectionResult.Success(format, mercs)` or the same sanitized
+`Failure(format, failure)`. Each merc contains exact `profileIndex`, `LiveMercStats`,
+and 19 ordered `LiveInventorySlot` facts (role, item ID, object count). This
+presentation surface retains no save, SOLDIERTYPE, inventory-record or payload
+bytes, offsets, checksum internals, rotation/key material, or path/keyring data.
+Collections are immutable snapshots. The existing `inspectLiveInventory` API
+and its defensive raw object accessors are unchanged.
+
+Stat provenance is exclusively the ten named offsets and signed-byte semantics
+already present in production `NormalNonLinuxRosterDecoder` as checksum inputs:
+current life, max life, agility, dexterity, strength, experience level,
+marksmanship, mechanical, explosives, and medical. These are exact signed-byte
+facts (-128..127), including negative values; there is no invented gameplay
+range or normalization. Current life and max life are separate values.
+No leadership/wisdom offset, source-derived table, catalog, or upstream expression
+is added. Membership and checksum authority are unchanged.
+
+Android uses two logical calls: `inspectV01` for campaign/profile roster and
+`inspectLiveMercState` for tactical stats plus inventory. It joins by exact
+profile index only after equal unique identity sets, equal format, and canonical
+19-slot role order are verified. Live/current tactical stats and Profile/base
+stats are visibly separate; leadership and wisdom remain profile/base only.
+This slice grants no editing, writing, or save-export authority.
 
 ## Classification boundary
 

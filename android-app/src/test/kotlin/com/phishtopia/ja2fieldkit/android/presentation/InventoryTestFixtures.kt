@@ -1,18 +1,6 @@
 package com.phishtopia.ja2fieldkit.android.presentation
 
-import com.phishtopia.ja2fieldkit.core.model.InventoryAttachment
-import com.phishtopia.ja2fieldkit.core.model.InventoryObject
-import com.phishtopia.ja2fieldkit.core.model.InventoryPayload
-import com.phishtopia.ja2fieldkit.core.model.InventorySlot
-import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
-import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
-import com.phishtopia.ja2fieldkit.core.model.CampaignSector
-import com.phishtopia.ja2fieldkit.core.model.CampaignSummaryV01
-import com.phishtopia.ja2fieldkit.core.model.MercInventoryEntry
-import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
-import com.phishtopia.ja2fieldkit.core.model.MercStats
-import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFormat
-import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
+import com.phishtopia.ja2fieldkit.core.model.*
 
 internal fun inventorySuccess(
     inspection: SaveInspectionV01Result,
@@ -21,7 +9,7 @@ internal fun inventorySuccess(
         ?.map { it.profileIndex }
         .orEmpty(),
     records: Map<Pair<Int, InventorySlotRole>, Pair<Int, Int>> = emptyMap(),
-): LiveInventoryInspectionResult.Success {
+): LiveMercStateInspectionResult.Success {
     val inventories = profileOrder.map { profileIndex ->
         inventoryEntry(
             profileIndex,
@@ -36,9 +24,9 @@ internal fun inventorySuccess(
 
 internal fun inventorySuccess(
     format: SaveInspectionFormat,
-    inventories: List<MercInventoryEntry>,
-): LiveInventoryInspectionResult.Success = construct(
-    LiveInventoryInspectionResult.Success::class.java,
+    inventories: List<LiveMercState>,
+): LiveMercStateInspectionResult.Success = construct(
+    LiveMercStateInspectionResult.Success::class.java,
     format,
     inventories,
 )
@@ -62,41 +50,16 @@ internal fun inspectionSuccess(
 
 internal fun inventoryEntry(
     profileIndex: Int,
-    slots: List<InventorySlot> = InventorySlotRole.entries.map { inventorySlot(it, 0, 0) },
-): MercInventoryEntry = construct(
-    MercInventoryEntry::class.java,
+    slots: List<LiveInventorySlot> = InventorySlotRole.entries.map { inventorySlot(it, 0, 0) },
+): LiveMercState = construct(
+    LiveMercState::class.java,
     profileIndex,
-    "Inventory $profileIndex",
-    null,
+    LiveMercStats(profileIndex, 99, -128, -2, 127, -3, -4, -5, -6, -7),
     slots,
 )
 
-internal fun inventorySlot(role: InventorySlotRole, itemId: Int, objectCount: Int): InventorySlot =
-    construct(InventorySlot::class.java, role, inventoryObject(itemId, objectCount))
-
-private fun inventoryObject(itemId: Int, objectCount: Int): InventoryObject {
-    val payload = if (itemId == 0 && objectCount == 0) {
-        InventoryPayload.Empty
-    } else {
-        construct(InventoryPayload.Unknown::class.java, ByteArray(12))
-    }
-    return construct(
-        InventoryObject::class.java,
-        itemId,
-        objectCount,
-        0,
-        List(4) { InventoryAttachment(0, 0) },
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        listOf(0, 0),
-        payload,
-        ByteArray(36),
-    )
-}
+internal fun inventorySlot(role: InventorySlotRole, itemId: Int, objectCount: Int): LiveInventorySlot =
+    LiveInventorySlot(role, itemId, objectCount)
 
 @Suppress("UNCHECKED_CAST")
 private fun <T> construct(type: Class<T>, vararg arguments: Any?): T {

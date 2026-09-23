@@ -233,7 +233,10 @@ class MainActivity : ComponentActivity() {
             ?.let { "${merc.name} ($it)" }
             ?: merc.name
         addHeading(displayName, 19f)
-        addBody(merc.stats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
+        addBody("Live/current tactical stats")
+        addBody(merc.liveStats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
+        addBody("Profile/base stats")
+        addBody(merc.profileStats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
         addHeading("Inventory", 17f)
         merc.inventory.forEach { slot ->
             val contents = when (val item = slot.contents) {

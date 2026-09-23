@@ -3,6 +3,9 @@ package com.phishtopia.ja2fieldkit.core.format
 import com.phishtopia.ja2fieldkit.core.io.LittleEndianReader
 import com.phishtopia.ja2fieldkit.core.model.InventorySlot
 import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
+import com.phishtopia.ja2fieldkit.core.model.LiveInventorySlot
+import com.phishtopia.ja2fieldkit.core.model.LiveMercState
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStats
 import com.phishtopia.ja2fieldkit.core.model.MercInventoryEntry
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
@@ -65,7 +68,7 @@ class RosterMembershipException(
  * Shared validated traversal of the first 20 normal SOLDIERTYPE slots.
  *
  * Roster and live inventory use identical membership, checksum, and tail-framing authority.
- * Soldier condition, assignments, sectors, paths, and keys remain uninterpreted.
+ * Only existing checksum stat facts are presented; assignments, sectors, paths, and keys remain uninterpreted.
  */
 object NormalNonLinuxRosterDecoder {
     fun decodeBuild041202(saveBytes: ByteArray): List<MercRosterEntry> =
@@ -81,8 +84,23 @@ object NormalNonLinuxRosterDecoder {
             )
         })
 
-    /** Only a narrow private inventory snapshot survives validation; no full soldier escapes. */
-    private class ValidatedPlayer(val rosterEntry: MercRosterEntry, inventory: ByteArray) {
+    internal fun decodeLiveMercStatesBuild041202(saveBytes: ByteArray): List<LiveMercState> =
+        Collections.unmodifiableList(scanBuild041202(saveBytes).map { soldier ->
+            LiveMercState(
+                soldier.rosterEntry.profileIndex,
+                soldier.stats,
+                soldier.inventorySlots().map { slot ->
+                    LiveInventorySlot(slot.role, slot.objectRecord.itemId, slot.objectRecord.objectCount)
+                },
+            )
+        })
+
+    /** Only stat facts and a narrow private inventory snapshot survive validation. */
+    private class ValidatedPlayer(
+        val rosterEntry: MercRosterEntry,
+        val stats: LiveMercStats,
+        inventory: ByteArray,
+    ) {
         private val inventory = inventory.copyOf()
 
         fun inventorySlots(): List<InventorySlot> = InventorySlotRole.entries.map { role ->
@@ -141,6 +159,7 @@ object NormalNonLinuxRosterDecoder {
             if (profileIds.size != previousCount) {
                 players += ValidatedPlayer(
                     context.profiles[profileIds.last()].toRosterEntry(),
+                    liveStats(LittleEndianReader(decrypted)),
                     decrypted.copyOfRange(
                         INVENTORY_START_OFFSET,
                         INVENTORY_START_OFFSET + INVENTORY_SLOT_COUNT * INVENTORY_RECORD_SIZE,
@@ -286,6 +305,19 @@ object NormalNonLinuxRosterDecoder {
         }
         profileIds += profileId
     }
+
+    private fun liveStats(reader: LittleEndianReader): LiveMercStats = LiveMercStats(
+        life = reader.i8(LIFE_OFFSET).toInt(),
+        lifeMax = reader.i8(LIFE_MAX_OFFSET).toInt(),
+        agility = reader.i8(AGILITY_OFFSET).toInt(),
+        dexterity = reader.i8(DEXTERITY_OFFSET).toInt(),
+        strength = reader.i8(STRENGTH_OFFSET).toInt(),
+        experienceLevel = reader.i8(EXPERIENCE_LEVEL_OFFSET).toInt(),
+        marksmanship = reader.i8(MARKSMANSHIP_OFFSET).toInt(),
+        mechanical = reader.i8(MECHANICAL_OFFSET).toInt(),
+        explosives = reader.i8(EXPLOSIVE_OFFSET).toInt(),
+        medical = reader.i8(MEDICAL_OFFSET).toInt(),
+    )
 
     private fun sourceChecksum(reader: LittleEndianReader): Long {
         var sum = CHECKSUM_STAT_OFFSET_PAIRS.fold(1L) { checksum, offsets ->

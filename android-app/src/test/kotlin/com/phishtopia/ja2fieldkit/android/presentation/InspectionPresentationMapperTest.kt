@@ -54,9 +54,9 @@ class InspectionPresentationMapperTest {
                 "Health", "Agility", "Dexterity", "Strength", "Leadership", "Wisdom",
                 "Experience", "Marksmanship", "Mechanical", "Explosives", "Medical",
             ),
-            state.roster.single().stats.map { it.label },
+            state.roster.single().profileStats.map { it.label },
         )
-        assertEquals((80..90).map(Int::toString), state.roster.single().stats.map { it.value })
+        assertEquals((80..90).map(Int::toString), state.roster.single().profileStats.map { it.value })
     }
 
     @Test

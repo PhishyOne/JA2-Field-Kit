@@ -1,7 +1,7 @@
 package com.phishtopia.ja2fieldkit.android.importing
 
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
-import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStateInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
 import java.io.InputStream
 
@@ -48,10 +48,10 @@ class ImportedSave internal constructor(
     /** Runs both read-only views while the imported bytes remain task-local. */
     internal fun <T> inspectWith(
         inspector: Ja2SaveInspector,
-        transform: (SaveInspectionV01Result, LiveInventoryInspectionResult) -> T,
+        transform: (SaveInspectionV01Result, LiveMercStateInspectionResult) -> T,
     ): T = transform(
         inspector.inspectV01(exactBytes),
-        inspector.inspectLiveInventory(exactBytes),
+        inspector.inspectLiveMercState(exactBytes),
     )
 }
 

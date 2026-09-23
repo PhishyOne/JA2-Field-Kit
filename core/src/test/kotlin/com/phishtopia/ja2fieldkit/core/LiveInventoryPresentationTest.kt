@@ -10,6 +10,36 @@ import kotlin.test.*
 
 class LiveInventoryPresentationTest {
     @Test
+    fun combinedSurfaceContainsOnlyAllowlistedFactsAndSnapshotsCollections() {
+        val allowed = mapOf(
+            LiveMercState::class.java to setOf("profileIndex", "stats", "slots"),
+            LiveMercStats::class.java to setOf("life", "lifeMax", "agility", "dexterity", "strength",
+                "experienceLevel", "marksmanship", "mechanical", "explosives", "medical"),
+            LiveInventorySlot::class.java to setOf("role", "itemId", "objectCount"),
+            LiveMercStateInspectionResult.Success::class.java to setOf("format", "mercs"),
+            LiveMercStateInspectionResult.Failure::class.java to setOf("format", "failure"),
+        )
+        allowed.forEach { (type, properties) ->
+            val fields = type.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+            assertEquals(properties, fields.map { it.name }.toSet())
+            assertTrue(fields.all { Modifier.isPrivate(it.modifiers) && Modifier.isFinal(it.modifiers) })
+            assertTrue(fields.none { it.type == ByteArray::class.java || it.type == InventoryObject::class.java })
+        }
+        val slots = mutableListOf(LiveInventorySlot(InventorySlotRole.HELMET, 0, 0))
+        val merc = LiveMercState(7, LiveMercStats(-128, 127, 1, 2, 3, 4, 5, 6, 7, 8), slots)
+        val mercs = mutableListOf(merc)
+        val result = LiveMercStateInspectionResult.Success(
+            SaveInspectionFormat(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,
+                SaveCompatibility.SUPPORTED, SaveFamily.UNKNOWN, 103, "04.12.02"), mercs)
+        slots.clear()
+        mercs.clear()
+        assertEquals(1, result.mercs.size)
+        assertEquals(1, merc.slots.size)
+        assertFailsWith<UnsupportedOperationException> { (result.mercs as MutableList).clear() }
+        assertFailsWith<UnsupportedOperationException> { (merc.slots as MutableList).clear() }
+    }
+
+    @Test
     fun publicInventoryPropertiesContainOnlyLogicalFactsAndDefensiveObjectBytes() {
         val allowed = mapOf(
             MercInventoryEntry::class.java to setOf("profileIndex", "name", "nickname", "slots"),

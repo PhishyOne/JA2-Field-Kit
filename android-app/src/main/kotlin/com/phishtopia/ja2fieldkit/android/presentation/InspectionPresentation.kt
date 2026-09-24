@@ -28,7 +28,11 @@ sealed interface InspectionScreenState {
         val format: FormatPresentation,
         val campaign: CampaignPresentation,
         val roster: List<MercPresentation>,
-    ) : InspectionScreenState
+        val selectedProfileIndex: Int? = roster.firstOrNull()?.profileIndex,
+    ) : InspectionScreenState {
+        val selectedMerc: MercPresentation?
+            get() = roster.firstOrNull { it.profileIndex == selectedProfileIndex } ?: roster.firstOrNull()
+    }
 
     data class Failure(
         val source: ImportedSaveProvenance?,
@@ -57,6 +61,7 @@ data class CampaignPresentation(
 )
 
 data class MercPresentation(
+    val profileIndex: Int,
     val name: String,
     val nickname: String?,
     val profileStats: List<StatPresentation>,
@@ -220,6 +225,7 @@ object InspectionPresentationMapper {
         merc: MercRosterEntry,
         live: LiveMercState,
     ): MercPresentation = MercPresentation(
+        profileIndex = merc.profileIndex,
         name = PresentationTextSanitizer.sanitize(merc.name)
             .takeUnless(String::isBlank)
             ?: "Unknown merc",
@@ -287,6 +293,14 @@ object InspectionPresentationMapper {
         InventorySlotRole.SMALL_POCKET_7 -> "Small pocket 7"
         InventorySlotRole.SMALL_POCKET_8 -> "Small pocket 8"
     }
+}
+
+/** Selection consumes only retained safe presentation facts, never save bytes or an inspector. */
+fun InspectionScreenState.withSelectedMerc(profileIndex: Int): InspectionScreenState {
+    if (this !is InspectionScreenState.Success) return this
+    val nextId = roster.firstOrNull { it.profileIndex == profileIndex }?.profileIndex
+        ?: selectedMerc?.profileIndex
+    return if (nextId == selectedProfileIndex) this else copy(selectedProfileIndex = nextId)
 }
 
 fun InspectionScreenState.withCompatibilityReportPreview(appVersion: String): InspectionScreenState {

@@ -9,9 +9,12 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -130,7 +133,7 @@ class MainActivity : ComponentActivity() {
                 content.addCampaign(screenState.campaign)
                 content.addHeading("Roster")
                 if (screenState.roster.isEmpty()) content.addBody("No roster members found.")
-                else screenState.roster.forEach { content.addMerc(it) }
+                else content.addMercSelector(screenState)
                 content.addOpenButton(R.string.open_another_save)
             }
 
@@ -227,12 +230,40 @@ class MainActivity : ComponentActivity() {
         addLabelValue("Balance", campaign.balance)
     }
 
+    private fun LinearLayout.addMercSelector(state: InspectionScreenState.Success) {
+        val selected = state.selectedMerc ?: return
+        val selector = Spinner(this@MainActivity).apply {
+            id = View.generateViewId()
+            contentDescription = "Selected merc"
+            // Selection is owned by the ViewModel, not Android's view-state restoration.
+            isSaveEnabled = false
+            adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_item,
+                state.roster.map { "${it.displayName()} · Profile #${it.profileIndex}" },
+            ).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            setSelection(state.roster.indexOfFirst { it.profileIndex == selected.profileIndex })
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    val merc = state.roster.getOrNull(position) ?: return
+                    if (merc.profileIndex != selected.profileIndex) model.selectMerc(merc.profileIndex)
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }
+        addView(textView("Selected merc", 16f).apply { labelFor = selector.id })
+        addView(selector, matchWidth())
+        addMerc(selected)
+    }
+
+    private fun MercPresentation.displayName(): String = nickname
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "$name ($it)" }
+        ?: name
+
     private fun LinearLayout.addMerc(merc: MercPresentation) {
-        val displayName = merc.nickname
-            ?.takeIf { it.isNotBlank() }
-            ?.let { "${merc.name} ($it)" }
-            ?: merc.name
-        addHeading(displayName, 19f)
+        addHeading(merc.displayName(), 19f)
         addBody("Live/current tactical stats")
         addBody(merc.liveStats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
         addBody("Profile/base stats")

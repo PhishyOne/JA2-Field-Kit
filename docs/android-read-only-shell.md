@@ -41,6 +41,25 @@ provider last-modified timestamp, and the SHA-256 of the exact imported bytes.
 No URI, filesystem path, provider/account identifier, provider exception, save
 bytes, or parser-internal diagnostic reaches presentation.
 
+## Roster selection
+
+A labeled platform Spinner selects by exact validated numeric profile index.
+Names and nicknames are display text only; each option also shows its profile
+index so duplicate names remain distinguishable. Exactly one selected merc's
+Live/current tactical stats, Profile/base stats, and all 19 inventory slots
+appear at a time. An empty roster shows “No roster members found.” without a
+selector.
+
+Each successful inspection initially selects its first roster entry. Selection
+changes use only retained safe presentation facts and never import or inspect
+again. Unknown requests preserve a valid selection, falling back to the first
+entry if the stored ID is stale. The ephemeral selected profile index lives in
+the existing ViewModel screen state and survives Activity recreation for
+configuration changes while that ViewModel lives. A new inspection resets it;
+process death/new ViewModel creation does not restore it. No persistent UI
+storage or save bytes are added. Programmatic selection and repeated selection
+of the same ID do not publish another state.
+
 ## Local, USB, and cloud documents
 
 Local files and Downloads, USB storage exposed by an installed Android document

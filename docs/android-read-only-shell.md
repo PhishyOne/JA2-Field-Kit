@@ -50,6 +50,16 @@ Live/current tactical stats, Profile/base stats, and all 19 inventory slots
 appear at a time. An empty roster shows “No roster members found.” without a
 selector.
 
+Inventory uses four sections: Head / armor (Helmet, Head 1, Head 2, Vest,
+Legs), Hands (Main hand, Off hand), Big pockets (1–4), and Small pockets
+(1–8). Two equal-width columns of wrapping, selectable text keep each slot's
+label and exact “Empty” or “Item #<numeric id> · Count <numeric count>” visible.
+Grouping uses the validated role enum retained with each slot, never its label
+or input position. Duplicate or missing roles show an unavailable message instead
+of a partial grid. No item catalog or additional object facts are inferred.
+Selection continues to replace only the dedicated detail container, preserving
+the existing ScrollView and Spinner viewport/focus behavior.
+
 Each successful inspection initially selects its first roster entry. Selection
 changes use only retained safe presentation facts and never import or inspect
 again. Unknown requests preserve a valid selection, falling back to the first

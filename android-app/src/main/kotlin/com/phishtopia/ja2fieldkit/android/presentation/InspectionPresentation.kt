@@ -72,6 +72,7 @@ data class MercPresentation(
 data class StatPresentation(val label: String, val value: String)
 
 data class InventorySlotPresentation(
+    val role: InventorySlotRole,
     val label: String,
     val contents: InventoryContentsPresentation,
 )
@@ -257,6 +258,7 @@ object InspectionPresentationMapper {
         ),
         inventory = live.slots.map { slot ->
             InventorySlotPresentation(
+                role = slot.role,
                 label = slot.role.displayLabel(),
                 contents = if (slot.itemId == 0 && slot.objectCount == 0) {
                     InventoryContentsPresentation.Empty

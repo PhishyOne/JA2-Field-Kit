@@ -58,6 +58,7 @@ class InventoryPresentationMapperTest {
             slots.map { it.label },
         )
         assertEquals(19, slots.size)
+        assertEquals(InventorySlotRole.entries, slots.map { it.role })
         assertEquals(InventoryContentsPresentation.Empty, slots.first().contents)
         assertEquals(
             InventoryContentsPresentation.Occupied(itemId = 321, objectCount = 4),

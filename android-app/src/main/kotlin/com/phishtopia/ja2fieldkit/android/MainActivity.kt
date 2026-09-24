@@ -138,12 +138,13 @@ class MainActivity : ComponentActivity() {
 
             is InspectionScreenState.Success -> {
                 content.addHeading("Inspection complete")
-                content.addSource(screenState.source)
-                content.addFormat(screenState.format)
                 content.addCampaign(screenState.campaign)
                 content.addHeading("Roster")
                 if (screenState.roster.isEmpty()) content.addBody("No roster members found.")
                 else content.addMercSelector(screenState)
+                content.addHeading("Technical details")
+                content.addSource(screenState.source)
+                content.addFormat(screenState.format)
                 content.addOpenButton(R.string.open_another_save)
             }
 

@@ -142,7 +142,7 @@ class InventoryPresentationMapperTest {
 
     @Test
     fun retainedPresentationContainsNoRawRecordPayloadOrSaveByteArrays() {
-        val inspection = inspectionSuccess(format, listOf(7))
+        val inspection = inspectionSuccess(format, listOf(7, 9))
         val state = assertIs<InspectionScreenState.Success>(
             InspectionPresentationMapper.map(
                 source,
@@ -151,9 +151,10 @@ class InventoryPresentationMapperTest {
                     inspection,
                     records = mapOf((7 to InventorySlotRole.VEST) to (88 to 3)),
                 ),
-            ),
+            ).withSelectedMerc(9),
         )
 
+        assertEquals(9, state.selectedMerc?.profileIndex)
         // Walk actual retained values, including list elements, rather than only erased field types.
         fun assertSafe(value: Any?) {
             when (value) {
@@ -174,9 +175,9 @@ class InventoryPresentationMapperTest {
 
         val retainedTypes = listOf(
             state.javaClass,
-            state.roster.single().javaClass,
-            state.roster.single().inventory.first().javaClass,
-            state.roster.single().inventory[1].contents.javaClass,
+            state.selectedMerc!!.javaClass,
+            state.selectedMerc!!.inventory.first().javaClass,
+            state.selectedMerc!!.inventory[1].contents.javaClass,
         ).flatMap { type -> type.declaredFields.map { it.type } }
         assertFalse(retainedTypes.contains(ByteArray::class.java))
         assertFalse(retainedTypes.contains(InventoryObject::class.java))

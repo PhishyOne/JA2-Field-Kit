@@ -20,6 +20,7 @@ import com.phishtopia.ja2fieldkit.android.presentation.InspectionPresentationMap
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.SourceFailureKind
 import com.phishtopia.ja2fieldkit.android.presentation.withCompatibilityReportPreview
+import com.phishtopia.ja2fieldkit.android.presentation.withSelectedMerc
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -94,6 +95,11 @@ class InspectionViewModel : ViewModel() {
 
     fun showCompatibilityReportPreview() {
         val next = state.withCompatibilityReportPreview(BuildConfig.VERSION_NAME)
+        if (next !== state) publish(next)
+    }
+
+    fun selectMerc(profileIndex: Int) {
+        val next = state.withSelectedMerc(profileIndex)
         if (next !== state) publish(next)
     }
 

@@ -27,7 +27,8 @@ import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
 import com.phishtopia.ja2fieldkit.android.presentation.CampaignPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
-import com.phishtopia.ja2fieldkit.android.presentation.InventoryContentsPresentation
+import com.phishtopia.ja2fieldkit.android.presentation.groupInventory
+import com.phishtopia.ja2fieldkit.android.presentation.visibleText
 import com.phishtopia.ja2fieldkit.android.presentation.MercPresentation
 import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 
@@ -305,13 +306,29 @@ class MainActivity : ComponentActivity() {
         addBody("Profile/base stats")
         addBody(merc.profileStats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
         addHeading("Inventory", 17f)
-        merc.inventory.forEach { slot ->
-            val contents = when (val item = slot.contents) {
-                InventoryContentsPresentation.Empty -> "Empty"
-                is InventoryContentsPresentation.Occupied ->
-                    "Item #${item.itemId} · Count ${item.objectCount}"
+        val groups = groupInventory(merc.inventory)
+        if (groups == null) {
+            addBody("Inventory unavailable: inconsistent slots.")
+            return
+        }
+        groups.forEach { group ->
+            addHeading(group.title, 16f)
+            group.slots.chunked(2).forEach { slots ->
+                val row = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                }
+                slots.forEach { slot ->
+                    row.addView(textView(slot.visibleText(), 16f).apply {
+                        setPadding(dp(4), dp(8), dp(4), dp(8))
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                }
+                // Keep an odd final cell the same width as the other cells.
+                if (slots.size == 1) {
+                    row.addView(View(this@MainActivity),
+                        LinearLayout.LayoutParams(0, 0, 1f))
+                }
+                addView(row, matchWidth())
             }
-            addLabelValue(slot.label, contents)
         }
     }
 

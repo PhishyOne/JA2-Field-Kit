@@ -22,7 +22,7 @@ and is not retained as an accepted save. It lends one task-local byte snapshot
 to `inspectV01` and `inspectLiveMercState`, and displays the source filename,
 actual and optional provider sizes, optional provider timestamp,
 lowercase SHA-256, format, campaign summary, roster, profile/base stats, verified
-live/current tactical stats, 19-slot read-only live inventory, or sanitized
+live/current tactical stats, 19-slot grouped read-only live inventory, or sanitized
 failure codes. Local/Downloads, USB, and cloud documents use Android Storage Access
 Framework providers; open-with and share-to converge on the same importer. It
 requests no storage permission, retains no URI grant or save bytes, performs no

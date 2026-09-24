@@ -44,6 +44,9 @@ class Ja2SaveInspectorDetectionTest {
             val inventory = assertIs<LiveInventoryInspectionResult.Failure>(inspector.inspectLiveInventory(caller))
             assertEquals(result.format, inventory.format)
             assertEquals(result.failure, inventory.failure)
+            val live = assertIs<LiveMercStateInspectionResult.Failure>(inspector.inspectLiveMercState(caller))
+            assertEquals(result.format, live.format)
+            assertEquals(result.failure, live.failure)
             assertContentEquals(original, caller)
             val interpreters: List<(ByteArray) -> Any> = listOf(
                 inspector::parseBuild041202Header,
@@ -60,7 +63,7 @@ class Ja2SaveInspectorDetectionTest {
                 assertFalse(error.toString().contains("PAYLOAD"))
                 assertContentEquals(original, caller)
             }
-            assertEquals(7, calls)
+            assertEquals(8, calls)
         }
     }
 

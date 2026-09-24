@@ -4,15 +4,19 @@
 
 The Android app is a read-only consumer of
 `Ja2SaveInspector.inspectV01(ByteArray)` and
-`Ja2SaveInspector.inspectLiveInventory(ByteArray)`. Its single importer accepts
+`Ja2SaveInspector.inspectLiveMercState(ByteArray)`. Its single importer accepts
 a stream
 from one user-granted `content://` URI and optional provider metadata: display
 name, declared size, and last-modified timestamp. It sanitizes the filename,
 counts and SHA-256 hashes the bytes while reading, closes the stream, lends the
 private byte snapshot only to the two immediate inspection calls, and discards it
 after presentation mapping. The mapper requires an exact one-to-one profile-index
-match and all 19 canonical slots before presenting roster inventory; it retains
-only slot labels, empty state, numeric item IDs, and object counts. Core receives
+match, equal format, and all 19 canonical slots before presenting live state; it retains
+only safe text/numeric facts. Separate Live/current tactical stats and Profile/base
+stats sections distinguish their provenance. Leadership and wisdom appear only in
+Profile/base stats. Live life and max life are separate exact signed values, with
+no gameplay-range clamping. Inventory retains only slot labels, empty state,
+numeric item IDs, and object counts. Core receives
 bytes only; it never receives the URI, source category, or provider metadata.
 
 The maximum accepted and retained complete payload is **16 MiB**. The admitted

@@ -19,11 +19,11 @@ accept narrowly advertised open-with/share-to content URIs. It accepts and
 retains complete payloads up to 16 MiB; an oversized rejected stream may be
 transiently read beyond that boundary by up to one current 64 KiB buffer read
 and is not retained as an accepted save. It lends one task-local byte snapshot
-to `inspectV01` and `inspectLiveInventory`, and displays the source filename,
+to `inspectV01` and `inspectLiveMercState`, and displays the source filename,
 actual and optional provider sizes, optional provider timestamp,
-lowercase SHA-256, format, campaign summary, roster, stats, 19-slot read-only
-live inventory, or sanitized failure
-codes. Local/Downloads, USB, and cloud documents use Android Storage Access
+lowercase SHA-256, format, campaign summary, roster, profile/base stats, verified
+live/current tactical stats, 19-slot read-only live inventory, or sanitized
+failure codes. Local/Downloads, USB, and cloud documents use Android Storage Access
 Framework providers; open-with and share-to converge on the same importer. It
 requests no storage permission, retains no URI grant or save bytes, performs no
 scanning/upload, and never writes, exports, or modifies a save.

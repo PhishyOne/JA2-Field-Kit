@@ -19,6 +19,7 @@ import com.phishtopia.ja2fieldkit.core.format.SaveHeaderProbe
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
 import com.phishtopia.ja2fieldkit.core.model.CampaignSector
 import com.phishtopia.ja2fieldkit.core.model.CampaignSummaryV01
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStateInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
@@ -101,6 +102,17 @@ class Ja2SaveInspector private constructor(
         LiveInventoryInspectionResult.Success(
             format,
             NormalNonLinuxRosterDecoder.decodeInventoriesBuild041202(snapshot),
+        )
+    }
+
+    /** Read existing verified tactical stats and 19-slot inventory facts in one validated scan. */
+    fun inspectLiveMercState(bytes: ByteArray): LiveMercStateInspectionResult = inspectReadOnly(
+        bytes,
+        failure = LiveMercStateInspectionResult::Failure,
+    ) { snapshot, format ->
+        LiveMercStateInspectionResult.Success(
+            format,
+            NormalNonLinuxRosterDecoder.decodeLiveMercStatesBuild041202(snapshot),
         )
     }
 

@@ -7,10 +7,9 @@ import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveFamily
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
-import com.phishtopia.ja2fieldkit.core.model.InventoryPayload
-import com.phishtopia.ja2fieldkit.core.model.InventorySlot
+import com.phishtopia.ja2fieldkit.core.model.LiveMercState
 import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
-import com.phishtopia.ja2fieldkit.core.model.LiveInventoryInspectionResult
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStateInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionDiagnostic
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailure
@@ -60,7 +59,8 @@ data class CampaignPresentation(
 data class MercPresentation(
     val name: String,
     val nickname: String?,
-    val stats: List<StatPresentation>,
+    val profileStats: List<StatPresentation>,
+    val liveStats: List<StatPresentation>,
     val inventory: List<InventorySlotPresentation>,
 )
 
@@ -80,9 +80,9 @@ object InspectionPresentationMapper {
     fun map(
         source: ImportedSaveProvenance,
         result: SaveInspectionV01Result,
-        inventoryResult: LiveInventoryInspectionResult,
+        liveResult: LiveMercStateInspectionResult,
     ): InspectionScreenState = when (result) {
-        is SaveInspectionV01Result.Success -> mapSuccess(source, result, inventoryResult)
+        is SaveInspectionV01Result.Success -> mapSuccess(source, result, liveResult)
 
         is SaveInspectionV01Result.Failure -> mapFailure(source, result.format, result.failure)
     }
@@ -90,25 +90,25 @@ object InspectionPresentationMapper {
     private fun mapSuccess(
         source: ImportedSaveProvenance,
         result: SaveInspectionV01Result.Success,
-        inventoryResult: LiveInventoryInspectionResult,
+        liveResult: LiveMercStateInspectionResult,
     ): InspectionScreenState {
-        if (inventoryResult is LiveInventoryInspectionResult.Failure) {
-            return mapFailure(source, inventoryResult.format, inventoryResult.failure)
+        if (liveResult is LiveMercStateInspectionResult.Failure) {
+            return mapFailure(source, liveResult.format, liveResult.failure)
         }
-        inventoryResult as LiveInventoryInspectionResult.Success
+        liveResult as LiveMercStateInspectionResult.Success
         val rosterIds = result.roster.map { it.profileIndex }
-        val inventoryIds = inventoryResult.inventories.map { it.profileIndex }
+        val liveIds = liveResult.mercs.map { it.profileIndex }
         val canonicalRoles = InventorySlotRole.entries
-        val coherent = result.format == inventoryResult.format &&
+        val coherent = result.format == liveResult.format &&
             rosterIds.size == rosterIds.toSet().size &&
-            inventoryIds.size == inventoryIds.toSet().size &&
-            rosterIds.toSet() == inventoryIds.toSet() &&
-            inventoryResult.inventories.all { entry ->
+            liveIds.size == liveIds.toSet().size &&
+            rosterIds.toSet() == liveIds.toSet() &&
+            liveResult.mercs.all { entry ->
                 entry.slots.map { it.role } == canonicalRoles
             }
         if (!coherent) return coherenceFailure(source, result.format)
 
-        val inventoriesByProfile = inventoryResult.inventories.associateBy { it.profileIndex }
+        val liveByProfile = liveResult.mercs.associateBy { it.profileIndex }
         return InspectionScreenState.Success(
             source = source,
             format = mapFormat(result.format),
@@ -122,7 +122,7 @@ object InspectionPresentationMapper {
                 balance = result.campaign.balance.toString(),
             ),
             roster = result.roster.map { merc ->
-                mapMerc(merc, inventoriesByProfile.getValue(merc.profileIndex).slots)
+                mapMerc(merc, liveByProfile.getValue(merc.profileIndex))
             },
         )
     }
@@ -218,13 +218,13 @@ object InspectionPresentationMapper {
 
     private fun mapMerc(
         merc: MercRosterEntry,
-        inventory: List<InventorySlot>,
+        live: LiveMercState,
     ): MercPresentation = MercPresentation(
         name = PresentationTextSanitizer.sanitize(merc.name)
             .takeUnless(String::isBlank)
             ?: "Unknown merc",
         nickname = merc.nickname?.let(PresentationTextSanitizer::sanitize),
-        stats = listOf(
+        profileStats = listOf(
             StatPresentation("Health", merc.stats.health.display()),
             StatPresentation("Agility", merc.stats.agility.display()),
             StatPresentation("Dexterity", merc.stats.dexterity.display()),
@@ -237,15 +237,27 @@ object InspectionPresentationMapper {
             StatPresentation("Explosives", merc.stats.explosives.display()),
             StatPresentation("Medical", merc.stats.medical.display()),
         ),
-        inventory = inventory.map { slot ->
+        liveStats = listOf(
+            StatPresentation("Life", live.stats.life.toString()),
+            StatPresentation("Max life", live.stats.lifeMax.toString()),
+            StatPresentation("Agility", live.stats.agility.toString()),
+            StatPresentation("Dexterity", live.stats.dexterity.toString()),
+            StatPresentation("Strength", live.stats.strength.toString()),
+            StatPresentation("Experience", live.stats.experienceLevel.toString()),
+            StatPresentation("Marksmanship", live.stats.marksmanship.toString()),
+            StatPresentation("Mechanical", live.stats.mechanical.toString()),
+            StatPresentation("Explosives", live.stats.explosives.toString()),
+            StatPresentation("Medical", live.stats.medical.toString()),
+        ),
+        inventory = live.slots.map { slot ->
             InventorySlotPresentation(
                 label = slot.role.displayLabel(),
-                contents = if (slot.objectRecord.payload is InventoryPayload.Empty) {
+                contents = if (slot.itemId == 0 && slot.objectCount == 0) {
                     InventoryContentsPresentation.Empty
                 } else {
                     InventoryContentsPresentation.Occupied(
-                        itemId = slot.objectRecord.itemId,
-                        objectCount = slot.objectRecord.objectCount,
+                        itemId = slot.itemId,
+                        objectCount = slot.objectCount,
                     )
                 },
             )

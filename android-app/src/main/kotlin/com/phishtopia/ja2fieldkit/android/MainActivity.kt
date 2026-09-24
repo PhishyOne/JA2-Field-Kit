@@ -34,6 +34,9 @@ import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 class MainActivity : ComponentActivity() {
     private val model: InspectionViewModel by viewModels()
     private val stateObserver: (InspectionScreenState) -> Unit = ::render
+    private var renderedSuccess: InspectionScreenState.Success? = null
+    private var mercSelector: Spinner? = null
+    private var selectedMercDetail: LinearLayout? = null
 
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) model.inspect(applicationContext.contentResolver, uri, SourceProvenance.DOCUMENT_PICKER)
@@ -109,6 +112,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun render(screenState: InspectionScreenState) {
+        if (updateMercSelection(screenState)) return
+
+        // A full render replaces the view tree, including after Activity recreation.
+        renderedSuccess = null
+        mercSelector = null
+        selectedMercDetail = null
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addTitle(getString(R.string.app_name))
@@ -171,7 +180,28 @@ class MainActivity : ComponentActivity() {
             )
         }
         setContentView(root)
+        renderedSuccess = screenState as? InspectionScreenState.Success
         ViewCompat.requestApplyInsets(root)
+    }
+
+    private fun updateMercSelection(screenState: InspectionScreenState): Boolean {
+        val previous = renderedSuccess ?: return false
+        if (screenState !is InspectionScreenState.Success) return false
+        if (screenState.selectedProfileIndex == previous.selectedProfileIndex ||
+            screenState.roster !== previous.roster ||
+            screenState != previous.copy(selectedProfileIndex = screenState.selectedProfileIndex)
+        ) return false
+        val selector = mercSelector ?: return false
+        val detail = selectedMercDetail ?: return false
+        val selected = screenState.selectedMerc ?: return false
+
+        // Keep the scroll viewport and selector (including accessibility focus) attached.
+        renderedSuccess = screenState
+        detail.removeAllViews()
+        detail.addMerc(selected)
+        val position = screenState.roster.indexOfFirst { it.profileIndex == selected.profileIndex }
+        if (selector.selectedItemPosition != position) selector.setSelection(position)
+        return true
     }
 
     private fun View.applySafeContentPadding(base: ContentPadding) {
@@ -245,8 +275,10 @@ class MainActivity : ComponentActivity() {
             setSelection(state.roster.indexOfFirst { it.profileIndex == selected.profileIndex })
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    if (mercSelector !== parent) return
                     val merc = state.roster.getOrNull(position) ?: return
-                    if (merc.profileIndex != selected.profileIndex) model.selectMerc(merc.profileIndex)
+                    // ViewModel idempotency also covers programmatic selection callbacks.
+                    model.selectMerc(merc.profileIndex)
                 }
 
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -254,7 +286,11 @@ class MainActivity : ComponentActivity() {
         }
         addView(textView("Selected merc", 16f).apply { labelFor = selector.id })
         addView(selector, matchWidth())
-        addMerc(selected)
+        mercSelector = selector
+        selectedMercDetail = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            addMerc(selected)
+        }.also { addView(it, matchWidth()) }
     }
 
     private fun MercPresentation.displayName(): String = nickname

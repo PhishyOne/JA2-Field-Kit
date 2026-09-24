@@ -44,6 +44,17 @@ class MercSelectionTest {
     }
 
     @Test
+    fun selectorCallbacksAfterEachChangeCannotRepublishOrBlockReturningToFirstMerc() {
+        val initial = inspected()
+        val second = assertIs<InspectionScreenState.Success>(initial.withSelectedMerc(4))
+        assertSame(second, second.withSelectedMerc(4))
+        val firstAgain = assertIs<InspectionScreenState.Success>(second.withSelectedMerc(9))
+        assertEquals(9, firstAgain.selectedProfileIndex)
+        assertSame(initial.roster.first(), firstAgain.selectedMerc)
+        assertSame(firstAgain, firstAgain.withSelectedMerc(9))
+    }
+
+    @Test
     fun unknownRequestsPreserveValidSelectionAndStaleStateFallsBackToFirst() {
         val selected = assertIs<InspectionScreenState.Success>(inspected().withSelectedMerc(4))
         assertSame(selected, selected.withSelectedMerc(999))

@@ -4,11 +4,20 @@
 
 This review supports Issue #8's license-selection decision. It is an engineering
 inventory and risk review, not legal advice, legal representation, a formal
-clean-room report, or legal clearance. It reviews Field Kit `main` exactly at
-commit `0fae25822b22174d21b1c3612613495ee5d04aea`, plus the expression cleanup in
-the pull request that adds this document. The review is limited to material in
-this repository and the evidence described below; legal conclusions depend on
-the facts and jurisdiction.
+clean-room report, or legal clearance. The document originated with the earlier
+expression-independence cleanup, reviewing Field Kit `main` at commit
+`0fae25822b22174d21b1c3612613495ee5d04aea` plus that earlier pull request's
+selector/checksum expression cleanup.
+
+The Issue #60 extension in PR #61 reviews authoritative base
+`2b4b6969c1560b921e75ce494be304a014bea080` and pre-repair Issue #60 candidate
+`f7b37ff9ac386398b2d4303fcb3c3c056c9bcc7f`, whose tree is
+`1304078edd5c3635e0b2545a52d56e4e1dc3a9f3`: specifically the full 228-index
+digest-only oracle plus the accompanying detector tests/docs. This follow-up
+repair changes only the review-document scope wording; final exact-head review
+must still bind the post-repair candidate before merge. The review is limited
+to material in this repository and the evidence described below; legal
+conclusions depend on the facts and jurisdiction.
 
 ## External licenses and legal evidence
 
@@ -76,19 +85,19 @@ tables or source blobs found in the completed audit. It is not part of current
 `main`. A future license on `main` would not automatically bless or relicense
 material on every stale branch.
 
-## Findings and cleanup in this pull request
+## Historical findings and prior expression-independence cleanup
 
-Two implementations on the reviewed main were too close to the statement and
-control-flow shape of their source evidence:
+Two implementations on the earlier reviewed `main` were too close to the
+statement and control-flow shape of their source evidence:
 
 - `NormalSaveEncryptionSelector.select` followed the selector's nested
-  divisibility branches. This pull request expresses the equivalent nonnegative
+  divisibility branches. The earlier cleanup expressed the equivalent nonnegative
   uint32 random contribution as data: add one for divisibility by 2, one for 14,
   one for 322, and two for 1106. It preserves uint32 wrapping, position modulo,
   nineteen-table banks, option offsets, and fail-closed inputs without adding a
   German selector.
 - `NormalNonLinuxRosterDecoder.sourceChecksum` followed the stat add/multiply
-  statements line by line. This pull request represents the five documented
+  statements line by line. The earlier cleanup represented the five documented
   serialized offset pairs as data and evaluates the modulo-2^32 recurrence,
   followed by the profile and nineteen item/count contributions.
 

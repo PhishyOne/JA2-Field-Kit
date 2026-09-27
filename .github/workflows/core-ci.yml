@@ -119,3 +119,35 @@ jobs:
           :android-app:lintDebug
           :android-app:assembleDebug
           --no-daemon
+
+      - name: Record debug APK provenance
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android-app/build/outputs/apk/debug/android-app-debug.apk"
+          test -f "$apk"
+          certificates=$("$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --print-certs "$apk")
+          certificate_sha256=$(printf '%s\n' "$certificates" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          [[ "$certificate_sha256" =~ ^[0-9a-fA-F]{64}$ ]]
+          apk_size=$(stat -c %s "$apk")
+          apk_sha256=$(sha256sum "$apk" | cut -d ' ' -f 1)
+          {
+            printf 'source_sha=%s\n' "$GITHUB_SHA"
+            printf 'build_type=debug\ntest_only=true\n'
+            printf 'apk_size_bytes=%s\n' "$apk_size"
+            printf 'apk_sha256=%s\n' "$apk_sha256"
+            printf 'signer_1_certificate_sha256=%s\n' "$certificate_sha256"
+          } > "$apk.provenance.txt"
+
+      - name: Upload test-only debug APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ja2-field-kit-debug-${{ github.sha }}
+          path: |
+            android-app/build/outputs/apk/debug/android-app-debug.apk
+            android-app/build/outputs/apk/debug/android-app-debug.apk.provenance.txt
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

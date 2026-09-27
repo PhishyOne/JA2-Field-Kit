@@ -34,24 +34,40 @@ A `SUPPORTED` result requires all of the following:
 6. the recovered rotation's SHA-256 identity equals an independently admitted
    digest for the exact header-selected index.
 
-The public oracle is deliberately minimal. It contains two non-secret digests
-for indexes `124` and `139`, each derived from the 49-byte row at that index in
-`src/game/Tactical/Tactical_Save.cc` at immutable JA2 Reborn commit
+The public oracle is deliberately minimal. It contains only five non-secret
+rotation digests for indexes `79`, `80`, `82`, `124`, and `139`, each matching
+the corresponding 49-byte row in `src/game/Tactical/Tactical_Save.cc` at
+immutable RealTommyGreen/JA2-Reborn commit
 `743f38a6ca86c81893376c2576277db660320170` (source blob
-`5640f1a623f609f973020b0a617bbc00b2dafe75`). The row bytes and the other 226
-production rows are not stored in this repository. The index-`124` digest is
-`384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306`,
-and the index-`139` digest is
-`b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc`.
+`5640f1a623f609f973020b0a617bbc00b2dafe75`). No production row bytes are stored
+in this repository.
+
+| Index | Rotation SHA-256 |
+| --- | --- |
+| `79` | `260bca25c2a15a8bf66c3d1651577f71e3852e4791380f6c933513db47786520` |
+| `80` | `dd93d880a6afdf0ef265377363d57666e7b5fa21ba766c9b9ed023530daf8005` |
+| `82` | `ef2213a747c89541042ce3bb00e90cb7e4758c002290930bdc96b0273bd974d1` |
+| `124` | `384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306` |
+| `139` | `b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc` |
+
+Admission of indexes `79`, `80`, and `82` is justified by authorized private
+real-save evidence independently inspected outside the repository and
+cross-checked against the same pinned upstream revision and source blob.
+Private save bytes, filenames, hashes, and other private payload-derived facts
+are not retained in the repository. Only the admitted public rotation digest
+identities are recorded here. This is engineering interoperability evidence,
+not legal clearance.
+
 The public synthetic header independently exercises index `139`; its body
 intentionally uses a different project-authored rotation and therefore does
 not become supported under the production oracle. Public regression coverage
-for index `124` verifies the digest-only oracle domain and fail-closed mismatch
-behavior without publishing either production row.
+checks the exact admitted set and fail-closed digest mismatches for indexes
+`79`, `80`, `82`, and `124` using that same synthetic body. Neighboring index
+`81` remains a candidate with no admitted oracle.
 
-Either digest establishes selector/body identity against that pinned table. It
-does not authenticate the whole save or identify which compatible executable
-wrote it. In particular, admitting index `124` does not prove producer family.
+An admitted digest match establishes selector/body identity against that pinned
+table. It does not authenticate the whole save or identify which compatible
+executable wrote it. Producer family remains `UNKNOWN`.
 
 ## Decision matrix
 

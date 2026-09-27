@@ -4,11 +4,20 @@
 
 This review supports Issue #8's license-selection decision. It is an engineering
 inventory and risk review, not legal advice, legal representation, a formal
-clean-room report, or legal clearance. It reviews Field Kit `main` exactly at
-commit `0fae25822b22174d21b1c3612613495ee5d04aea`, plus the expression cleanup in
-the pull request that adds this document. The review is limited to material in
-this repository and the evidence described below; legal conclusions depend on
-the facts and jurisdiction.
+clean-room report, or legal clearance. The document originated with the earlier
+expression-independence cleanup, reviewing Field Kit `main` at commit
+`0fae25822b22174d21b1c3612613495ee5d04aea` plus that earlier pull request's
+selector/checksum expression cleanup.
+
+The Issue #60 extension in PR #61 reviews authoritative base
+`2b4b6969c1560b921e75ce494be304a014bea080` and pre-repair Issue #60 candidate
+`f7b37ff9ac386398b2d4303fcb3c3c056c9bcc7f`, whose tree is
+`1304078edd5c3635e0b2545a52d56e4e1dc3a9f3`: specifically the full 228-index
+digest-only oracle plus the accompanying detector tests/docs. This follow-up
+repair changes only the review-document scope wording; final exact-head review
+must still bind the post-repair candidate before merge. The review is limited
+to material in this repository and the evidence described below; legal
+conclusions depend on the facts and jurisdiction.
 
 ## External licenses and legal evidence
 
@@ -57,9 +66,18 @@ equations as interoperability facts or methods. Project-authored Kotlin and
 Python structure, diagnostics, validation policy, UI, and fixture tooling are
 Field Kit expression of those documented facts.
 
-The production repository contains SHA-256 identities for only two rotation
-rows, not the row bytes. It contains no production rotation array or table, no
-upstream source files, and no real private-save bytes. Public fixtures are
+The production repository now contains SHA-256 identities for the full 228-index
+selector domain, not production 49-byte rotation row bytes or reconstructed
+rotation data. Issue #60 uses only the digest facts from a separate read-only
+audit of JA2-Reborn commit `743f38a6ca86c81893376c2576277db660320170`,
+`src/game/Tactical/Tactical_Save.cc` blob
+`5640f1a623f609f973020b0a617bbc00b2dafe75`. Its indexed digest list is
+project-authored; no upstream expression, comments, or initializer layout is
+incorporated. This expands campaign-state compatibility, not producer
+attribution; family stays `UNKNOWN` and missing-oracle behavior remains a
+fail-closed injected test seam. This is engineering interoperability/provenance,
+not legal clearance. There are no production rotation-byte arrays or resources,
+upstream source files, or real private-save bytes. Public fixtures are
 independently generated synthetic evidence subject to the fixture policy.
 
 Stale public PR #1 contains documentation and provenance, with no copied numeric
@@ -67,19 +85,19 @@ tables or source blobs found in the completed audit. It is not part of current
 `main`. A future license on `main` would not automatically bless or relicense
 material on every stale branch.
 
-## Findings and cleanup in this pull request
+## Historical findings and prior expression-independence cleanup
 
-Two implementations on the reviewed main were too close to the statement and
-control-flow shape of their source evidence:
+Two implementations on the earlier reviewed `main` were too close to the
+statement and control-flow shape of their source evidence:
 
 - `NormalSaveEncryptionSelector.select` followed the selector's nested
-  divisibility branches. This pull request expresses the equivalent nonnegative
+  divisibility branches. The earlier cleanup expressed the equivalent nonnegative
   uint32 random contribution as data: add one for divisibility by 2, one for 14,
   one for 322, and two for 1106. It preserves uint32 wrapping, position modulo,
   nineteen-table banks, option offsets, and fail-closed inputs without adding a
   German selector.
 - `NormalNonLinuxRosterDecoder.sourceChecksum` followed the stat add/multiply
-  statements line by line. This pull request represents the five documented
+  statements line by line. The earlier cleanup represented the five documented
   serialized offset pairs as data and evaluates the modulo-2^32 recurrence,
   followed by the profile and nineteen item/count contributions.
 

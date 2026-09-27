@@ -60,24 +60,40 @@ class SaveFormatDetectorTest {
     }
 
     @Test
-    fun productionOracleAdmitsOnlyPinnedDigestsForIndexes124And139() {
-        val admitted = (0 until NormalSaveEncryptionSelector.ROTATION_TABLE_COUNT)
-            .map(::NormalRotationTableIndex)
-            .mapNotNull { index ->
-                Build041202RotationDigestOracle.digestFor(index)?.let { index.value to it }
-            }
+    fun productionOracleCoversEntireSelectorDomainWithUniqueLowercaseDigests() {
+        val oracle: RotationDigestOracle = Build041202RotationDigestOracle
+        assertEquals(228, NormalSaveEncryptionSelector.ROTATION_TABLE_COUNT)
+        val digests = (0..227).map { index ->
+            val digest = kotlin.test.assertNotNull(oracle.digestFor(NormalRotationTableIndex(index)))
+            assertTrue(digest.hexadecimal.matches(Regex("[0-9a-f]{64}")), "index $index")
+            digest.hexadecimal
+        }
+        assertEquals(228, digests.toSet().size)
+        // Pins the complete ordered audit without duplicating its mapping or row material.
+        val identity = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(digests.joinToString("\n").toByteArray(Charsets.US_ASCII))
+            .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+        assertEquals("0dfe9f0577fa4d50fc52e14f011c4f537ca2b60f76d8e2e1281200d95592b46c", identity)
+    }
 
-        assertEquals(
-            listOf(
-                124 to RotationTableDigest.parse(
-                    "384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306",
-                ),
-                139 to RotationTableDigest.parse(
-                    "b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc",
-                ),
-            ),
-            admitted,
+    @Test
+    fun productionOraclePinsRepresentativeAndPreviouslyAdmittedIdentities() {
+        val expected = mapOf(
+            0 to "bfbe609a5c030aaf12ee8a47e8e31d2c5f52371112c74824537eebe7971a1d4a",
+            1 to "6d01cfc9edf519068df0f6e27f1525b5be8cfea7d4ddcb1d9e29a1fc74fc708b",
+            18 to "6a004cbaffb3f05c37bee2c85aacecc527cadcfc76c612ac684b5b608c9736ca",
+            19 to "005bc1222699cb5bc927280de76137c2a5e3f3d3f68e74b7eac1cbb96c6f974e",
+            124 to "384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306",
+            139 to "b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc",
+            227 to "f64cb39cba1b50601a22fd41c0b135bea0ebd68f4d8e9326996d948177ed2558",
         )
+        expected.forEach { (index, digest) ->
+            assertEquals(
+                RotationTableDigest.parse(digest),
+                Build041202RotationDigestOracle.digestFor(NormalRotationTableIndex(index)),
+                "index $index",
+            )
+        }
     }
 
     @Test
@@ -113,7 +129,11 @@ class SaveFormatDetectorTest {
 
         for ((compatibility, bytes) in cases) {
             val failure = assertFailsWith<SaveInterpretationAdmissionException> {
-                Ja2SaveInspector().parseBuild041202NormalNonLinuxProfiles(bytes)
+                (if (compatibility == SaveCompatibility.CANDIDATE) {
+                    Ja2SaveInspector.withRotationDigestOracleForTesting(oracle())
+                } else {
+                    Ja2SaveInspector()
+                }).parseBuild041202NormalNonLinuxProfiles(bytes)
             }
             assertEquals(compatibility, failure.compatibility)
         }
@@ -292,6 +312,7 @@ class SaveFormatDetectorTest {
 
         val result = SaveFormatDetector.detect(save, oracle(139 to SYNTHETIC_ROTATION_DIGEST))
 
+        SaveFormatDetector.detect(save)
         assertContentEquals(before, save)
         save.fill(0)
         assertEquals(SaveCompatibility.SUPPORTED, result.compatibility)

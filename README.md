@@ -109,6 +109,21 @@ conflicting bwrap policy.
 
 A Gradle wrapper will be added once the initial build is validated, rather than committing an unverified generated wrapper binary.
 
+Successful main-push CI publishes the test-only debug APK as the Actions artifact
+`ja2-field-kit-debug-<exact source SHA>`, retained for 7 days. A dedicated
+publication job rebuilds the debug APK after both fixture-policy and test jobs
+succeed, including Android unit tests, lint, and debug assembly. Pull requests
+and feature-branch pushes do not publish this artifact. Its adjacent
+`.apk.provenance.txt` file
+records the exact source SHA, APK SHA-256, APK byte size, debug/test-only markers,
+and a verified signing certificate summary (the first signer's SHA-256 digest).
+
+This is test delivery, not Play, GitHub Release, or public release distribution.
+It uses normal debug signing: the CI debug signing identity may differ between
+runs, so a later artifact may require uninstall/reinstall instead of an in-place
+update. Stable signing and public distribution require separate future
+authorization.
+
 ## Compatibility targets
 
 1. JA2 Reborn

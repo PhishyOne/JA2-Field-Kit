@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.core
 
 import com.phishtopia.ja2fieldkit.core.format.*
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStateInspectionResult
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
@@ -17,6 +18,8 @@ class Ja2MarksmanshipEditorTest {
                 records.fill(0, id * 716, id * 716 + 80)
                 records[id * 716] = ('A'.code + id % 26).toByte()
                 records[id * 716 + 60] = ('a'.code + id % 26).toByte()
+                records[id * 716 + 353] = 89
+                putU32(records, id * 716 + 696, independentChecksum(records.copyOfRange(id * 716, (id + 1) * 716)))
             }
         }
     }
@@ -29,8 +32,8 @@ class Ja2MarksmanshipEditorTest {
         MarksmanshipEditRequest(id, plain[id * 716 + 353].toInt(), newValue)
 
     @Test
-    fun rosterAndNonRosterTargetsPreserveEveryByteAndParsedFact() {
-        for (id in listOf(0, 7, 42, 169)) {
+    fun hiredTargetsPreserveEveryByteAndParsedFact() {
+        for (id in listOf(7, 42)) {
             val source = save()
             val original = source.copyOf()
             val request = request(id)
@@ -40,7 +43,12 @@ class Ja2MarksmanshipEditorTest {
             assertEquals(source.size, candidate.size)
             val start = PROFILE_START + id * 716
             assertContentEquals(source.copyOfRange(0, start + 353), candidate.copyOfRange(0, start + 353))
-            assertContentEquals(source.copyOfRange(start + 716, source.size), candidate.copyOfRange(start + 716, candidate.size))
+            val soldierStart = soldierStart(id)
+            for (offset in source.indices) {
+                if (offset !in start + 353 until start + 716 && offset !in soldierStart + 1377 until soldierStart + 2328) {
+                    assertEquals(source[offset], candidate[offset], "outside records/prefix $offset")
+                }
+            }
             val decrypted = NormalSaveBlockDecryptor.decryptBlock(candidate.copyOfRange(start, start + 716), 716, rotation)
             assertEquals(55, decrypted[353].toInt())
             for (offset in 0 until 716) {
@@ -58,8 +66,18 @@ class Ja2MarksmanshipEditorTest {
             assertEquals(oldInspection.roster.map {
                 if (it.profileIndex == id) it.copy(stats = it.stats.copy(marksmanship = 55)) else it
             }, newInspection.roster)
-            // Entire soldier area is outside the exact target record, including current stats.
-            assertContentEquals(source.copyOfRange(PROFILE_END, source.size), candidate.copyOfRange(PROFILE_END, candidate.size))
+            val oldSoldier = NormalSaveBlockDecryptor.decryptBlock(source.copyOfRange(soldierStart, soldierStart + 2328), 2328, rotation)
+            val newSoldier = NormalSaveBlockDecryptor.decryptBlock(candidate.copyOfRange(soldierStart, soldierStart + 2328), 2328, rotation)
+            assertEquals(55, newSoldier[1377].toInt())
+            for (offset in oldSoldier.indices) {
+                if (offset != 1377 && offset !in 2208..2211) assertEquals(oldSoldier[offset], newSoldier[offset], "soldier $offset")
+            }
+            assertEquals(independentSoldierChecksum(newSoldier), u32(newSoldier, 2208))
+            assertFalse(u32(oldSoldier, 2208) == u32(newSoldier, 2208))
+            assertFalse(u32(plain, id * 716 + 696) == u32(decrypted, 696))
+            val oldLive = assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(source))
+            val newLive = assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(candidate))
+            assertTrue(verifyLiveMarksmanship(request, oldInspection.format, oldLive, newLive))
             assertEquals(MarksmanshipVerificationCheck.entries.toList(), success.verification.map { it.relation })
             assertTrue(success.verification.all { it.outcome == EditVerificationOutcome.PASSED })
         }
@@ -81,7 +99,7 @@ class Ja2MarksmanshipEditorTest {
     fun provenanceIsDeterministicExactAndOutputIsDefensivelyOwned() {
         val source = save()
         val original = source.copyOf()
-        val request = request(7, -128)
+        val request = request(7, 0)
         val first = assertIs<MarksmanshipEditResult.VerifiedCandidate>(editor().edit(source, request))
         val second = assertIs<MarksmanshipEditResult.VerifiedCandidate>(editor().edit(source, request))
         assertEquals(first.provenance, second.provenance)
@@ -93,11 +111,11 @@ class Ja2MarksmanshipEditorTest {
         val canonical = ByteArray(12)
         putU32(canonical, 0, 7)
         putU32(canonical, 4, request.expectedCurrentMarksmanship.toLong())
-        putU32(canonical, 8, -128)
+        putU32(canonical, 8, 0)
         assertEquals(canonical.joinToString("") { "%02x".format(it) }, first.provenance.canonicalRequest)
         assertEquals(MarksmanshipCapabilityIdentity.PROJECT_AUTHORED_SYNTHETIC_V103, first.provenance.capabilityIdentity)
         assertEquals(1, first.provenance.capabilityRevision)
-        assertEquals(1, first.provenance.transactionModelVersion)
+        assertEquals(2, first.provenance.transactionModelVersion)
         assertEquals(EditVerificationOutcome.PASSED, first.provenance.verificationOutcome)
         source.fill(0)
         first.candidateBytes.fill(0)
@@ -120,8 +138,8 @@ class Ja2MarksmanshipEditorTest {
     }
 
     @Test
-    fun signedRepresentationEndpointsAreAcceptedWithoutGameplayClaims() {
-        for (value in listOf(-128, -1, 0, 100, 127)) {
+    fun gameplayEndpointsAreAccepted() {
+        for (value in listOf(0, 100)) {
             assertIs<MarksmanshipEditResult.VerifiedCandidate>(editor().edit(save(), request(newValue = value)))
         }
     }
@@ -129,7 +147,7 @@ class Ja2MarksmanshipEditorTest {
     @Test
     fun mismatchDisabledCapabilityAndInvalidSourceFailClosed() {
         val source = save()
-        fail(editor().edit(source, request().copy(expectedCurrentMarksmanship = 127)),
+        fail(editor().edit(source, request().copy(expectedCurrentMarksmanship = 88)),
             MarksmanshipEditStage.PRECONDITION, MarksmanshipEditReason.EXPECTED_CURRENT_MISMATCH)
         fail(Ja2MarksmanshipEditor().edit(source, request()),
             MarksmanshipEditStage.CAPABILITY, MarksmanshipEditReason.CAPABILITY_DISABLED)
@@ -167,7 +185,7 @@ class Ja2MarksmanshipEditorTest {
             )
             if (mode == "campaign") {
                 fail(result, MarksmanshipEditStage.VERIFICATION, MarksmanshipEditReason.VERIFICATION_MISMATCH)
-                assertEquals(2, calls)
+                assertEquals(4, calls)
             } else {
                 fail(result, MarksmanshipEditStage.CANDIDATE_PARSE, MarksmanshipEditReason.INVALID_CANDIDATE)
                 assertEquals(1, calls)
@@ -177,7 +195,7 @@ class Ja2MarksmanshipEditorTest {
 
     @Test
     fun mutatingDetectorsAreRejectedOnSourceAndCandidateBeforeParsing() {
-        for (mutateAt in listOf(1, 2, 3, 4)) {
+        for (mutateAt in listOf(1, 2, 3, 4, 5, 6, 7)) {
             var calls = 0
             val alteredInspector = Ja2SaveInspector.withDetectorForTesting { bytes ->
                 val detection = SaveFormatDetector.detect(bytes, oracle)
@@ -188,8 +206,8 @@ class Ja2MarksmanshipEditorTest {
             val original = source.copyOf()
             val result = privilegedEditor(oracle, inspector = alteredInspector).edit(source, request())
             fail(result,
-                if (mutateAt <= 2) MarksmanshipEditStage.SOURCE_PARSE else MarksmanshipEditStage.CANDIDATE_PARSE,
-                if (mutateAt <= 2) MarksmanshipEditReason.INVALID_SOURCE else MarksmanshipEditReason.INVALID_CANDIDATE)
+                if (mutateAt <= 3) MarksmanshipEditStage.SOURCE_PARSE else MarksmanshipEditStage.CANDIDATE_PARSE,
+                if (mutateAt <= 3) MarksmanshipEditReason.INVALID_SOURCE else MarksmanshipEditReason.INVALID_CANDIDATE)
             assertEquals(mutateAt, calls)
             assertContentEquals(original, source)
         }
@@ -298,6 +316,76 @@ class Ja2MarksmanshipEditorTest {
         }
     }
 
+    @Test
+    fun nonRosterVehicleAndDisagreementFailClosed() {
+        for (id in listOf(0, 169)) fail(editor().edit(save(), request(id)),
+            MarksmanshipEditStage.PRECONDITION, MarksmanshipEditReason.TARGET_NOT_HIRED)
+        val disagreement = save().also { rewriteSoldier(it, 7) { bytes -> bytes[1377] = 88 } }
+        fail(editor().edit(disagreement, request()), MarksmanshipEditStage.PRECONDITION,
+            MarksmanshipEditReason.PROFILE_LIVE_DISAGREEMENT)
+        val vehicle = save().also {
+            rewriteSoldier(it, 7) { bytes -> bytes[9] = 0x80.toByte() }
+            it[291] = 1
+        }
+        // Header count participates in rotation selection; bind this synthetic variant's exact index.
+        val vehicleIndex = NormalSaveEncryptionSelector.select(
+            NormalEncryptionHeaderInputs.fromBuild041202(SaveHeaderParser.parseBuild041202(vehicle)))
+        val vehicleOracle = RotationDigestOracle { index ->
+            if (index == vehicleIndex) RotationTableDigest.from(rotation) else null
+        }
+        assertIs<SaveInspectionV01Result.Success>(
+            Ja2SaveInspector.withRotationDigestOracleForTesting(vehicleOracle).inspectV01(vehicle))
+        fail(privilegedEditor(vehicleOracle).edit(vehicle, request()), MarksmanshipEditStage.PRECONDITION,
+            MarksmanshipEditReason.TARGET_NOT_HIRED)
+        val duplicate = save().also { rewriteSoldier(it, 42) { bytes -> bytes[1825] = 7 } }
+        fail(editor().edit(duplicate, request()), MarksmanshipEditStage.SOURCE_PARSE, MarksmanshipEditReason.INVALID_SOURCE)
+    }
+
+    @Test
+    fun soldierOnlyProfileOnlyAndUnrelatedPlaintextDamageCannotVerify() {
+        val source = save()
+        val candidate = assertIs<MarksmanshipEditResult.VerifiedCandidate>(editor().edit(source, request())).candidateBytes
+        val before = assertIs<SaveInspectionV01Result.Success>(inspector().inspectV01(source))
+        val profiles = inspector().parseBuild041202NormalNonLinuxProfiles(source)
+        for (mode in listOf("profile-only", "soldier-only", "inventory", "metadata", "other-stat", "soldier-checksum")) {
+            val damaged = candidate.copyOf()
+            when (mode) {
+                "profile-only" -> source.copyInto(damaged, soldierStart(7), soldierStart(7), soldierStart(7) + 2328)
+                "soldier-only" -> source.copyInto(damaged, PROFILE_START + 7 * 716, PROFILE_START + 7 * 716, PROFILE_START + 8 * 716)
+                "inventory" -> rewriteSoldier(damaged, 7) { it[25]++ }
+                "metadata" -> rewriteSoldier(damaged, 7) { it[1500]++ }
+                "other-stat" -> rewriteSoldier(damaged, 42) { it[868]++ }
+                "soldier-checksum" -> damaged[soldierStart(7) + 2208]++
+            }
+            assertIs<MarksmanshipEditResult.Failure>(validatePrivilegedCandidate(editor(), source, damaged,
+                request(), before, profiles, rotation), mode)
+        }
+    }
+
+    private fun soldierStart(id: Int) = PROFILE_END + 1 + (if (id == 7) 0 else 2328 + 4 + 20 + 1 + 128 + 1)
+
+    private fun rewriteSoldier(save: ByteArray, id: Int, change: (ByteArray) -> Unit) {
+        val start = soldierStart(id)
+        val plain = NormalSaveBlockDecryptor.decryptBlock(save.copyOfRange(start, start + 2328), 2328, rotation)
+        change(plain)
+        putU32(plain, 2208, independentSoldierChecksum(plain))
+        encrypt(plain).copyInto(save, start)
+    }
+
+    private fun independentSoldierChecksum(record: ByteArray): Long {
+        var value = java.math.BigInteger.ONE
+        for ((a, b) in listOf(868 to 917, 880 to 840, 886 to 1377, 1372 to 916, 1378 to 849)) {
+            value = (value + (record[a].toLong() + 1).toBigInteger()) * (record[b].toLong() + 1).toBigInteger()
+        }
+        value += (1 + (record[1825].toInt() and 255)).toBigInteger()
+        repeat(19) { slot ->
+            val offset = 12 + 36 * slot
+            value += ((record[offset].toInt() and 255) + ((record[offset + 1].toInt() and 255) shl 8) +
+                (record[offset + 2].toInt() and 255)).toBigInteger()
+        }
+        return value.mod(java.math.BigInteger.ONE.shiftLeft(32)).toLong()
+    }
+
     private fun save(): ByteArray {
         val prefix = ByteArray(PROFILE_END)
         resource("synthetic-build-04.12.02-header-v1").copyInto(prefix)
@@ -313,9 +401,16 @@ class Ja2MarksmanshipEditorTest {
                 val soldier = ByteArray(2328)
                 soldier[0] = slot.toByte(); soldier[8] = 8; soldier[751] = 1
                 soldier[1825] = id.toByte()
-                // With zero stat/inventory inputs, five (+1)*1 steps then +1+profile.
-                putU32(soldier, 2208, (7 + id).toLong())
-                output.write(encrypt(soldier)); output.write(ByteArray(5))
+                soldier[1377] = plain[id * 716 + 353]
+                soldier[868] = 64; soldier[917] = 90; soldier[840] = 66
+                soldier[12] = 17; soldier[14] = 2; soldier[25] = 93 // inventory opaque payload
+                soldier[1500] = 87 // unrelated progress metadata
+                putU32(soldier, 2208, independentSoldierChecksum(soldier))
+                output.write(encrypt(soldier))
+                output.write(byteArrayOf(1, 0, 0, 0)) // one path node
+                output.write(ByteArray(20) { (it + 3).toByte() })
+                output.write(1) // keyring present
+                output.write(ByteArray(128) { (it + 9).toByte() })
             }
         }
         output.write(byteArrayOf(11, 22, 33)) // Opaque sentinel suffix.

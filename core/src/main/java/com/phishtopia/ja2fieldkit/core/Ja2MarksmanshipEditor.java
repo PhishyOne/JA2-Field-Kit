@@ -17,7 +17,7 @@ import static com.phishtopia.ja2fieldkit.core.MarksmanshipEditStage.*;
 import static com.phishtopia.ja2fieldkit.core.MarksmanshipVerificationCheck.*;
 
 /**
- * Bounded profile/base marksmanship kernel. Production capability remains disabled.
+ * Bounded synchronized hired-merc marksmanship kernel. Production capability remains disabled.
  * Callers must not mutate source concurrently during its snapshot copy.
  * Java private/nestmate access, not Kotlin visibility metadata, guards edit authority.
  */
@@ -49,9 +49,9 @@ public final class Ja2MarksmanshipEditor {
         if (request.getProfileId() < 0 || request.getProfileId() >= 170) {
             return failure(stage, INVALID_PROFILE_ID);
         }
-        // Signed INT8 is the representation domain only, not a gameplay range.
-        if (request.getExpectedCurrentMarksmanship() < -128 || request.getExpectedCurrentMarksmanship() > 127
-                || request.getNewMarksmanship() < -128 || request.getNewMarksmanship() > 127) {
+        // Audited direct-set gameplay domain.
+        if (request.getExpectedCurrentMarksmanship() < 0 || request.getExpectedCurrentMarksmanship() > 100
+                || request.getNewMarksmanship() < 0 || request.getNewMarksmanship() > 100) {
             return failure(stage, INVALID_MARKSMANSHIP);
         }
         var admitted = new MarksmanshipEditRequest(request.getProfileId(),
@@ -77,11 +77,26 @@ public final class Ja2MarksmanshipEditor {
             for (int id = 0; id < 170; id++) {
                 if (profiles.get(id).getProfileId() != id) return failure(stage, INVALID_SOURCE);
             }
+            var liveInspection = inspector.inspectLiveMercState(snapshot);
+            if (!(liveInspection instanceof LiveMercStateInspectionResult.Success live)
+                    || !baseline.getFormat().equals(live.getFormat())) return failure(stage, INVALID_SOURCE);
+            var locations = NormalNonLinuxRosterDecoder.INSTANCE.validatedRecordLocations(snapshot);
+            var location = locations.stream().filter(it -> it.getProfileIndex() == admitted.getProfileId())
+                    .findFirst().orElse(null);
             stage = PRECONDITION;
+            if (location == null || baseline.getRoster().stream().noneMatch(it -> it.getProfileIndex() == admitted.getProfileId())) {
+                return failure(stage, TARGET_NOT_HIRED);
+            }
+            var liveTarget = live.getMercs().stream().filter(it -> it.getProfileIndex() == admitted.getProfileId())
+                    .findFirst().orElse(null);
+            if (liveTarget == null) return failure(stage, TARGET_NOT_HIRED);
+            if (liveTarget.getStats().getMarksmanship() != profiles.get(admitted.getProfileId()).getMarksmanship()) {
+                return failure(stage, PROFILE_LIVE_DISAGREEMENT);
+            }
             if (profiles.get(admitted.getProfileId()).getMarksmanship() != admitted.getExpectedCurrentMarksmanship()) {
                 return failure(stage, EXPECTED_CURRENT_MISMATCH);
             }
-            // Fixed plan: 12 complete relations, 170 profiles, at most 20 roster entries.
+            // Fixed plan: 15 complete relations, 170 profiles, at most 20 roster entries.
             if (baseline.getRoster().size() > 20) return failure(stage, INVALID_SOURCE);
             var frame = NormalNonLinuxProfileFramer.INSTANCE.frameBuild041202(snapshot);
             var rotation = NormalProfileRotationRecovery.INSTANCE.recoverBuild041202(frame.getEncryptedProfileBytes());
@@ -92,13 +107,23 @@ public final class Ja2MarksmanshipEditor {
             long checksum = NormalProfileChecksum.INSTANCE.calculate(changed);
             for (int i = 0; i < 4; i++) changed[696 + i] = (byte) (checksum >>> (8 * i));
 
+            int soldierStart = location.getAbsoluteOffset();
+            byte[] soldier = NormalSaveBlockDecryptor.INSTANCE.decryptBlock(
+                    Arrays.copyOfRange(snapshot, soldierStart, soldierStart + 2328), 2328, rotation);
+            soldier[1377] = (byte) admitted.getNewMarksmanship();
+            long soldierChecksum = NormalSoldierChecksum.INSTANCE.calculate(soldier);
+            for (int i = 0; i < 4; i++) soldier[2208 + i] = (byte) (soldierChecksum >>> (8 * i));
+
             stage = SERIALIZATION;
             var writer = new BoundedCandidateWriter(snapshot.length, capability.getMaxCandidateBytes(),
                     () -> observe.accept(EditWork.CANDIDATE_ALLOCATION));
             writer.append(snapshot, 0, start);
             byte[] encrypted = NormalSaveBlockEncryptor.INSTANCE.encryptBlock(changed, 716, rotation);
             writer.append(encrypted, 0, encrypted.length);
-            writer.append(snapshot, start + 716, snapshot.length);
+            writer.append(snapshot, start + 716, soldierStart);
+            byte[] encryptedSoldier = NormalSaveBlockEncryptor.INSTANCE.encryptBlock(soldier, 2328, rotation);
+            writer.append(encryptedSoldier, 0, encryptedSoldier.length);
+            writer.append(snapshot, soldierStart + 2328, snapshot.length);
             return validateCandidate(snapshot, writer.finish(), admitted, baseline, profiles, rotation, sourceHash);
         } catch (CandidateBoundException ignored) {
             return failure(stage, CANDIDATE_SIZE_LIMIT);
@@ -124,7 +149,18 @@ public final class Ja2MarksmanshipEditor {
                 return failure(stage, INVALID_CANDIDATE);
             }
             var candidateProfiles = inspector.parseBuild041202NormalNonLinuxProfiles(candidate);
+            var sourceLive = inspector.inspectLiveMercState(source);
+            if (!(sourceLive instanceof LiveMercStateInspectionResult.Success oldLive)) {
+                return failure(stage, INVALID_CANDIDATE);
+            }
+            var candidateLive = inspector.inspectLiveMercState(candidate);
+            if (!(candidateLive instanceof LiveMercStateInspectionResult.Success newLive)) {
+                return failure(stage, INVALID_CANDIDATE);
+            }
             stage = VERIFICATION;
+            if (!MarksmanshipEditModelsKt.verifyLiveMarksmanship(request, baseline.getFormat(), oldLive, newLive)) {
+                return failure(stage, VERIFICATION_MISMATCH);
+            }
             if (!MarksmanshipEditModelsKt.verifyMarksmanshipCandidate(source, candidate, request,
                     baseline, reparsed, profiles, candidateProfiles, rotation)) {
                 return failure(stage, VERIFICATION_MISMATCH);
@@ -133,7 +169,7 @@ public final class Ja2MarksmanshipEditor {
             var provenance = new MarksmanshipEditProvenance(sourceHash, source.length, candidateHash,
                     candidate.length, baseline.getFormat(), request, canonicalRequest(request),
                     MarksmanshipCapabilityIdentity.PROJECT_AUTHORED_SYNTHETIC_V103, 1,
-                    "profile-marksmanship-verification-v1", EditVerificationOutcome.PASSED, 1);
+                    "synchronized-hired-marksmanship-verification-v2", EditVerificationOutcome.PASSED, 2);
             if (!provenance.getSourceSha256().equals(sha256(source))
                     || !provenance.getCandidateSha256().equals(sha256(candidate))
                     || !provenance.getCanonicalRequest().equals(canonicalRequest(provenance.getRequest()))) {
@@ -194,7 +230,8 @@ public final class Ja2MarksmanshipEditor {
                     passed(EXACT_FORMAT_IDENTITY), passed(EXACT_SIZE_AND_LAYOUT), passed(REQUESTED_PROFILE_VALUE),
                     passed(ALL_170_PROFILE_FACTS), passed(ALL_CAMPAIGN_FACTS), passed(ALL_ROSTER_IDENTITIES_AND_STATS),
                     passed(TARGET_CHECKSUM), passed(TARGET_PLAINTEXT_ENVELOPE), passed(CIPHERTEXT_PREFIX),
-                    passed(ALL_OUTSIDE_CIPHERTEXT), passed(NO_OP_BYTE_IDENTITY), passed(HASH_BINDINGS));
+                    passed(ALL_OUTSIDE_CIPHERTEXT), passed(NO_OP_BYTE_IDENTITY), passed(HASH_BINDINGS),
+                    passed(ALL_LIVE_STATS_AND_INVENTORY), passed(SOLDIER_CHECKSUM), passed(SOLDIER_PLAINTEXT_ENVELOPE));
         }
 
         public byte[] getCandidateBytes() { return snapshot.clone(); }

@@ -43,15 +43,20 @@ binding establishes layout compatibility, not producer family.
 The transform accepts an exact expected block size, including a zero-byte
 no-op; zero is an API-valid block length, not a claim about a real serialized
 block. Tests use project-authored synthetic selector and decryption vectors.
-The repository does **not** contain the production 49-byte rotation-table
-contents or an independently admissible real encrypted-block vector. It stores
-SHA-256 identities for selector indexes `124` and `139`, both derived from
+The repository does **not** contain the production 49-byte rotation rows
+or an independently admissible real encrypted-block vector. The production
+digest oracle stores SHA-256 identities for every validated selector index
+`0..227` (228 indexes), derived from
 `src/game/Tactical/Tactical_Save.cc` at immutable upstream commit
 `743f38a6ca86c81893376c2576277db660320170` and exact source blob
-`5640f1a623f609f973020b0a617bbc00b2dafe75`, without storing either row's
-bytes. These identities establish selector/body matches only; index `124` does
-not establish producer family. The rotation itself is recovered from each
-framed save and remains scoped to that inspection. Full-save encrypted block
+`5640f1a623f609f973020b0a617bbc00b2dafe75`, without storing rotation-row
+bytes. The previously admitted anchors at indexes `124` and `139` remain
+unchanged, but are no longer the only admitted indexes. Matching digests
+establish selector/body compatibility only; producer family remains `UNKNOWN`.
+Rotation bytes are recovered from each framed save and remain inspection-local.
+This broadens campaign-state compatibility and is expected to address the former
+missing-oracle gap, but the user's unavailable newer save binaries have not
+been proven fixed. Full-save encrypted block
 locations and merc-profile field offsets were not established by the earlier
 encryption slice; the bounded framing and profile decoding sections below
 independently establish those later slices.

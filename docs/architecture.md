@@ -27,11 +27,17 @@ the encrypted profile table, recover its per-save rotation, decrypt each record,
 and return the minimal immutable profile model. Detection requires header,
 selector, framing, bounded profile-consistency evidence, and an independently
 admitted digest for the exact selected rotation index; file length or header
-identity alone does not establish support. Producer family remains independent
-and currently unknown. Production rotation tables are not bundled; non-secret
-digests for indexes 124 and 139 are admitted from the same pinned upstream
-commit/blob, and recovered rotation data is scoped to one inspection. Every
-layout-specific interpretation method on the public inspector enforces that
+identity alone does not establish support. Production does not bundle 49-byte
+rotation rows. Its digest oracle covers every validated selector index `0..227`
+with SHA-256 identities from the same pinned upstream commit/blob documented in
+[save-format.md](save-format.md). The previously admitted anchors at indexes
+`124` and `139` remain unchanged, but are no longer the only admitted indexes.
+Rotation bytes are recovered from each save and remain inspection-local. A
+matching digest establishes selector/body compatibility only; producer family
+remains `UNKNOWN`. This broadens campaign-state compatibility and is expected
+to address the former missing-oracle gap, but the user's unavailable newer
+save binaries have not been proven fixed. Every layout-specific interpretation
+method on the public inspector enforces that
 same detector result before returning parsed data.
 The presentation boundary is `Ja2SaveInspector.inspectV01`: it snapshots the
 input, detects once against a separate detector copy, rejects detector mutation

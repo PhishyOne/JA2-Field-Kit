@@ -25,6 +25,8 @@ class SuccessRenderOrderTest {
                 "content.addHeading(\"Roster\")",
                 "content.addBody(\"No roster members found.\")",
                 "content.addMercSelector(screenState)",
+                "content.addBody(screenState.catalog.status)",
+                "content.addView(Button(this)",
                 "content.addHeading(\"Technical details\")",
                 "content.addSource(screenState.source)",
                 "content.addFormat(screenState.format)",

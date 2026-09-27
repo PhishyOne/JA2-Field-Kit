@@ -24,6 +24,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.phishtopia.ja2fieldkit.android.importing.ImportedSaveProvenance
 import com.phishtopia.ja2fieldkit.android.importing.SourceProvenance
+import com.phishtopia.ja2fieldkit.android.presentation.CatalogNames
 import com.phishtopia.ja2fieldkit.android.presentation.CampaignPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
@@ -36,11 +37,16 @@ class MainActivity : ComponentActivity() {
     private val model: InspectionViewModel by viewModels()
     private val stateObserver: (InspectionScreenState) -> Unit = ::render
     private var renderedSuccess: InspectionScreenState.Success? = null
+    private var displayedCatalog: CatalogNames? = null
     private var mercSelector: Spinner? = null
     private var selectedMercDetail: LinearLayout? = null
 
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) model.inspect(applicationContext.contentResolver, uri, SourceProvenance.DOCUMENT_PICKER)
+    }
+
+    private val openCatalogDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) model.loadItemNames(applicationContext.contentResolver, uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,6 +122,7 @@ class MainActivity : ComponentActivity() {
         if (updateMercSelection(screenState)) return
 
         // A full render replaces the view tree, including after Activity recreation.
+        displayedCatalog = (screenState as? InspectionScreenState.Success)?.catalog?.active
         renderedSuccess = null
         mercSelector = null
         selectedMercDetail = null
@@ -142,6 +149,12 @@ class MainActivity : ComponentActivity() {
                 content.addHeading("Roster")
                 if (screenState.roster.isEmpty()) content.addBody("No roster members found.")
                 else content.addMercSelector(screenState)
+                content.addBody(screenState.catalog.status)
+                content.addView(Button(this).apply {
+                    text = if (screenState.catalog.active == null) "Load item names" else "Replace item names"
+                    isEnabled = !screenState.catalog.loading
+                    setOnClickListener { openCatalogDocument.launch(arrayOf("*/*")) }
+                }, matchWidth())
                 content.addHeading("Technical details")
                 content.addSource(screenState.source)
                 content.addFormat(screenState.format)
@@ -319,7 +332,7 @@ class MainActivity : ComponentActivity() {
                     orientation = LinearLayout.HORIZONTAL
                 }
                 slots.forEach { slot ->
-                    row.addView(textView(slot.visibleText(), 16f).apply {
+                    row.addView(textView(slot.visibleText(displayedCatalog), 16f).apply {
                         setPadding(dp(4), dp(8), dp(4), dp(8))
                     }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 }

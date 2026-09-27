@@ -29,6 +29,7 @@ sealed interface InspectionScreenState {
         val campaign: CampaignPresentation,
         val roster: List<MercPresentation>,
         val selectedProfileIndex: Int? = roster.firstOrNull()?.profileIndex,
+        val catalog: CatalogPresentation = CatalogPresentation(),
     ) : InspectionScreenState {
         val selectedMerc: MercPresentation?
             get() = roster.firstOrNull { it.profileIndex == selectedProfileIndex } ?: roster.firstOrNull()
@@ -314,7 +315,7 @@ fun InspectionScreenState.withCompatibilityReportPreview(appVersion: String): In
 }
 
 /** Removes text controls at the boundary where save data becomes retained screen state. */
-private object PresentationTextSanitizer {
+internal object PresentationTextSanitizer {
     fun sanitize(value: String): String = buildString(value.length) {
         var index = 0
         while (index < value.length) {

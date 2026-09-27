@@ -20,7 +20,7 @@ class InventoryGroupingWiringTest {
         assertTrue(rejection.contains("Inventory unavailable: inconsistent slots."))
         assertTrue(rejection.contains("return"))
         assertTrue(render.contains("group.slots.chunked(2)"))
-        assertTrue(render.contains("textView(slot.visibleText(), 16f)"))
+        assertTrue(render.contains("textView(slot.visibleText(displayedCatalog), 16f)"))
         assertTrue(render.contains("LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)"))
         assertTrue(activity.contains("setTextIsSelectable(true)"))
         listOf("HorizontalScrollView", "RecyclerView", "setSingleLine", "ellipsize", "setHorizontallyScrolling")
@@ -28,12 +28,12 @@ class InventoryGroupingWiringTest {
     }
 
     @Test
-    fun inventoryUsesNoCatalogPayloadOrAdditionalUiDependency() {
+    fun inventoryUsesOnlyDecodedCatalogDecorationAndNoAdditionalUiDependency() {
         val grouping = File(source, "presentation/InventoryGrouping.kt").readText()
         val render = activity.substringAfter("addHeading(\"Inventory\", 17f)")
             .substringBefore("private fun LinearLayout.addTitle")
         listOf("InventoryObject", "InventoryPayload", "ByteArray", "itemName", "icon", "condition",
-            "ammo", "attachment", "weight", "catalog").forEach {
+            "ammo", "attachment", "weight", "CatalogReader", "GogEnglishItemCatalog", "itemdesc").forEach {
             assertFalse((grouping + render).contains(it, ignoreCase = true), it)
         }
         val dependencies = File(project, "build.gradle.kts").readText().substringAfter("dependencies {")

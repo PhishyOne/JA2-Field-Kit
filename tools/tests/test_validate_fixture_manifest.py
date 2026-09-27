@@ -1133,7 +1133,7 @@ class CliAndWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(workflow.count("fetch-depth: 0"), 2)
         self.assertGreaterEqual(workflow.count("actions/setup-python@v5"), 2)
         self.assertGreaterEqual(workflow.count("--require-hashes"), 2)
-        self.assertEqual(2, workflow.count("runs-on: ubuntu-24.04"))
+        self.assertEqual(3, workflow.count("runs-on: ubuntu-24.04"))
         self.assertEqual(2, workflow.count("python3 -B tools/setup_bwrap_sandbox.py"))
         self.assertNotIn("bwrap --version", workflow)
         self.assertNotIn("sysctl", workflow)

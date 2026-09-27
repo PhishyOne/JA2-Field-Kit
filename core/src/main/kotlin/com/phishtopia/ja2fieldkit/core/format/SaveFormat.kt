@@ -136,13 +136,22 @@ internal fun interface RotationDigestOracle {
 /**
  * Minimal public-build oracle derived from the exact immutable upstream source.
  *
- * Only indexes 124 and 139 are admitted. The repository stores their digests, never the
+ * Only indexes 79, 80, 82, 124, and 139 are admitted. The repository stores their digests, never the
  * corresponding 49-byte rows.
  * Provenance: RealTommyGreen/JA2-Reborn commit 743f38a6ca86c81893376c2576277db660320170,
  * src/game/Tactical/Tactical_Save.cc blob 5640f1a623f609f973020b0a617bbc00b2dafe75.
- * Matching either digest establishes selector/body identity, not producer family.
+ * Matching an admitted digest establishes selector/body identity, not producer family.
  */
 internal object Build041202RotationDigestOracle : RotationDigestOracle {
+    private val index79 = RotationTableDigest.parse(
+        "260bca25c2a15a8bf66c3d1651577f71e3852e4791380f6c933513db47786520",
+    )
+    private val index80 = RotationTableDigest.parse(
+        "dd93d880a6afdf0ef265377363d57666e7b5fa21ba766c9b9ed023530daf8005",
+    )
+    private val index82 = RotationTableDigest.parse(
+        "ef2213a747c89541042ce3bb00e90cb7e4758c002290930bdc96b0273bd974d1",
+    )
     private val index124 = RotationTableDigest.parse(
         "384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306",
     )
@@ -152,6 +161,9 @@ internal object Build041202RotationDigestOracle : RotationDigestOracle {
 
     override fun digestFor(index: NormalRotationTableIndex): RotationTableDigest? =
         when (index.value) {
+            79 -> index79
+            80 -> index80
+            82 -> index82
             124 -> index124
             139 -> index139
             else -> null

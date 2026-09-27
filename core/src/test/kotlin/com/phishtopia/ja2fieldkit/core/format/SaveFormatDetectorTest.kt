@@ -60,7 +60,7 @@ class SaveFormatDetectorTest {
     }
 
     @Test
-    fun productionOracleAdmitsOnlyPinnedDigestsForIndexes124And139() {
+    fun productionOracleAdmitsOnlyPinnedDigestsForIndexes79And80And82And124And139() {
         val admitted = (0 until NormalSaveEncryptionSelector.ROTATION_TABLE_COUNT)
             .map(::NormalRotationTableIndex)
             .mapNotNull { index ->
@@ -69,6 +69,15 @@ class SaveFormatDetectorTest {
 
         assertEquals(
             listOf(
+                79 to RotationTableDigest.parse(
+                    "260bca25c2a15a8bf66c3d1651577f71e3852e4791380f6c933513db47786520",
+                ),
+                80 to RotationTableDigest.parse(
+                    "dd93d880a6afdf0ef265377363d57666e7b5fa21ba766c9b9ed023530daf8005",
+                ),
+                82 to RotationTableDigest.parse(
+                    "ef2213a747c89541042ce3bb00e90cb7e4758c002290930bdc96b0273bd974d1",
+                ),
                 124 to RotationTableDigest.parse(
                     "384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306",
                 ),
@@ -95,6 +104,32 @@ class SaveFormatDetectorTest {
         assertEquals(false, result.facts.rotationDigestMatched)
         assertEquals(SaveCompatibility.INCONSISTENT, result.compatibility)
         assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, result.reason)
+        assertEquals(SaveFamily.UNKNOWN, result.family)
+    }
+
+    @Test
+    fun publicOracleRejectsSyntheticBodyForNewlyAdmittedIndexesWithoutAttributingFamily() {
+        for ((index, day) in listOf(79 to 130, 80 to 140, 82 to 160)) {
+            val result = Ja2SaveInspector().detect(syntheticSciFiMediumSave(day))
+
+            assertEquals(index, result.facts.selectedRotationIndex)
+            assertEquals(true, result.facts.rotationOracleAvailable)
+            assertEquals(false, result.facts.rotationDigestMatched)
+            assertEquals(SaveCompatibility.INCONSISTENT, result.compatibility)
+            assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, result.reason)
+            assertEquals(SaveFamily.UNKNOWN, result.family)
+        }
+    }
+
+    @Test
+    fun publicOracleLeavesNeighboringIndex81AsCandidateWithoutAttributingFamily() {
+        val result = Ja2SaveInspector().detect(syntheticSciFiMediumSave(day = 150))
+
+        assertEquals(81, result.facts.selectedRotationIndex)
+        assertEquals(false, result.facts.rotationOracleAvailable)
+        assertNull(result.facts.rotationDigestMatched)
+        assertEquals(SaveCompatibility.CANDIDATE, result.compatibility)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_ORACLE_MISSING, result.reason)
         assertEquals(SaveFamily.UNKNOWN, result.family)
     }
 
@@ -299,6 +334,17 @@ class SaveFormatDetectorTest {
         assertTrue(result.evidence.none { it.contains(SYNTHETIC_ROTATION_DIGEST) })
     }
 
+    private fun syntheticSciFiMediumSave(day: Int): ByteArray =
+        syntheticSave(eventCount = 0).also {
+            // Project-authored selector mutations; the synthetic profile body is unchanged.
+            // Bank 76 plus (9 + day / 10) % 19 selects indexes 79 through 82.
+            it.putU32Le(WORLD_DAY_OFFSET, day)
+            it[LOAD_SCREEN_ID_OFFSET] = 8
+            it[GUN_NUT_OFFSET] = 0
+            it[SCI_FI_OFFSET] = 1
+            it[DIFFICULTY_LEVEL_OFFSET] = 2
+        }
+
     private fun syntheticSave(
         eventCount: Long,
         orderUsedCount: Int = 0,
@@ -350,6 +396,8 @@ class SaveFormatDetectorTest {
         const val EVENT_DATA_OFFSET = 819
         const val WORLD_DAY_OFFSET = 280
         const val LOAD_SCREEN_ID_OFFSET = 302
+        const val GUN_NUT_OFFSET = 303
+        const val SCI_FI_OFFSET = 304
         const val DIFFICULTY_LEVEL_OFFSET = 305
         const val STORED_CHECKSUM_OFFSET = 696
         const val PROFILE_VECTOR_CIPHERTEXT_OFFSET = 121769

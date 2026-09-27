@@ -57,9 +57,18 @@ equations as interoperability facts or methods. Project-authored Kotlin and
 Python structure, diagnostics, validation policy, UI, and fixture tooling are
 Field Kit expression of those documented facts.
 
-The production repository contains SHA-256 identities for only two rotation
-rows, not the row bytes. It contains no production rotation array or table, no
-upstream source files, and no real private-save bytes. Public fixtures are
+The production repository now contains SHA-256 identities for the full 228-index
+selector domain, not production 49-byte rotation row bytes or reconstructed
+rotation data. Issue #60 uses only the digest facts from a separate read-only
+audit of JA2-Reborn commit `743f38a6ca86c81893376c2576277db660320170`,
+`src/game/Tactical/Tactical_Save.cc` blob
+`5640f1a623f609f973020b0a617bbc00b2dafe75`. Its indexed digest list is
+project-authored; no upstream expression, comments, or initializer layout is
+incorporated. This expands campaign-state compatibility, not producer
+attribution; family stays `UNKNOWN` and missing-oracle behavior remains a
+fail-closed injected test seam. This is engineering interoperability/provenance,
+not legal clearance. There are no production rotation-byte arrays or resources,
+upstream source files, or real private-save bytes. Public fixtures are
 independently generated synthetic evidence subject to the fixture policy.
 
 Stale public PR #1 contains documentation and provenance, with no copied numeric

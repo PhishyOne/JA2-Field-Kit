@@ -31,6 +31,24 @@ For a completed import that fails inspection, the user can explicitly preview,
 copy, or share a versioned privacy-bounded compatibility report; save
 contribution remains unimplemented.
 
+The success screen offers **Load item names** / **Replace item names** through a
+separate explicit document picker for a user-owned `Binarydata.slf`. The only
+admitted catalog is **GOG English v1.12 (Build 04.12.02)**: exactly 2,047,959 bytes,
+MD5 `ffd1c49977c891d9c7ffc7756a25f741` (identity only, not authentication).
+No catalog ships with Field Kit. Sanitized full English names are optional
+**Base catalog** display decoration; mods may override them. Save-derived role,
+numeric item ID, and object count remain authoritative and visible. Unknown IDs
+remain numeric and empty slots remain empty.
+
+The content-only reader consumes at most 2,047,960 bytes without trusting provider
+size. Archive and item-description bytes stay task-local; no URI grants, archive
+bytes, or derived catalog files are durably persisted. Immutable decoded names
+remain only in ViewModel memory across Activity recreation and later save
+inspections, and disappear on clear/process death. Rejected replacements
+explicitly leave the previous catalog active; stale requests cannot replace a
+later request. Catalog import never invokes save inspection, adds no network or
+storage permission, and is not available through Open With or Share To.
+
 The core v0.1 presentation facade is
 `Ja2SaveInspector.inspectV01(ByteArray)`. It returns a sealed, sanitized result
 covering format/version/layout compatibility, the minimal campaign summary, and

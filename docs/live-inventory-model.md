@@ -4,7 +4,7 @@ This slice reads the live SOLDIERTYPE inventory of each hired, non-vehicle
 player merc in the supported normal non-Linux v103 / Build 04.12.02 domain.
 It does not read inventory from the profile table. There is no editing or write
 capability, inventory serialization, checksum regeneration, output placement,
-bridge, item catalog, or 1.13/NIV support.
+bridge or 1.13/NIV support. Optional base-name decoration is separate from this model.
 
 ## API and validation authority
 
@@ -71,7 +71,8 @@ Internal `ItemSerializationResolver` maps item ID to `ItemSerializationKind`:
 `GENERIC_STATUS`, `AMMO`, `GUN`, `KEY`, `MONEY`, `ACTION_OR_SWITCH`, `OWNERSHIP`, or
 `UNKNOWN`. No classifier parameter is exposed on the inspector. Possessing a
 resolver grants read-only interpretation, never write authority. Tests use only
-project-authored synthetic IDs; production has no item metadata catalog.
+project-authored synthetic IDs; production ships no item metadata catalog. The optional user-owned GOG English
+catalog adds display names only; see [Android shell](android-read-only-shell.md#optional-base-item-names).
 
 ID 0 with count 0 yields `Empty` without consulting the resolver. Every other
 production record yields `Unknown`. Noncanonical ID 0/count nonzero and ID

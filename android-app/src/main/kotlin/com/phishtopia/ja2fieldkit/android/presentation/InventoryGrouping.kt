@@ -27,10 +27,13 @@ fun groupInventory(slots: List<InventorySlotPresentation>): List<InventoryGroupP
 }
 
 /** One visible, selectable text node provides both the slot label and its exact read facts. */
-fun InventorySlotPresentation.visibleText(): String {
+fun InventorySlotPresentation.visibleText(catalog: CatalogNames? = null): String {
     val value = when (val item = contents) {
         InventoryContentsPresentation.Empty -> "Empty"
-        is InventoryContentsPresentation.Occupied -> "Item #${item.itemId} · Count ${item.objectCount}"
+        is InventoryContentsPresentation.Occupied -> {
+            val numeric = "Item #${item.itemId} · Count ${item.objectCount}"
+            catalog?.names?.get(item.itemId)?.let { "$it\nBase catalog · $numeric" } ?: numeric
+        }
     }
     return "$label\n$value"
 }

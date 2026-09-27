@@ -1,5 +1,7 @@
 package com.phishtopia.ja2fieldkit.android
 
+import com.phishtopia.ja2fieldkit.android.importing.CatalogReader
+import com.phishtopia.ja2fieldkit.android.presentation.CatalogSession
 import android.content.ContentResolver
 import android.database.Cursor
 import android.net.Uri
@@ -29,6 +31,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 /** Retains only presentation state across configuration changes; save bytes stay task-local. */
 class InspectionViewModel : ViewModel() {
+    private val catalogSession = CatalogSession()
     private val inspector = Ja2SaveInspector()
     private val importer = SaveImporter()
     private val executor = Executors.newSingleThreadExecutor()
@@ -103,6 +106,20 @@ class InspectionViewModel : ViewModel() {
         if (next !== state) publish(next)
     }
 
+    private fun withCatalog(next: InspectionScreenState): InspectionScreenState =
+        if (next is InspectionScreenState.Success) next.copy(catalog = catalogSession.presentation) else next
+
+    fun loadItemNames(resolver: ContentResolver, uri: Uri) {
+        val request = catalogSession.begin()
+        publish(state)
+        executor.execute {
+            val result = CatalogReader.read(uri.scheme) { resolver.openInputStream(uri) }
+            mainHandler.post {
+                if (catalogSession.complete(request, result)) publish(state)
+            }
+        }
+    }
+
     private fun querySourceMetadata(
         resolver: ContentResolver,
         uri: Uri,
@@ -145,12 +162,13 @@ class InspectionViewModel : ViewModel() {
     }
 
     private fun publish(next: InspectionScreenState) {
-        state = next
-        observer?.invoke(next)
+        state = withCatalog(next)
+        observer?.invoke(state)
     }
 
     override fun onCleared() {
         requestSequence.incrementAndGet()
+        catalogSession.clear()
         executor.shutdownNow()
     }
 }

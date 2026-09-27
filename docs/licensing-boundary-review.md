@@ -57,9 +57,14 @@ equations as interoperability facts or methods. Project-authored Kotlin and
 Python structure, diagnostics, validation policy, UI, and fixture tooling are
 Field Kit expression of those documented facts.
 
-The production repository contains SHA-256 identities for only two rotation
-rows, not the row bytes. It contains no production rotation array or table, no
-upstream source files, and no real private-save bytes. Public fixtures are
+At the historical review baseline, the production repository contained two
+SHA-256 rotation identities. Issue #59 expands this to all 228 normal indexes
+`0..227`, storing fingerprints only, never row bytes. The exact audited revisions,
+common blob, and canonical digest-set hash are recorded in
+[detection provenance](save-family-detection.md). This expansion establishes
+selector/body identity only and is not legal clearance. The repository contains
+no production rotation array or table, no upstream source files, and no real
+private-save bytes. Public fixtures are
 independently generated synthetic evidence subject to the fixture policy.
 
 Stale public PR #1 contains documentation and provenance, with no copied numeric

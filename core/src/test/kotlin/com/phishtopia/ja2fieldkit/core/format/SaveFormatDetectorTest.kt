@@ -60,27 +60,6 @@ class SaveFormatDetectorTest {
     }
 
     @Test
-    fun productionOracleAdmitsOnlyPinnedDigestsForIndexes124And139() {
-        val admitted = (0 until NormalSaveEncryptionSelector.ROTATION_TABLE_COUNT)
-            .map(::NormalRotationTableIndex)
-            .mapNotNull { index ->
-                Build041202RotationDigestOracle.digestFor(index)?.let { index.value to it }
-            }
-
-        assertEquals(
-            listOf(
-                124 to RotationTableDigest.parse(
-                    "384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306",
-                ),
-                139 to RotationTableDigest.parse(
-                    "b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc",
-                ),
-            ),
-            admitted,
-        )
-    }
-
-    @Test
     fun publicOracleTreatsIndex124AsAdmittedWithoutAttributingFamily() {
         val save = syntheticSave(eventCount = 0).also {
             it.putU32Le(WORLD_DAY_OFFSET, 10)
@@ -99,10 +78,25 @@ class SaveFormatDetectorTest {
     }
 
     @Test
-    fun publicInterpretationRejectsEveryNonSupportedCompatibility() {
-        val candidate = syntheticSave(eventCount = 0).also {
+    fun newlyCoveredSelectorStillRejectsSyntheticBodyMismatch() {
+        val save = syntheticSave(eventCount = 0).also {
             it[LOAD_SCREEN_ID_OFFSET] = (it[LOAD_SCREEN_ID_OFFSET] + 1).toByte()
         }
+
+        val result = Ja2SaveInspector().detect(save)
+
+        assertEquals(149, result.facts.selectedRotationIndex)
+        assertEquals(true, result.facts.selectorHeaderCompatible)
+        assertEquals(true, result.facts.rotationOracleAvailable)
+        assertEquals(false, result.facts.rotationDigestMatched)
+        assertEquals(SaveCompatibility.INCONSISTENT, result.compatibility)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, result.reason)
+        assertEquals(SaveFamily.UNKNOWN, result.family)
+    }
+
+    @Test
+    fun publicInterpretationRejectsEveryNonSupportedCompatibility() {
+        val candidate = syntheticSave(eventCount = 0, profiles = ambiguousProfiles())
         val cases = listOf(
             SaveCompatibility.CANDIDATE to candidate,
             SaveCompatibility.INCONSISTENT to syntheticSave(eventCount = 0),
@@ -268,17 +262,8 @@ class SaveFormatDetectorTest {
         assertEquals(SaveCompatibility.INCONSISTENT, noCandidateResult.compatibility)
         assertEquals(SaveDetectionReason.PROFILE_ROTATION_NO_CANDIDATE, noCandidateResult.reason)
 
-        val ambiguityRecord = recoveryVector.copyOfRange(
-            PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_OFFSET,
-            PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_END,
-        )
-        val ambiguousProfiles = ByteArray(encryptedProfiles.size).also { block ->
-            repeat(NormalProfileRotationRecovery.RECORD_COUNT) { record ->
-                ambiguityRecord.copyInto(block, record * ambiguityRecord.size)
-            }
-        }
         val ambiguousResult = SaveFormatDetector.detect(
-            syntheticSave(eventCount = 0, profiles = ambiguousProfiles),
+            syntheticSave(eventCount = 0, profiles = ambiguousProfiles()),
         )
         assertEquals(SaveCompatibility.CANDIDATE, ambiguousResult.compatibility)
         assertEquals(SaveDetectionReason.PROFILE_ROTATION_AMBIGUOUS, ambiguousResult.reason)
@@ -297,6 +282,18 @@ class SaveFormatDetectorTest {
         assertEquals(SaveCompatibility.SUPPORTED, result.compatibility)
         assertEquals(139, result.facts.selectedRotationIndex)
         assertTrue(result.evidence.none { it.contains(SYNTHETIC_ROTATION_DIGEST) })
+    }
+
+    private fun ambiguousProfiles(): ByteArray {
+        val ambiguityRecord = recoveryVector.copyOfRange(
+            PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_OFFSET,
+            PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_END,
+        )
+        return ByteArray(encryptedProfiles.size).also { block ->
+            repeat(NormalProfileRotationRecovery.RECORD_COUNT) { record ->
+                ambiguityRecord.copyInto(block, record * ambiguityRecord.size)
+            }
+        }
     }
 
     private fun syntheticSave(

@@ -34,31 +34,37 @@ A `SUPPORTED` result requires all of the following:
 6. the recovered rotation's SHA-256 identity equals an independently admitted
    digest for the exact header-selected index.
 
-The public oracle is deliberately minimal. It contains two non-secret digests
-for indexes `124` and `139`, each derived from the 49-byte row at that index in
-`src/game/Tactical/Tactical_Save.cc` at immutable JA2 Reborn commit
-`743f38a6ca86c81893376c2576277db660320170` (source blob
-`5640f1a623f609f973020b0a617bbc00b2dafe75`). The row bytes and the other 226
-production rows are not stored in this repository. The index-`124` digest is
-`384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306`,
-and the index-`139` digest is
-`b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc`.
-The public synthetic header independently exercises index `139`; its body
-intentionally uses a different project-authored rotation and therefore does
-not become supported under the production oracle. Public regression coverage
-for index `124` verifies the digest-only oracle domain and fail-closed mismatch
-behavior without publishing either production row.
+The public oracle covers all 228 normal v103 selector indexes `0..227` with
+unique lowercase SHA-256 fingerprints only. No upstream 49-byte rotation rows
+or upstream source/comments are shipped. The project-audited identities refer
+to `src/game/Tactical/Tactical_Save.cc` at these pinned revisions:
 
-Either digest establishes selector/body identity against that pinned table. It
-does not authenticate the whole save or identify which compatible executable
-wrote it. In particular, admitting index `124` does not prove producer family.
+- JA2-Reborn: `743f38a6ca86c81893376c2576277db660320170`.
+- Stracciatella: `8883ac43dc1b2b95a76286476f690526bc858565`.
+- Common source blob: `5640f1a623f609f973020b0a617bbc00b2dafe75`.
+
+Serializing indexes in ascending order as decimal index + `:` + digest + `\n`
+(ASCII, including the final newline) has SHA-256
+`594442e0803a44774ad919af5addabed5d114d4262695b433a942ee4a5f945fe`.
+Oracle initialization and focused tests pin that identity to fail closed on
+index misalignment. Index `124` remains
+`384d8f0b52fe4413ea361c3027a3293b54d1763eb9828cc1cb0feb483c964306`;
+index `139` remains
+`b9cf6efc03ac27c7c1293f83df845ae077922af388f4cb149e9041edbf5f68bc`.
+
+Public synthetic bodies use project-authored rotations and still fail the
+production digest comparison, including at newly covered index `149`. A match
+proves selector/body rotation identity, not whole-save authenticity or producer
+family. Coverage does not admit Linux, German, or other save families and does
+not enable editing or save writes. This engineering provenance conclusion is
+not legal clearance. The compatibility report schema is unchanged.
 
 ## Decision matrix
 
 | Observed evidence | Compatibility | Layout | Family |
 | --- | --- | --- | --- |
 | Complete frame, unique recovered rotation, and matching digest for the selected index | `SUPPORTED` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
-| Complete frame and unique recovered rotation, but no oracle for the selected index | `CANDIDATE` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
+| Complete frame and unique recovered rotation, but no oracle for the selected index (injected test oracle only) | `CANDIDATE` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
 | Complete frame and ambiguous recovered rotation | `CANDIDATE` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
 | Selected-index digest mismatch, conflicting rotation constraints, or no checksum survivor | `INCONSISTENT` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
 | Exact identity but incomplete header or body | `TRUNCATED` | `UNKNOWN` | `UNKNOWN` |
@@ -67,10 +73,10 @@ wrote it. In particular, admitting index `124` does not prove producer family.
 | Incomplete or otherwise unknown identity | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 
 Changing a selector-affecting header byte while retaining the body changes the
-selected index. If an oracle exists for that changed index and its digest does
-not match the recovered body rotation, detection returns `INCONSISTENT`. If the
-changed index has no admitted oracle, detection returns only `CANDIDATE`; it
-never falls back to structural support.
+selected index. A digest mismatch returns `INCONSISTENT`. The production oracle
+covers every valid normal index; the defensive missing-oracle path remains
+`CANDIDATE` and is exercised with an injected test oracle. Detection never falls
+back to structural support.
 
 Diagnostics retain only bounded structural facts: input size, printable
 version/build identity, header completeness, selector compatibility, selected

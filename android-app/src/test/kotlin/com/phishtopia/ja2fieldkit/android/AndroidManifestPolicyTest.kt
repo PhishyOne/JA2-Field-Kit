@@ -1,6 +1,7 @@
 package com.phishtopia.ja2fieldkit.android
 
 import java.io.File
+import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,6 +16,28 @@ class AndroidManifestPolicyTest {
     private val document = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
     }.newDocumentBuilder().parse(manifest)
+
+    @Test
+    fun launcherIconsUseApprovedArtwork() {
+        val application = document.getElementsByTagName("application").item(0)
+        for (attribute in listOf("icon", "roundIcon")) {
+            assertEquals(
+                "@mipmap/ic_launcher",
+                application.attributes.getNamedItemNS(ANDROID_NAMESPACE, attribute)?.nodeValue,
+                "Application $attribute must reference the approved launcher artwork",
+            )
+        }
+
+        val icon = File(manifest.parentFile, "res/mipmap-xxxhdpi/ic_launcher.png")
+        assertTrue(icon.isFile, "Approved launcher artwork must be present")
+        val sha256 = MessageDigest.getInstance("SHA-256").digest(icon.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        assertEquals(
+            "c904f0689899066552c0c697e79a7b3a39bbf935a3275ebb298137e7198d9c56",
+            sha256,
+            "Approved launcher artwork must remain byte-for-byte unchanged",
+        )
+    }
 
     @Test
     fun requestsNoPermissions() {

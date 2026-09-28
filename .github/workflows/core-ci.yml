@@ -166,7 +166,23 @@ jobs:
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-37.0" "build-tools;36.0.0"
 
+      - name: Materialize test signing keystore
+        shell: bash
+        env:
+          JA2_FIELD_KIT_TEST_KEYSTORE_B64: ${{ secrets.JA2_FIELD_KIT_TEST_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$JA2_FIELD_KIT_TEST_KEYSTORE_B64"
+          keystore="$RUNNER_TEMP/ja2-field-kit-test-signing.p12"
+          printf '%s' "$JA2_FIELD_KIT_TEST_KEYSTORE_B64" | base64 --decode > "$keystore"
+          chmod 0600 "$keystore"
+          test -s "$keystore"
+
       - name: Assemble debug APK
+        env:
+          FIELD_KIT_TEST_KEYSTORE_PATH: ${{ runner.temp }}/ja2-field-kit-test-signing.p12
+          FIELD_KIT_TEST_KEYSTORE_PASSWORD: ${{ secrets.JA2_FIELD_KIT_TEST_SIGNING_PASSWORD }}
         run: gradle :android-app:assembleDebug --no-daemon
 
       - name: Record debug APK provenance
@@ -178,6 +194,8 @@ jobs:
           certificates=$("$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --print-certs "$apk")
           certificate_sha256=$(printf '%s\n' "$certificates" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
           [[ "$certificate_sha256" =~ ^[0-9a-fA-F]{64}$ ]]
+          certificate_sha256="${certificate_sha256,,}"
+          [[ "$certificate_sha256" == "59f644232f2ae3a17e9ddeede98d0b59a366981368631d6000bf053aa57489fe" ]]
           apk_size=$(stat -c %s "$apk")
           apk_sha256=$(sha256sum "$apk" | cut -d ' ' -f 1)
           {
@@ -198,3 +216,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
+
+      - name: Remove test signing keystore
+        if: always()
+        shell: bash
+        run: rm -f -- "$RUNNER_TEMP/ja2-field-kit-test-signing.p12"

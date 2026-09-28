@@ -4,10 +4,27 @@ plugins {
     id("com.android.application")
 }
 
+val testKeystorePath = providers.environmentVariable("FIELD_KIT_TEST_KEYSTORE_PATH").orNull
+val testKeystorePassword = providers.environmentVariable("FIELD_KIT_TEST_KEYSTORE_PASSWORD").orNull
+check((testKeystorePath == null && testKeystorePassword == null) ||
+    (!testKeystorePath.isNullOrBlank() && !testKeystorePassword.isNullOrBlank())) {
+    "Test signing requires both FIELD_KIT_TEST_KEYSTORE_PATH and FIELD_KIT_TEST_KEYSTORE_PASSWORD, nonblank, or neither"
+}
+
 android {
     namespace = "com.phishtopia.ja2fieldkit.android"
     compileSdk = 37
     buildToolsVersion = "36.0.0"
+
+    if (testKeystorePath != null && testKeystorePassword != null) {
+        signingConfigs.getByName("debug") {
+            storeFile = file(testKeystorePath)
+            storePassword = testKeystorePassword
+            keyPassword = testKeystorePassword
+            storeType = "PKCS12"
+            keyAlias = "ja2-field-kit-test"
+        }
+    }
 
     defaultConfig {
         applicationId = "com.phishtopia.ja2fieldkit"

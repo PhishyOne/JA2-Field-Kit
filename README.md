@@ -119,10 +119,12 @@ records the exact source SHA, APK SHA-256, APK byte size, debug/test-only marker
 and a verified signing certificate summary (the first signer's SHA-256 digest).
 
 This is test delivery, not Play, GitHub Release, or public release distribution.
-It uses normal debug signing: the CI debug signing identity may differ between
-runs, so a later artifact may require uninstall/reinstall instead of an in-place
-update. Stable signing and public distribution require separate future
-authorization.
+Only exact-main retained test APKs use a persistent private test signing key;
+PR/test builds continue to use ordinary default debug signing without those
+credentials. The first migration from old ephemeral-key builds may require one
+uninstall, then future retained test APKs can update in place so long as the
+persistent test key is preserved. This is NOT production/Play signing. Public
+distribution requires separate future authorization.
 
 ## Compatibility targets
 

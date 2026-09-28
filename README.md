@@ -55,6 +55,11 @@ covering format/version/layout compatibility, the minimal campaign summary, and
 the verified roster/core stats. Inputs are copied before inspection; no raw
 offset, rotation, digest, key, or encryption details cross this facade.
 
+The [Issue #72 candidate transaction](docs/save-edit-transactions.md) adds a
+source-bound core request/result architecture and privileged synthetic coverage
+for synchronized hired-merc marksmanship. Production editing remains disabled;
+Android Save As awaits a qualified create-new placement adapter.
+
 ## Architecture
 
 - `core/` is a pure Kotlin/JVM library with no Android dependencies.

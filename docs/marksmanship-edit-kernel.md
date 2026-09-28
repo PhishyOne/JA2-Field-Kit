@@ -1,5 +1,9 @@
 # Issue #36: bounded profile marksmanship rewrite kernel
 
+The successor [Issue #72 transaction](save-edit-transactions.md) synchronizes
+profile/base and live/current marksmanship behind a source-bound request. This
+page documents the retained, disabled profile-only proof and its tests.
+
 ## Status and semantic boundary
 
 The core kernel exists; **production editing remains disabled**. The public

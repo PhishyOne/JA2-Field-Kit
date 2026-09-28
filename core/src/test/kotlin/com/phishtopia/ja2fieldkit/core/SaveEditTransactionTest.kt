@@ -7,6 +7,10 @@ import java.math.BigInteger
 import java.security.MessageDigest
 import java.util.function.Consumer
 import kotlin.test.*
+import org.junit.jupiter.api.DynamicTest.dynamicTest
+import org.junit.jupiter.api.TestFactory
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /** Only manifested project-authored resources, assembled here with independent test arithmetic. */
 class SaveEditTransactionTest {
@@ -17,14 +21,154 @@ class SaveEditTransactionTest {
     private fun inspector() = Ja2SaveInspector.withRotationDigestOracleForTesting(oracle)
     private fun editor(
         inspector: Ja2SaveInspector = inspector(),
-        capability: SyntheticMarksmanshipCapability = SyntheticMarksmanshipCapability(),
+        capability: SyntheticSaveEditCapability = SyntheticSaveEditCapability(),
         observe: (EditWork) -> Unit = {},
     ): Ja2SaveEditor = Ja2SaveEditor::class.java.getDeclaredConstructor(
-        Ja2SaveInspector::class.java, SyntheticMarksmanshipCapability::class.java, Consumer::class.java,
+        Ja2SaveInspector::class.java, SyntheticSaveEditCapability::class.java, Consumer::class.java,
     ).apply { isAccessible = true }.newInstance(inspector, capability, Consumer<EditWork> { observe(it) })
     private fun request(source: ByteArray, id: Int = 7, expected: Int = 89, value: Int = 90) = SaveEditRequest(
-        SaveEditRequest.SourceIdentity(source.size, hash(source)), SaveEditRequest.SetHiredMarksmanship(id, expected, value),
+        SaveEditRequest.SourceIdentity(source.size, hash(source)), SaveEditRequest.SetHiredStat(id, HiredMercStat.MARKSMANSHIP, expected, value),
     )
+
+    // Literal serializer facts, independent of the editor registry and read offsets.
+    // Pinned upstream audit: tools/check_hired_stat_offsets.py.
+    private data class StatCase(val stat: HiredMercStat, val profile: Int, val live: Int,
+        val current: Int, val minimum: Int, val maximum: Int, val damage: Int = -1)
+    private val cases = listOf(
+        StatCase(HiredMercStat.AGILITY, 405, 880, 61, 1, 100, 820),
+        StatCase(HiredMercStat.DEXTERITY, 335, 840, 62, 1, 100, 821),
+        StatCase(HiredMercStat.STRENGTH, 296, 886, 40, 1, 100, 822),
+        StatCase(HiredMercStat.LEADERSHIP, 341, 895, 64, 1, 100),
+        StatCase(HiredMercStat.WISDOM, 355, 841, 65, 1, 100, 823),
+        StatCase(HiredMercStat.EXPERIENCE_LEVEL, 352, 849, 6, 1, 10),
+        StatCase(HiredMercStat.MARKSMANSHIP, 353, 1377, 89, 0, 100),
+        StatCase(HiredMercStat.MECHANICAL, 411, 916, 68, 0, 100),
+        StatCase(HiredMercStat.EXPLOSIVES, 339, 1378, 69, 0, 100),
+        StatCase(HiredMercStat.MEDICAL, 261, 1372, 70, 0, 100),
+    )
+    private fun statRequest(source: ByteArray, case: StatCase, expected: Int = case.current,
+        value: Int = case.current + 1) = SaveEditRequest(
+        SaveEditRequest.SourceIdentity(source.size, hash(source)),
+        SaveEditRequest.SetHiredStat(7, case.stat, expected, value),
+    )
+
+    @TestFactory fun everyStatSynchronizesAndPreservesAllOtherFacts() = cases.mapIndexed { tag, case ->
+        dynamicTest(case.stat.name) {
+            val source = save()
+            val original = source.copyOf()
+            val request = statRequest(source, case)
+            val result = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request))
+            val candidate = result.candidateBytes
+            val value = case.current + 1
+            assertContentEquals(original, source)
+            assertEquals(case.profile, case.stat.profileOffset())
+            assertEquals(case.live, case.stat.soldierOffset())
+            val oldProfiles = inspector().parseBuild041202NormalNonLinuxProfiles(source)
+            val newProfiles = inspector().parseBuild041202NormalNonLinuxProfiles(candidate)
+            assertEquals(oldProfiles.map { if (it.profileId == 7) it.withStat(case.stat, value) else it }, newProfiles)
+            val old = assertIs<SaveInspectionV01Result.Success>(inspector().inspectV01(source))
+            val new = assertIs<SaveInspectionV01Result.Success>(inspector().inspectV01(candidate))
+            assertEquals(old.format, new.format)
+            assertEquals(old.campaign, new.campaign)
+            assertEquals(old.roster.map { if (it.profileIndex == 7) it.copy(stats = it.stats.withStat(case.stat, value)) else it }, new.roster)
+            val oldLive = assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(source))
+            val newLive = assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(candidate))
+            oldLive.mercs.zip(newLive.mercs).forEach { (a, b) ->
+                assertEquals(a.profileIndex, b.profileIndex)
+                assertEquals(a.slots, b.slots)
+                assertEquals(if (a.profileIndex == 7) a.stats.withStat(case.stat, value) else a.stats, b.stats)
+            }
+            val pStart = PROFILE_START + 7 * 716
+            val sStart = PROFILE_END + 1
+            source.indices.forEach { i ->
+                if (i !in pStart + case.profile until pStart + 716 && i !in sStart + case.live until sStart + 2328) {
+                    assertEquals(source[i], candidate[i], "untouched ciphertext $i")
+                }
+            }
+            for ((start, size, field, checksum) in listOf(listOf(pStart, 716, case.profile, 696), listOf(sStart, 2328, case.live, 2208))) {
+                val a = decrypt(source, start, size)
+                val b = decrypt(candidate, start, size)
+                assertEquals(case.current, a[field].toInt())
+                assertEquals(value, b[field].toInt())
+                a.indices.forEach { i -> if (i != field && i !in checksum..checksum + 3) assertEquals(a[i], b[i], "plaintext $i") }
+                assertEquals(independentChecksum(b, size == 2328), u32(b, checksum))
+                if (case.stat in listOf(HiredMercStat.LEADERSHIP, HiredMercStat.WISDOM)) {
+                    assertEquals(u32(a, checksum), u32(b, checksum)) // Neither formula covers these fields.
+                } else assertNotEquals(u32(a, checksum), u32(b, checksum))
+            }
+            val canonical = ByteBuffer.allocate(60).order(ByteOrder.LITTLE_ENDIAN).putInt(2)
+                .put(java.util.HexFormat.of().parseHex(hash(source))).putInt(source.size)
+                .putInt(1).putInt(tag + 1).putInt(7).putInt(case.current).putInt(value).array()
+            assertEquals(hash(canonical), result.provenance.requestSha256())
+            assertEquals("hired-stat-v2", result.provenance.verificationPlan())
+            assertEquals(2, result.provenance.modelVersion())
+        }
+    }
+
+    @TestFactory fun statSpecificRangesAndNoOpIdentity() = cases.map { case -> dynamicTest(case.stat.name) {
+        val source = save()
+        assertEquals(case.minimum, case.stat.minimum())
+        assertEquals(case.maximum, case.stat.maximum())
+        for (value in listOf(case.minimum, case.maximum)) {
+            val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, statRequest(source, case, value = value))).candidateBytes
+            // Boundary also becomes a valid expected-current, through the same complete path.
+            assertContentEquals(candidate, assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(candidate,
+                statRequest(candidate, case, expected = value, value = value))).candidateBytes)
+        }
+        assertContentEquals(source, assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source,
+            statRequest(source, case, value = case.current))).candidateBytes)
+        var work = 0
+        val bounded = editor(observe = { work++ })
+        for (bad in listOf(case.minimum - 1, case.maximum + 1, Int.MIN_VALUE, Int.MAX_VALUE)) {
+            failure(bounded.edit(source, statRequest(source, case, value = bad)), SaveEditResult.Reason.INVALID_REQUEST)
+            failure(bounded.edit(source, statRequest(source, case, expected = bad)), SaveEditResult.Reason.INVALID_REQUEST)
+        }
+        assertEquals(0, work)
+    } }
+
+    @TestFactory fun eachStatRejectsStaleValuesDisagreementAndV102() = cases.map { case -> dynamicTest(case.stat.name) {
+        val source = save()
+        failure(editor().edit(source, statRequest(source, case, expected = case.current - 1)), SaveEditResult.Reason.EXPECTED_CURRENT_MISMATCH)
+        for ((start, size, field) in listOf(listOf(PROFILE_START + 7 * 716, 716, case.profile), listOf(PROFILE_END + 1, 2328, case.live))) {
+            val mismatch = source.copyOf()
+            rewrite(mismatch, start, size) { it[field]-- }
+            failure(editor().edit(mismatch, statRequest(mismatch, case)), SaveEditResult.Reason.EXPECTED_CURRENT_MISMATCH)
+        }
+        val v102 = source.copyOf().also { it[0] = 102 }
+        assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(v102))
+        failure(editor().edit(v102, statRequest(v102, case)), SaveEditResult.Reason.UNSUPPORTED_FORMAT)
+        failure(Ja2SaveEditor().edit(source, statRequest(source, case)), SaveEditResult.Reason.CAPABILITY_DISABLED)
+    } }
+
+    @TestFactory fun statInjuriesAreNotMistakenForProfileLiveAgreement() = cases.filter { it.damage >= 0 }.map { case ->
+        dynamicTest(case.stat.name) {
+            for (damage in listOf(-128, -1, 1, 127)) {
+                val source = save().also { bytes -> rewrite(bytes, PROFILE_END + 1, 2328) { it[case.damage] = damage.toByte() } }
+                val original = source.copyOf()
+                for (value in listOf(case.current, case.current + 1)) {
+                    val rejected = assertIs<SaveEditResult.Failure>(editor().edit(source, statRequest(source, case, value = value)))
+                    assertEquals(SaveEditResult.Stage.PRECONDITION, rejected.stage())
+                    assertEquals(SaveEditResult.Reason.STAT_INJURY_PRESENT, rejected.reason())
+                }
+                assertContentEquals(original, source)
+                // An unrelated stat edit must preserve this injury byte exactly.
+                val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request(source))).candidateBytes
+                assertEquals(damage.toByte(), decrypt(candidate, PROFILE_END + 1, 2328)[case.damage])
+            }
+        }
+    }
+
+    @TestFactory fun everyStatRejectsCorruptOrSemanticallyWrongCandidates() = cases.map { case -> dynamicTest(case.stat.name) {
+        val source = save()
+        val request = statRequest(source, case)
+        val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request)).candidateBytes
+        for ((start, size, field) in listOf(listOf(PROFILE_START + 7 * 716, 716, case.profile), listOf(PROFILE_END + 1, 2328, case.live))) {
+            val wrong = candidate.copyOf().also { bytes -> rewrite(bytes, start, size) { it[field]++ } }
+            failure(validate(source, wrong, request), SaveEditResult.Reason.VERIFICATION_MISMATCH)
+            val corrupt = candidate.copyOf().also { it[start + if (size == 716) 696 else 2208]++ }
+            assertEquals(SaveEditResult.Stage.CANDIDATE_PARSE, assertIs<SaveEditResult.Failure>(validate(source, corrupt, request)).stage())
+        }
+    } }
 
     @Test fun synchronizedEditPreservesAllOtherFactsAndBytes() {
         for (id in listOf(7, 42)) {
@@ -155,6 +299,8 @@ class SaveEditTransactionTest {
         for (digest in listOf("", "a".repeat(65), "G".repeat(64))) {
             failure(editor.edit(empty, SaveEditRequest(SaveEditRequest.SourceIdentity(0, digest), request(empty).operation())), SaveEditResult.Reason.INVALID_REQUEST)
         }
+        failure(editor.edit(empty, SaveEditRequest(SaveEditRequest.SourceIdentity(0, hash(empty)),
+            SaveEditRequest.SetHiredStat(7, null, 0, 0))), SaveEditResult.Reason.INVALID_REQUEST)
         failure(editor.edit(empty, null), SaveEditResult.Reason.INVALID_REQUEST)
         failure(editor.edit(empty, SaveEditRequest(null, null)), SaveEditResult.Reason.INVALID_REQUEST)
         failure(editor.edit(ByteArray(Ja2SaveEditor.MAX_SAVE_BYTES + 1), null), SaveEditResult.Reason.SOURCE_TOO_LARGE)
@@ -165,13 +311,15 @@ class SaveEditTransactionTest {
         val maximum = ByteArray(Ja2SaveEditor.MAX_SAVE_BYTES)
         failure(Ja2SaveEditor().edit(maximum, request(maximum)), SaveEditResult.Reason.CAPABILITY_DISABLED)
         val source = save()
-        failure(editor(capability = SyntheticMarksmanshipCapability(source.size - 1, source.size)).edit(source, request(source)),
+        val exact = source.copyOf(Ja2SaveEditor.MAX_SAVE_BYTES)
+        assertEquals(exact.size, assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(exact, request(exact))).candidateBytes.size)
+        failure(editor(capability = SyntheticSaveEditCapability(source.size - 1, source.size)).edit(source, request(source)),
             SaveEditResult.Reason.CAPABILITY_SIZE_LIMIT)
         val work = mutableListOf<EditWork>()
-        failure(editor(capability = SyntheticMarksmanshipCapability(source.size, source.size - 1), observe = work::add).edit(source, request(source)),
+        failure(editor(capability = SyntheticSaveEditCapability(source.size, source.size - 1), observe = work::add).edit(source, request(source)),
             SaveEditResult.Reason.CANDIDATE_SIZE_LIMIT)
         assertFalse(EditWork.CANDIDATE_ALLOCATION in work)
-        assertIs<SaveEditResult.VerifiedCandidate>(editor(capability = SyntheticMarksmanshipCapability(source.size, source.size)).edit(source, request(source)))
+        assertIs<SaveEditResult.VerifiedCandidate>(editor(capability = SyntheticSaveEditCapability(source.size, source.size)).edit(source, request(source)))
     }
 
     @Test fun endpointsAccepted() {
@@ -223,11 +371,86 @@ class SaveEditTransactionTest {
         }
     }
 
-    private fun validate(source: ByteArray, candidate: ByteArray, request: SaveEditRequest): SaveEditResult =
+    @Test fun liveLeadershipAndWisdomRemainSignedReadFactsForBothVersions() {
+        for (version in listOf(102, 103)) {
+            val source = save().also { it[0] = version.toByte() }
+            rewrite(source, PROFILE_END + 1, 2328) { it[895] = -128; it[841] = 127 }
+            val live = assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(source))
+            assertEquals(-128, live.mercs.first().stats.leadership)
+            assertEquals(127, live.mercs.first().stats.wisdom)
+        }
+    }
+
+    @Test fun capabilityCannotRaiseCoreCeiling() {
+        for (limit in listOf(-1, Ja2SaveEditor.MAX_SAVE_BYTES + 1, Int.MAX_VALUE)) {
+            assertFailsWith<IllegalArgumentException> { SyntheticSaveEditCapability(maxSourceBytes = limit) }
+            assertFailsWith<IllegalArgumentException> { SyntheticSaveEditCapability(maxCandidateBytes = limit) }
+        }
+        assertEquals(cases.map { it.stat }, HiredMercStat.entries)
+    }
+
+    @Test fun detectorCannotHideMalformedNamesByRepairingItsOwnCopy() {
+        val source = save()
+        val request = request(source)
+        val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request)).candidateBytes
+        val repairingInspector = Ja2SaveInspector.withDetectorForTesting { bytes ->
+            rewrite(bytes, PROFILE_START, 716) { it[0] = 'A'.code.toByte(); it[1] = 0 }
+            SaveFormatDetector.detect(bytes, oracle).also { assertEquals(SaveCompatibility.SUPPORTED, it.compatibility) }
+        }
+        fun corrupt(bytes: ByteArray) = bytes.copyOf().also { bad ->
+            rewrite(bad, PROFILE_START, 716) { it[0] = 0; it[1] = 0xd8.toByte() }
+        }
+        val badSource = corrupt(source)
+        val badCandidate = corrupt(candidate)
+        val originalSource = badSource.copyOf()
+        val originalCandidate = badCandidate.copyOf()
+        failure(editor(repairingInspector).edit(badSource, request(badSource)), SaveEditResult.Reason.INVALID_SOURCE)
+        failure(validate(source, badCandidate, request, editor(repairingInspector)), SaveEditResult.Reason.INVALID_CANDIDATE)
+        assertContentEquals(originalSource, badSource)
+        assertContentEquals(originalCandidate, badCandidate)
+        assertEquals(SaveDetectionReason.DETECTOR_MUTATED_INPUT, repairingInspector.detect(badCandidate).reason)
+    }
+
+    @Test fun verifierRejectsEveryProfileAndAllExposedStatDrift() {
+        val source = save()
+        val request = request(source)
+        val operation = request.operation() as SaveEditRequest.SetHiredStat
+        val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request)).candidateBytes
+        val before = assertIs<SaveInspectionV01Result.Success>(inspector().inspectV01(source))
+        val after = assertIs<SaveInspectionV01Result.Success>(inspector().inspectV01(candidate))
+        val profiles = inspector().parseBuild041202NormalNonLinuxProfiles(source)
+        val newProfiles = inspector().parseBuild041202NormalNonLinuxProfiles(candidate)
+        val live = assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(source))
+        val newLive = assertIs<LiveMercStateInspectionResult.Success>(inspector().inspectLiveMercState(candidate))
+        fun verify(changedProfiles: List<MercProfile> = newProfiles,
+            changedRoster: SaveInspectionV01Result.Success = after,
+            changedLive: LiveMercStateInspectionResult.Success = newLive) =
+            verifySaveEdit(source, candidate, operation, before, changedRoster, profiles, changedProfiles, live, changedLive, rotation)
+        assertTrue(verify())
+        for (id in 0..169) {
+            assertFalse(verify(changedProfiles = newProfiles.toMutableList().also { it[id] = it[id].copy(life = it[id].life + 1) }))
+        }
+        val target = newProfiles[7]
+        val variants = listOf(target.copy(profileId = 8), target.copy(name = "changed"),
+            target.copy(nickname = "changed"), target.copy(lifeMax = 99)) +
+            cases.map { target.withStat(it.stat, -99) }
+        variants.forEach { changed -> assertFalse(verify(changedProfiles = newProfiles.toMutableList().also { it[7] = changed })) }
+        for (case in cases) {
+            assertFalse(verify(changedRoster = SaveInspectionV01Result.Success.create(after.format, after.campaign,
+                after.roster.map { it.copy(stats = it.stats.withStat(case.stat, -99)) })))
+            assertFalse(verify(changedLive = LiveMercStateInspectionResult.Success(newLive.format,
+                newLive.mercs.map { LiveMercState(it.profileIndex, it.stats.withStat(case.stat, -99), it.slots) })))
+        }
+        assertFalse(verify(changedRoster = SaveInspectionV01Result.Success.create(after.format, after.campaign, after.roster.reversed())))
+        assertFalse(verify(changedLive = LiveMercStateInspectionResult.Success(newLive.format, newLive.mercs.reversed())))
+        assertFalse(verify(changedRoster = SaveInspectionV01Result.Success.create(after.format, after.campaign.copy(balance = -1), after.roster)))
+    }
+
+    private fun validate(source: ByteArray, candidate: ByteArray, request: SaveEditRequest, editor: Ja2SaveEditor = editor()): SaveEditResult =
         Ja2SaveEditor::class.java.getDeclaredMethod("validateCandidate", ByteArray::class.java, ByteArray::class.java,
             SaveEditRequest::class.java, SaveInspectionV01Result.Success::class.java, List::class.java,
             LiveMercStateInspectionResult.Success::class.java, SaveRotationTable::class.java,
-        ).apply { isAccessible = true }.invoke(editor(), source, candidate, request,
+        ).apply { isAccessible = true }.invoke(editor, source, candidate, request,
             inspector().inspectV01(source), inspector().parseBuild041202NormalNonLinuxProfiles(source),
             inspector().inspectLiveMercState(source), rotation) as SaveEditResult
 
@@ -240,7 +463,7 @@ class SaveEditTransactionTest {
             val profile = vector.copyOfRange(49 + id * 716, 49 + (id + 1) * 716)
             profile.fill(0, 0, 80)
             profile[0] = ('A'.code + id % 26).toByte(); profile[60] = ('a'.code + id % 26).toByte()
-            profile[353] = 89
+            cases.forEach { profile[it.profile] = it.current.toByte() }
             putU32(profile, 696, independentChecksum(profile, false))
             encrypt(profile).copyInto(prefix, PROFILE_START + id * 716)
         }
@@ -253,6 +476,7 @@ class SaveEditTransactionTest {
                 val soldier = ByteArray(2328)
                 soldier[0] = slot.toByte(); soldier[8] = 8; soldier[751] = 1
                 soldier[1825] = if (slot == 0 || kind in listOf("duplicate", "vehicleAlias")) 7 else 42
+                cases.forEach { soldier[it.live] = it.current.toByte() }
                 soldier[1377] = if (kind == "mismatch" && slot == 0) 88 else 89
                 soldier[868] = 55; soldier[917] = 65; soldier[886] = 40
                 // Opaque inventory bytes and unsigned checksum contributions, preserved exactly.

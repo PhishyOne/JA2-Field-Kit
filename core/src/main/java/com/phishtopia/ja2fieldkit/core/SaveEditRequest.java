@@ -6,8 +6,8 @@ public record SaveEditRequest(SourceIdentity expectedSource, Operation operation
     public record SourceIdentity(int size, String sha256) {}
 
     /** Closed operation set; future operations require their own complete verification plan. */
-    public sealed interface Operation permits SetHiredMarksmanship {}
+    public sealed interface Operation permits SetHiredStat {}
 
     /** Direct set of both base and current values, with a required shared precondition. */
-    public record SetHiredMarksmanship(int profileId, int expectedCurrent, int value) implements Operation {}
+    public record SetHiredStat(int profileId, HiredMercStat stat, int expectedCurrent, int value) implements Operation {}
 }

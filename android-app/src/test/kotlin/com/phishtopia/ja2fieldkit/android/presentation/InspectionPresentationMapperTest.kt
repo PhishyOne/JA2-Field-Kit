@@ -131,7 +131,7 @@ class InspectionPresentationMapperTest {
     }
 
     private val equalBase = MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90)
-    private val equalLive = LiveMercStats(-8, 99, 81, 82, 83, 86, 87, 88, 89, 90)
+    private val equalLive = LiveMercStats(-8, 99, 81, 82, 83, 86, 87, 88, 89, 90, 0, 0)
 
     private fun statsMerc(base: MercStats = equalBase, live: LiveMercStats = equalLive): MercPresentation {
         val result = successResult(stats = base)

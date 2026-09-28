@@ -4,14 +4,14 @@
 
 `Ja2SaveEditor` establishes the in-memory transaction boundary on main
 `120fdc9aeba70b3243c55bff7a2a89ae338533a1`. Its closed operation set currently
-contains one synchronized hired-merc marksmanship edit. **Production capability
+contains one typed synchronized hired-merc stat operation, covering ten proven
+non-health stats (see [evidence and domains](hired-stat-edit-evidence.md)). **Production capability
 remains disabled.** The no-argument editor fails closed; only deliberately
 privileged synthetic tests can inject a capability and synthetic digest oracle.
 This slice does not claim real-save qualification or playable-product completion.
 
-The older `Ja2MarksmanshipEditor` remains an isolated, disabled profile-only
-proof with its existing regression tests. New callers must use the transaction
-contract here; the new engine neither calls nor enables the old proof.
+The older profile-only proof has been retired. `Ja2SaveEditor` is the sole
+editing path; source binding and hired-player synchronization are mandatory.
 
 [Issue #12](transactional-edit-safety.md) governs both candidate creation and
 future placement. Core performs no filesystem, URI, process or network writes.
@@ -22,7 +22,7 @@ Android remains read-only. No private save was used in this construction.
 ```java
 new SaveEditRequest(
     new SaveEditRequest.SourceIdentity(expectedSize, expectedSha256),
-    new SaveEditRequest.SetHiredMarksmanship(profileId, expectedCurrent, value)
+    new SaveEditRequest.SetHiredStat(profileId, HiredMercStat.MARKSMANSHIP, expectedCurrent, value)
 )
 ```
 
@@ -55,14 +55,16 @@ and Build **04.12.02** through the existing public detector/parser. Readable
 v102 is explicitly refused for writes. Neither a caller-supplied identity nor a
 synthetic capability bypasses normal source or candidate admission.
 
-Both expected-current and requested marksmanship are in 0..100. The target must
+Both expected-current and requested values must satisfy the selected stat's
+[evidenced domain](hired-stat-edit-evidence.md). Attribute injury counters must
+be zero for the edited stat; equality alone does not prove an uninjured target. The target must
 be exactly one current, non-vehicle player merc. The shared validated roster
 traversal now also supplies internal framing descriptors, including vehicles so
 an aliasing vehicle profile ID cannot make an edit ambiguous. Existing read
 membership and checksum rules remain intact. Non-player, duplicate, missing,
 vehicle-only, and profile/live disagreement cases fail closed.
 
-Serialization sets profile byte 353 and soldier byte 1377, regenerates profile
+Serialization sets the selected profile and soldier stat bytes, regenerates profile
 checksum bytes 696..699 and soldier checksum bytes 2208..2211, and re-encrypts
 those two fixed records (716 and 2328 bytes) with per-record transform reset.
 The existing roster checksum verifier is retained independently of the new
@@ -93,8 +95,8 @@ serializes and reparses and must reproduce the entire input byte for byte.
 
 Provenance binds source and candidate size/SHA-256, exact format, immutable
 request, canonical-request SHA-256, synthetic capability/revision, verification
-plan and transaction model version. The canonical request is 56 bytes:
-little-endian version, 32-byte source digest, source size, operation tag,
+plan and transaction model version. The canonical request is version 2, 60 bytes:
+little-endian version, 32-byte source digest, source size, operation tag, stable stat tag,
 profile ID, expected value and new value (all integers signed 32-bit).
 No names, filenames, URIs, diagnostics or rotation bytes enter provenance.
 These runtime hashes must not be published for private saves.
@@ -107,8 +109,8 @@ These runtime hashes must not be published for private saves.
 | Candidate layout | Exactly source length; two fixed record replacements |
 | Operations | Exactly one, counted structurally; no collection or batch overload |
 | Additional assertions / nesting | Zero; absent from this initial API |
-| Request components | Four fixed integers, one exactly 64-character lowercase hex digest |
-| Canonical request | Exactly 56 bytes before hashing |
+| Request components | Four fixed integers, one closed stat enum, one exactly 64-character lowercase hex digest |
+| Canonical request | Exactly 60 bytes before hashing |
 | Plan / report | Exactly 12 aggregate relations, no dynamic expansion |
 | Profiles / player slots / inventory slots | 170 / 20 / 19 per player |
 | Plaintext edit buffers | 716 + 2328 bytes; encrypted replacements have the same sizes |
@@ -161,7 +163,7 @@ Production enablement, a qualified placement adapter and authorized local
 real-save/game-load evidence remain follow-up work. Draft publication is not
 candidate completion.
 
-## Construction validation (2026-09-28)
+## Initial transaction validation (start HEAD, 2026-09-28)
 
 Using JDK 21, cached Gradle 9.5.0 and the pinned fixture-validator environment:
 
@@ -180,3 +182,8 @@ The restricted execution sandbox blocked Gradle's local socket and the policy
 suite's namespace setup. The successful runs used the authorized host execution
 path, with fixture isolation and all admission checks unchanged. No production
 capability, real-save or placement qualification is inferred from these results.
+
+## Multi-stat continuation
+
+See [hired-stat evidence](hired-stat-edit-evidence.md) for this run's semantic
+reassessment, API consolidation, offset audit and validation results.

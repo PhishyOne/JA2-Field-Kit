@@ -330,6 +330,8 @@ object NormalNonLinuxRosterDecoder {
         mechanical = reader.i8(MECHANICAL_OFFSET).toInt(),
         explosives = reader.i8(EXPLOSIVE_OFFSET).toInt(),
         medical = reader.i8(MEDICAL_OFFSET).toInt(),
+        leadership = reader.i8(895).toInt(),
+        wisdom = reader.i8(841).toInt(),
     )
 
     private fun sourceChecksum(reader: LittleEndianReader): Long {

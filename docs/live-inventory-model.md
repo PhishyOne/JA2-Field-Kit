@@ -44,14 +44,14 @@ bytes, offsets, checksum internals, rotation/key material, or path/keyring data.
 Collections are immutable snapshots. The existing `inspectLiveInventory` API
 and its defensive raw object accessors are unchanged.
 
-Stat provenance is exclusively the ten named offsets and signed-byte semantics
+The initial Issue #42 stat provenance was the ten named offsets and signed-byte semantics
 already present in production `NormalNonLinuxRosterDecoder` as checksum inputs:
 current life, max life, agility, dexterity, strength, experience level,
 marksmanship, mechanical, explosives, and medical. These are exact signed-byte
 facts (-128..127), including negative values; there is no invented gameplay
 range or normalization. Current life and max life are separate values.
-No leadership/wisdom offset, source-derived table, catalog, or upstream expression
-is added. Membership and checksum authority are unchanged.
+That slice added no leadership/wisdom offset, source-derived table, catalog, or
+upstream expression. The Issue #72 extension is documented below. Membership and checksum authority are unchanged.
 
 Android uses two logical calls: `inspectV01` for campaign/profile roster and
 `inspectLiveMercState` for tactical stats plus inventory. It joins by exact
@@ -220,3 +220,11 @@ with Gradle 9.5.0/JDK 21; both fail before configuration with
 `FileLockContentionHandler`. Cached compilation and focused execution are
 supplemental evidence only. CI with working fixture isolation is authoritative
 for the complete suite and live-inventory integration claims.
+
+## Issue #72 read-model extension
+
+The public live-stat model now also reads signed leadership at 895 and wisdom
+at 841, independent of checksum participation. These values are required for
+synchronized stat candidate verification; existing read admission and checksums
+are unchanged. See [pinned evidence](hired-stat-edit-evidence.md). Android's
+production presentation remains unchanged in this construction slice.

@@ -59,15 +59,16 @@ contains only profile identity, numeric stats, and role/item ID/count inventory
 facts; no raw records or opaque bytes. Android calls `inspectV01` plus this
 combined surface, requiring equal format, equal unique profile identity sets,
 and canonical slot order. Android merges live/current and profile/base stats for display;
-leadership and wisdom remain profile/base only. See
+the current Android presentation still shows leadership and wisdom as profile/base,
+while core also exposes their live values for transaction verification. See
 [live-inventory-model.md](live-inventory-model.md) for provenance and boundaries.
 
-The separate [Issue #36 marksmanship kernel](marksmanship-edit-kernel.md) can
-construct verified in-memory candidates under privileged synthetic test evidence.
-A Java 21 sealed result view and bytecode-private editor transaction/constructors
-guard authority; tests must explicitly suppress reflection access checks.
-Its production capability is disabled. `Ja2SaveInspector` and Android remain
-read-only; there is no save output, placement, or replacement path.
+The [Issue #72 transaction](save-edit-transactions.md) is the sole edit path,
+replacing the earlier profile-only proof. It binds a typed hired-stat request to
+source identity, synchronizes profile/live values, and constructs verified
+in-memory candidates only under privileged synthetic test evidence. Java sealed
+results and private constructors guard authority. Production capability remains
+disabled; the inspector and Android remain read-only, with no output placement.
 
 ## Planned boundaries
 

@@ -57,7 +57,8 @@ offset, rotation, digest, key, or encryption details cross this facade.
 
 The [Issue #72 candidate transaction](docs/save-edit-transactions.md) adds a
 source-bound core request/result architecture and privileged synthetic coverage
-for synchronized hired-merc marksmanship. Production editing remains disabled;
+for ten synchronized hired-merc stats with stat-specific ranges and injury guards.
+Production editing remains disabled;
 Android Save As awaits a qualified create-new placement adapter.
 
 ## Architecture

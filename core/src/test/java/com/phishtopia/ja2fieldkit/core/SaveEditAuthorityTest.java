@@ -15,7 +15,7 @@ public class SaveEditAuthorityTest {
         assertTrue(SaveEditResult.class.isSealed());
         assertTrue(SaveEditResult.VerifiedCandidate.class.isSealed());
         assertTrue(SaveEditRequest.Operation.class.isSealed());
-        assertEquals(Set.of(SaveEditRequest.SetHiredMarksmanship.class), Set.of(SaveEditRequest.Operation.class.getPermittedSubclasses()));
+        assertEquals(Set.of(SaveEditRequest.SetHiredStat.class), Set.of(SaveEditRequest.Operation.class.getPermittedSubclasses()));
         var impl = SaveEditResult.VerifiedCandidate.class.getPermittedSubclasses();
         assertEquals(1, impl.length);
         assertEquals(Ja2SaveEditor.class, impl[0].getNestHost());
@@ -29,10 +29,10 @@ public class SaveEditAuthorityTest {
         for (var method : Ja2SaveEditor.class.getDeclaredMethods()) {
             if (!method.getName().equals("edit")) assertTrue(Modifier.isPrivate(method.getModifiers()), method.toString());
         }
-        var constructor = Ja2SaveEditor.class.getDeclaredConstructor(Ja2SaveInspector.class, SyntheticMarksmanshipCapability.class, Consumer.class);
+        var constructor = Ja2SaveEditor.class.getDeclaredConstructor(Ja2SaveInspector.class, SyntheticSaveEditCapability.class, Consumer.class);
         assertThrows(IllegalAccessException.class, () -> constructor.newInstance(new Ja2SaveInspector(),
-            new SyntheticMarksmanshipCapability(1, 1), (Consumer<EditWork>) work -> {}));
-        for (var type : List.of(SaveEditRequest.class, SaveEditRequest.SourceIdentity.class, SaveEditRequest.SetHiredMarksmanship.class)) {
+            new SyntheticSaveEditCapability(1, 1), (Consumer<EditWork>) work -> {}));
+        for (var type : List.of(SaveEditRequest.class, SaveEditRequest.SourceIdentity.class, SaveEditRequest.SetHiredStat.class)) {
             assertTrue(type.isRecord());
             for (var field : type.getDeclaredFields()) assertTrue(Modifier.isFinal(field.getModifiers()));
         }
@@ -42,7 +42,7 @@ public class SaveEditAuthorityTest {
 
     @Test public void adversarialCompilationCannotMintSuccessOrSupplyCapabilities() throws Exception {
         var attacks = List.of(
-            "class Probe { Object x = new Ja2SaveEditor(new Ja2SaveInspector(), new SyntheticMarksmanshipCapability(1,1), w -> {}); }",
+            "class Probe { Object x = new Ja2SaveEditor(new Ja2SaveInspector(), new SyntheticSaveEditCapability(1,1), w -> {}); }",
             "class Probe { Object x = new Ja2SaveEditor.VerifiedCandidateImpl(new byte[0], null); }",
             "abstract class Probe implements SaveEditResult.VerifiedCandidate {}",
             "abstract class Probe implements SaveEditResult {}",
@@ -50,7 +50,7 @@ public class SaveEditAuthorityTest {
             "class Probe { Object x = new Ja2SaveEditor.BoundedCandidateWriter(1,1, () -> {}); }"
         );
         for (var pkg : List.of("com.phishtopia.ja2fieldkit.core", "adversary")) {
-            assertTrue(compile(pkg, "class Probe { SaveEditResult x = new Ja2SaveEditor().edit(new byte[0], new SaveEditRequest(new SaveEditRequest.SourceIdentity(0, \"0\".repeat(64)), new SaveEditRequest.SetHiredMarksmanship(0,0,0))); }"));
+            assertTrue(compile(pkg, "class Probe { SaveEditResult x = new Ja2SaveEditor().edit(new byte[0], new SaveEditRequest(new SaveEditRequest.SourceIdentity(0, \"0\".repeat(64)), new SaveEditRequest.SetHiredStat(0,HiredMercStat.MARKSMANSHIP,0,0))); }"));
             for (var attack : attacks) assertFalse(compile(pkg, attack), attack);
         }
     }

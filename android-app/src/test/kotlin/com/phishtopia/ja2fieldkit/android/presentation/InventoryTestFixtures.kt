@@ -51,7 +51,7 @@ internal fun inspectionSuccess(
 internal fun inventoryEntry(
     profileIndex: Int,
     slots: List<LiveInventorySlot> = InventorySlotRole.entries.map { inventorySlot(it, 0, 0) },
-    stats: LiveMercStats = LiveMercStats(profileIndex, 99, -128, -2, 127, -3, -4, -5, -6, -7),
+    stats: LiveMercStats = LiveMercStats(profileIndex, 99, -128, -2, 127, -3, -4, -5, -6, -7, 0, 0),
 ): LiveMercState = construct(
     LiveMercState::class.java,
     profileIndex,

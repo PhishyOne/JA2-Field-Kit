@@ -63,8 +63,8 @@ class NormalNonLinuxRosterDecoderTest {
         val inspector = admittedInspector()
         val result = assertIs<LiveMercStateInspectionResult.Success>(inspector.inspectLiveMercState(save))
         assertEquals(listOf(42, 7), result.mercs.map { it.profileIndex })
-        assertEquals(LiveMercStats(-128, 127, -3, -4, -5, -6, -7, -8, -9, -10), result.mercs[0].stats)
-        assertEquals(LiveMercStats(55, 65, 45, 35, 40, 7, 50, 30, 20, 25), result.mercs[1].stats)
+        assertEquals(LiveMercStats(-128, 127, -3, -4, -5, -6, -7, -8, -9, -10, 0, 0), result.mercs[0].stats)
+        assertEquals(LiveMercStats(55, 65, 45, 35, 40, 7, 50, 30, 20, 25, 0, 0), result.mercs[1].stats)
         val inventories = assertIs<LiveInventoryInspectionResult.Success>(inspector.inspectLiveInventory(save))
         assertEquals(inventories.format, result.format)
         result.mercs.zip(inventories.inventories).forEach { (live, inventory) ->

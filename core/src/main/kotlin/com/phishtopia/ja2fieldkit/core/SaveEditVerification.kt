@@ -7,7 +7,7 @@ import com.phishtopia.ja2fieldkit.core.model.*
 internal fun verifySaveEdit(
     source: ByteArray,
     candidate: ByteArray,
-    request: SaveEditRequest.SetHiredMarksmanship,
+    request: SaveEditRequest.SetHiredStat,
     before: SaveInspectionV01Result.Success,
     after: SaveInspectionV01Result.Success,
     sourceProfiles: List<MercProfile>,
@@ -16,22 +16,24 @@ internal fun verifySaveEdit(
     candidateLive: LiveMercStateInspectionResult.Success,
     rotation: SaveRotationTable,
 ): Boolean {
+    val profileOffset = request.stat().profileOffset()
+    val soldierOffset = request.stat().soldierOffset()
     if (!exactFormat(after.format) || before.format != after.format ||
         source.size != candidate.size || candidate.size > Ja2SaveEditor.MAX_SAVE_BYTES ||
         sourceProfiles.size != 170 || candidateProfiles.size != 170 ||
         before.campaign != after.campaign || before.roster.size != after.roster.size ||
-        candidateProfiles[request.profileId()].marksmanship != request.value()
+        request.stat().profileValue(candidateProfiles[request.profileId()]) != request.value()
     ) return false
     for (id in 0..169) {
         val expected = sourceProfiles[id].let {
-            if (id == request.profileId()) it.copy(marksmanship = request.value()) else it
+            if (id == request.profileId()) it.withStat(request.stat(), request.value()) else it
         }
         if (candidateProfiles[id] != expected) return false
     }
     for (index in before.roster.indices) {
         val expected = before.roster[index].let {
             if (it.profileIndex == request.profileId()) {
-                it.copy(stats = it.stats.copy(marksmanship = request.value()))
+                it.copy(stats = it.stats.withStat(request.stat(), request.value()))
             } else it
         }
         if (after.roster[index] != expected) return false
@@ -44,8 +46,8 @@ internal fun verifySaveEdit(
     for ((old, new) in sourceLive.mercs.zip(candidateLive.mercs)) {
         val target = old.profileIndex == request.profileId()
         if (old.profileIndex != new.profileIndex || old.slots != new.slots ||
-            (target && old.stats.marksmanship != request.expectedCurrent()) ||
-            new.stats != if (target) old.stats.copy(marksmanship = request.value()) else old.stats
+            (target && request.stat().liveValue(old.stats) != request.expectedCurrent()) ||
+            new.stats != if (target) old.stats.withStat(request.stat(), request.value()) else old.stats
         ) return false
     }
     val locations = NormalNonLinuxRosterDecoder.validatedRecordLocations(source)
@@ -65,24 +67,25 @@ internal fun verifySaveEdit(
     ) return false
     val start = sourceFrame.profileStartOffset + request.profileId() * 716
     for (index in source.indices) {
-        if (index !in start + 353 until start + 716 &&
-            index !in soldierStart + 1377 until soldierStart + 2328 && source[index] != candidate[index]
+        if (index !in start + profileOffset until start + 716 &&
+            index !in soldierStart + soldierOffset until soldierStart + 2328 && source[index] != candidate[index]
         ) return false
     }
     val oldPlain = decryptRecord(source, start, rotation)
     val newPlain = decryptRecord(candidate, start, rotation)
-    if (oldPlain[353].toInt() != request.expectedCurrent()) return false
+    if (oldPlain[profileOffset].toInt() != request.expectedCurrent()) return false
     for (index in 0 until 716) {
-        if (index != 353 && index !in 696..699 && oldPlain[index] != newPlain[index]) return false
+        if (index != profileOffset && index !in 696..699 && oldPlain[index] != newPlain[index]) return false
     }
-    if (newPlain[353].toInt() != request.value()) return false
+    if (newPlain[profileOffset].toInt() != request.value()) return false
     val checksum = NormalProfileChecksum.calculate(newPlain)
     repeat(4) { if (newPlain[696 + it] != (checksum ushr (8 * it)).toByte()) return false }
     val oldSoldier = NormalSaveBlockDecryptor.decryptBlock(source.copyOfRange(soldierStart, soldierStart + 2328), 2328, rotation)
     val newSoldier = NormalSaveBlockDecryptor.decryptBlock(candidate.copyOfRange(soldierStart, soldierStart + 2328), 2328, rotation)
-    if (oldSoldier[1377].toInt() != request.expectedCurrent() || newSoldier[1377].toInt() != request.value()) return false
+    if (!request.stat().admitsInjuryState(oldSoldier) || !request.stat().admitsInjuryState(newSoldier)) return false
+    if (oldSoldier[soldierOffset].toInt() != request.expectedCurrent() || newSoldier[soldierOffset].toInt() != request.value()) return false
     for (index in oldSoldier.indices) {
-        if (index != 1377 && index !in 2208..2211 && oldSoldier[index] != newSoldier[index]) return false
+        if (index != soldierOffset && index !in 2208..2211 && oldSoldier[index] != newSoldier[index]) return false
     }
     val soldierChecksum = NormalSoldierChecksum.calculate(newSoldier)
     repeat(4) { if (newSoldier[2208 + it] != (soldierChecksum ushr (8 * it)).toByte()) return false }

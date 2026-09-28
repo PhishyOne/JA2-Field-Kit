@@ -1,3 +1,8 @@
+> Historical Issue #36 construction record. Issue #72 retired this profile-only
+> API and its write path; use the sole [source-bound transaction](save-edit-transactions.md)
+> and [current stat evidence](hired-stat-edit-evidence.md). The text below records
+> the earlier proof, not the current public API.
+
 # Issue #36: bounded profile marksmanship rewrite kernel
 
 The successor [Issue #72 transaction](save-edit-transactions.md) synchronizes

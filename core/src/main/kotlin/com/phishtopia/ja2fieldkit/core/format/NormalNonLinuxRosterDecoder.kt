@@ -95,8 +95,18 @@ object NormalNonLinuxRosterDecoder {
             )
         })
 
+    // Internal descriptor carries framing only, never decrypted record bytes.
+    internal data class RecordLocation(val profileIndex: Int, val absoluteOffset: Int)
+
+    @JvmName("validatedRecordLocations")
+    internal fun validatedRecordLocations(saveBytes: ByteArray): List<RecordLocation> =
+        Collections.unmodifiableList(scanBuild041202(saveBytes).map {
+            RecordLocation(it.rosterEntry.profileIndex, it.absoluteOffset)
+        })
+
     /** Only stat facts and a narrow private inventory snapshot survive validation. */
     private class ValidatedPlayer(
+        val absoluteOffset: Int,
         val rosterEntry: MercRosterEntry,
         val stats: LiveMercStats,
         inventory: ByteArray,
@@ -158,6 +168,7 @@ object NormalNonLinuxRosterDecoder {
             validateSoldier(decrypted, slotIndex, saveBytes.size, profileIds, uniqueProfileIds)
             if (profileIds.size != previousCount) {
                 players += ValidatedPlayer(
+                    offset.toInt(),
                     context.profiles[profileIds.last()].toRosterEntry(),
                     liveStats(LittleEndianReader(decrypted)),
                     decrypted.copyOfRange(
@@ -274,7 +285,7 @@ object NormalNonLinuxRosterDecoder {
         if (statusFlags and SOLDIER_PC == 0L) {
             identityFailure(saveSize, RosterMembershipFailure.MISSING_PC_FLAG, slotIndex)
         }
-        if (reader.u32(STORED_CHECKSUM_OFFSET) != sourceChecksum(reader)) {
+        if (reader.u32(STORED_CHECKSUM_OFFSET) != NormalSoldierChecksum.calculate(bytes)) {
             throw RosterMembershipException(
                 reason = RosterMembershipFailure.CHECKSUM_MISMATCH,
                 stage = RosterMembershipStage.SOLDIER_CHECKSUM,
@@ -318,25 +329,6 @@ object NormalNonLinuxRosterDecoder {
         explosives = reader.i8(EXPLOSIVE_OFFSET).toInt(),
         medical = reader.i8(MEDICAL_OFFSET).toInt(),
     )
-
-    private fun sourceChecksum(reader: LittleEndianReader): Long {
-        var sum = CHECKSUM_STAT_OFFSET_PAIRS.fold(1L) { checksum, offsets ->
-            wrap(
-                (checksum + 1L + reader.i8(offsets.addend)) *
-                    (1L + reader.i8(offsets.multiplier)),
-            )
-        }
-        sum = wrap(sum + 1L + reader.u8(PROFILE_OFFSET))
-        repeat(INVENTORY_SLOT_COUNT) { slot ->
-            val recordOffset = INVENTORY_RECORD_SIZE * slot
-            sum = wrap(
-                sum +
-                    reader.u16(INVENTORY_START_OFFSET + recordOffset) +
-                    reader.u8(INVENTORY_COUNT_OFFSET + recordOffset),
-            )
-        }
-        return sum
-    }
 
     private fun identityFailure(
         saveSize: Int,
@@ -387,8 +379,6 @@ object NormalNonLinuxRosterDecoder {
 
     private fun checkedAdd(left: Long, right: Long): Long = Math.addExact(left, right)
 
-    private fun wrap(value: Long): Long = value and UINT32_MASK
-
     private fun MercProfile.toRosterEntry(): MercRosterEntry = MercRosterEntry(
         profileIndex = profileId,
         name = name,
@@ -438,16 +428,4 @@ object NormalNonLinuxRosterDecoder {
     private const val TEAM_OFFSET = 752
     private const val PROFILE_OFFSET = 1825
     private const val STORED_CHECKSUM_OFFSET = 2208
-    private const val UINT32_MASK = 0xffff_ffffL
-
-    private data class ChecksumStatOffsets(val addend: Int, val multiplier: Int)
-
-    private val CHECKSUM_STAT_OFFSET_PAIRS =
-        listOf(
-            ChecksumStatOffsets(LIFE_OFFSET, LIFE_MAX_OFFSET),
-            ChecksumStatOffsets(AGILITY_OFFSET, DEXTERITY_OFFSET),
-            ChecksumStatOffsets(STRENGTH_OFFSET, MARKSMANSHIP_OFFSET),
-            ChecksumStatOffsets(MEDICAL_OFFSET, MECHANICAL_OFFSET),
-            ChecksumStatOffsets(EXPLOSIVE_OFFSET, EXPERIENCE_LEVEL_OFFSET),
-        )
 }

@@ -62,8 +62,9 @@ and canonical slot order. Android merges live/current and profile/base stats for
 leadership and wisdom remain profile/base only. See
 [live-inventory-model.md](live-inventory-model.md) for provenance and boundaries.
 
-The separate [Issue #36 marksmanship kernel](marksmanship-edit-kernel.md) can
-construct verified in-memory candidates under privileged synthetic test evidence.
+The separate [Issue #55 synchronized marksmanship kernel](marksmanship-edit-kernel.md) can
+construct verified in-memory candidates for one hired merc, synchronizing profile
+and live marksmanship under privileged synthetic test evidence.
 A Java 21 sealed result view and bytecode-private editor transaction/constructors
 guard authority; tests must explicitly suppress reflection access checks.
 Its production capability is disabled. `Ja2SaveInspector` and Android remain

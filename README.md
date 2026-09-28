@@ -55,6 +55,12 @@ covering format/version/layout compatibility, the minimal campaign summary, and
 the verified roster/core stats. Inputs are copied before inspection; no raw
 offset, rotation, digest, key, or encryption details cross this facade.
 
+The [synchronized marksmanship core kernel](docs/marksmanship-edit-kernel.md)
+sets profile/base and live/current values together for one validated hired merc
+in privileged synthetic tests. Production capability remains disabled pending
+post-Draft exact-candidate private qualification. It adds no Android editing or
+output flow; the earlier profile-only proof is superseded.
+
 ## Architecture
 
 - `core/` is a pure Kotlin/JVM library with no Android dependencies.

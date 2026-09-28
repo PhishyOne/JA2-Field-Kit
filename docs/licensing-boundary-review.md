@@ -186,3 +186,19 @@ of the supplied audited interoperability facts. No upstream implementation,
 comments, localization-repair switches, catalog strings, or tables are copied.
 Tests generate invented strings and synthetic archives only. This does not
 select a project license or resolve the existing licensing review gate.
+
+## Synchronized marksmanship interoperability boundary (#55)
+
+The disabled core edit proof now synchronizes one validated hired merc's profile
+and live marksmanship over the audited 0..100 domain. It is direct set and
+preserves gain/history, salary, dialogue and other metadata. The old profile-only
+proof has no remaining transaction path. Shared roster framing and soldier
+checksum authority avoid a second parser or duplicated checksum recurrence.
+
+[The kernel provenance](marksmanship-edit-kernel.md) records the supplied Reborn
+and Stracciatella revisions and Campaign/Soldier blob identities and expresses
+only interoperability facts in project-authored prose/code. No upstream source,
+comments, private save data or rotation tables were imported. This is engineering
+provenance, not legal clearance. Production capability remains disabled pending
+post-Draft exact-candidate private qualification; existing independent licensing
+review and project-license decision gates remain unchanged.

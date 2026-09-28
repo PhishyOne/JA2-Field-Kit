@@ -1,5 +1,8 @@
 package com.phishtopia.ja2fieldkit.core
 
+import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxRosterDecoder
+import com.phishtopia.ja2fieldkit.core.format.NormalSoldierChecksum
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStateInspectionResult
 import com.phishtopia.ja2fieldkit.core.format.NormalNonLinuxProfileFramer
 import com.phishtopia.ja2fieldkit.core.format.NormalProfileChecksum
 import com.phishtopia.ja2fieldkit.core.format.NormalSaveBlockDecryptor
@@ -10,7 +13,7 @@ import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFormat
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionV01Result
 
-/** One profile/base-field rewrite, never a SOLDIERTYPE current/tactical-stat operation. */
+/** One direct set of profile/base and live/current marksmanship for a validated hired merc. */
 data class MarksmanshipEditRequest(
     val profileId: Int,
     val expectedCurrentMarksmanship: Int,
@@ -25,7 +28,7 @@ enum class MarksmanshipEditStage {
 enum class MarksmanshipEditReason {
     SOURCE_TOO_LARGE, INVALID_PROFILE_ID, INVALID_MARKSMANSHIP,
     CAPABILITY_DISABLED, CAPABILITY_SIZE_LIMIT, UNSUPPORTED_FORMAT, INVALID_SOURCE,
-    EXPECTED_CURRENT_MISMATCH, CANDIDATE_SIZE_LIMIT, INVALID_CANDIDATE,
+    TARGET_NOT_HIRED, PROFILE_LIVE_DISAGREEMENT, EXPECTED_CURRENT_MISMATCH, CANDIDATE_SIZE_LIMIT, INVALID_CANDIDATE,
     VERIFICATION_MISMATCH, INTERNAL_FAILURE,
 }
 
@@ -35,6 +38,7 @@ enum class MarksmanshipVerificationCheck {
     ALL_170_PROFILE_FACTS, ALL_CAMPAIGN_FACTS, ALL_ROSTER_IDENTITIES_AND_STATS,
     TARGET_CHECKSUM, TARGET_PLAINTEXT_ENVELOPE, CIPHERTEXT_PREFIX,
     ALL_OUTSIDE_CIPHERTEXT, NO_OP_BYTE_IDENTITY, HASH_BINDINGS,
+    ALL_LIVE_STATS_AND_INVENTORY, SOLDIER_CHECKSUM, SOLDIER_PLAINTEXT_ENVELOPE,
 }
 
 enum class EditVerificationOutcome { PASSED }
@@ -92,6 +96,8 @@ internal fun verifyMarksmanshipCandidate(
     candidateProfiles: List<MercProfile>,
     rotation: SaveRotationTable,
 ): Boolean {
+    if (request.profileId !in 0..169 || request.expectedCurrentMarksmanship !in 0..100 ||
+        request.newMarksmanship !in 0..100) return false
     if (!exactFormat(after.format) || before.format != after.format ||
         source.size != candidate.size || candidate.size > Ja2MarksmanshipEditor.MAX_SAVE_BYTES ||
         sourceProfiles.size != 170 || candidateProfiles.size != 170 ||
@@ -123,9 +129,29 @@ internal fun verifyMarksmanshipCandidate(
         sourceFrame.insurancePayoutUsedCount != candidateFrame.insurancePayoutUsedCount
     ) return false
     val start = sourceFrame.profileStartOffset + request.profileId * 716
+    val oldLocations = try { NormalNonLinuxRosterDecoder.validatedRecordLocations(source) }
+        catch (_: IllegalArgumentException) { return false }
+    val newLocations = try { NormalNonLinuxRosterDecoder.validatedRecordLocations(candidate) }
+        catch (_: IllegalArgumentException) { return false }
+    if (oldLocations != newLocations) return false
+    val soldierStart = oldLocations.singleOrNull { it.profileIndex == request.profileId }?.absoluteOffset
+        ?: return false
+    if (before.roster.none { it.profileIndex == request.profileId }) return false
     for (index in source.indices) {
-        if (index !in start + 353 until start + 716 && source[index] != candidate[index]) return false
+        if (index !in start + 353 until start + 716 &&
+            index !in soldierStart + 1377 until soldierStart + 2328 && source[index] != candidate[index]) return false
     }
+    val oldSoldier = NormalSaveBlockDecryptor.decryptBlock(
+        source.copyOfRange(soldierStart, soldierStart + 2328), 2328, rotation)
+    val newSoldier = NormalSaveBlockDecryptor.decryptBlock(
+        candidate.copyOfRange(soldierStart, soldierStart + 2328), 2328, rotation)
+    if (oldSoldier[1377].toInt() != request.expectedCurrentMarksmanship ||
+        newSoldier[1377].toInt() != request.newMarksmanship) return false
+    for (index in oldSoldier.indices) {
+        if (index != 1377 && index !in 2208..2211 && oldSoldier[index] != newSoldier[index]) return false
+    }
+    val soldierChecksum = NormalSoldierChecksum.calculate(newSoldier)
+    repeat(4) { if (newSoldier[2208 + it] != (soldierChecksum ushr (8 * it)).toByte()) return false }
     val oldPlain = decryptRecord(source, start, rotation)
     val newPlain = decryptRecord(candidate, start, rotation)
     if (oldPlain[353].toInt() != request.expectedCurrentMarksmanship) return false
@@ -148,3 +174,20 @@ private fun exactFormat(format: SaveInspectionFormat): Boolean =
 
 private fun decryptRecord(bytes: ByteArray, start: Int, rotation: SaveRotationTable): ByteArray =
     NormalSaveBlockDecryptor.decryptBlock(bytes.copyOfRange(start, start + 716), 716, rotation)
+
+/** Public live read surfaces must agree on identity, target value and every other exposed fact. */
+internal fun verifyLiveMarksmanship(
+    request: MarksmanshipEditRequest,
+    format: SaveInspectionFormat,
+    before: LiveMercStateInspectionResult.Success,
+    after: LiveMercStateInspectionResult.Success,
+): Boolean {
+    if (before.format != format || after.format != format || before.mercs.size != after.mercs.size) return false
+    if (before.mercs.count { it.profileIndex == request.profileId } != 1) return false
+    return before.mercs.zip(after.mercs).all { (old, new) ->
+        val target = old.profileIndex == request.profileId
+        old.profileIndex == new.profileIndex && old.slots == new.slots &&
+            (!target || old.stats.marksmanship == request.expectedCurrentMarksmanship) &&
+            new.stats == if (target) old.stats.copy(marksmanship = request.newMarksmanship) else old.stats
+    }
+}

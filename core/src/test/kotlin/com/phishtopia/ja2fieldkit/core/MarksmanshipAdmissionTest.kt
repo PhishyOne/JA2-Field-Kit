@@ -22,7 +22,7 @@ class MarksmanshipAdmissionTest {
         for (id in listOf(Int.MIN_VALUE, -1, 170, Int.MAX_VALUE)) {
             check(maximum, valid.copy(profileId = id), MarksmanshipEditReason.INVALID_PROFILE_ID)
         }
-        for (value in listOf(Int.MIN_VALUE, -129, 128, Int.MAX_VALUE)) {
+        for (value in listOf(Int.MIN_VALUE, -129, -1, 101, 128, Int.MAX_VALUE)) {
             check(maximum, valid.copy(newMarksmanship = value), MarksmanshipEditReason.INVALID_MARKSMANSHIP)
             check(maximum, valid.copy(expectedCurrentMarksmanship = value), MarksmanshipEditReason.INVALID_MARKSMANSHIP)
         }

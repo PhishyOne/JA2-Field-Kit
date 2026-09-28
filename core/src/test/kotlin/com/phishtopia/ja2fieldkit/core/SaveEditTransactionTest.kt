@@ -446,6 +446,208 @@ class SaveEditTransactionTest {
         assertFalse(verify(changedRoster = SaveInspectionV01Result.Success.create(after.format, after.campaign.copy(balance = -1), after.roster)))
     }
 
+    private fun inventoryRequest(source: ByteArray, slot: Int = 7, item: Int = 201, status: Int = 80,
+        newItem: Int? = null, newStatus: Int = 90, id: Int = 7, count: Int = if (item == 0) 0 else 1,
+        newCount: Int = 1) = SaveEditRequest(SaveEditRequest.SourceIdentity(source.size, hash(source)),
+        SaveEditRequest.ExpectedSlot(item, count, status).let { expected ->
+            if (newItem == null) SaveEditRequest.ClearSlot(id, slot, expected)
+            else SaveEditRequest.SetSimpleItem(id, slot, expected, newItem, newCount, newStatus)
+        })
+
+    private fun inventorySave(item: Int = 201, status: Int = if (item == 0) 0 else 80, slot: Int = 7,
+        kind: String = "normal", emptyWeight: Int = 1): ByteArray = save(kind).also { bytes ->
+        rewrite(bytes, PROFILE_START + 7 * 716, 716) {
+            it[416 + 2 * slot] = item.toByte(); it[417 + 2 * slot] = (item ushr 8).toByte()
+            it[358 + slot] = status.toByte(); it[377 + slot] = if (item == 0) 0 else 1
+            it[412] = 0
+        }
+        rewrite(bytes, PROFILE_END + 1, 2328) {
+            val start = 12 + slot * 36
+            it.fill(0, start, start + 36)
+            it[start] = item.toByte(); it[start + 1] = (item ushr 8).toByte()
+            it[start + 2] = if (item == 0) 0 else 1; it[start + 4] = status.toByte()
+            it[start + 32] = (if (item == 0) emptyWeight else 255).toByte()
+        }
+    }
+
+    @TestFactory fun inventoryAddReplaceAndClearEachAdmittedItem() = listOf(201, 202, 203).flatMap { item ->
+        listOf("add", "replace", "clear").map { operation -> dynamicTest("$operation $item") {
+            for (slot in 7..10) {
+                val oldItem = if (operation == "add") 0 else item
+                val oldStatus = if (oldItem == 0) 0 else 80
+                val newItem = if (operation == "clear") 0 else if (operation == "replace") 201 + (item - 200) % 3 else item
+                val source = inventorySave(oldItem, oldStatus, slot)
+                val original = source.copyOf()
+                val request = inventoryRequest(source, slot, oldItem, oldStatus, newItem.takeIf { it != 0 })
+                val result = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request))
+                val candidate = result.candidateBytes
+                assertContentEquals(original, source)
+                assertEquals("inventory-v1", result.provenance.verificationPlan())
+                assertEquals(3, result.provenance.modelVersion())
+                val before = assertIs<SaveInspectionV01Result.Success>(inspector().inspectV01(source))
+                val after = assertIs<SaveInspectionV01Result.Success>(inspector().inspectV01(candidate))
+                assertEquals(before.format, after.format); assertEquals(before.roster, after.roster)
+                assertEquals(before.campaign, after.campaign)
+                val a = inspector().parseBuild041202NormalNonLinuxProfiles(source)
+                val b = inspector().parseBuild041202NormalNonLinuxProfiles(candidate)
+                assertEquals(a.map { if (it.profileId == 7) it.copy(inventory = it.inventory.mapIndexed { i, old ->
+                    if (i == slot) ProfileInventorySlot(newItem, if (newItem == 0) 0 else 1, if (newItem == 0) 0 else 90) else old
+                }) else it }, b)
+                val oldLive = assertIs<LiveInventoryInspectionResult.Success>(inspector().inspectLiveInventory(source))
+                val newLive = assertIs<LiveInventoryInspectionResult.Success>(inspector().inspectLiveInventory(candidate))
+                oldLive.inventories.zip(newLive.inventories).forEach { (old, new) ->
+                    assertEquals(old.profileIndex, new.profileIndex)
+                    old.slots.zip(new.slots).forEachIndexed { i, (x, y) ->
+                        if (old.profileIndex != 7 || i != slot) assertContentEquals(x.objectRecord.rawRecord, y.objectRecord.rawRecord)
+                        else {
+                            val expected = ByteArray(36)
+                            expected[0] = newItem.toByte(); expected[1] = (newItem ushr 8).toByte()
+                            expected[2] = if (newItem == 0) 0 else 1; expected[4] = if (newItem == 0) 0 else 90
+                            expected[32] = (if (newItem == 0) 1 else 255).toByte()
+                            assertContentEquals(expected, y.objectRecord.rawRecord)
+                        }
+                    }
+                }
+                val ps = PROFILE_START + 7 * 716; val ss = PROFILE_END + 1
+                val fields = setOf(358 + slot, 377 + slot, 416 + slot * 2, 417 + slot * 2)
+                for ((start, size, checksum) in listOf(listOf(ps, 716, 696), listOf(ss, 2328, 2208))) {
+                    val old = decrypt(source, start, size); val new = decrypt(candidate, start, size)
+                    old.indices.forEach { i ->
+                        val admitted = if (size == 716) i in fields else i in 12 + slot * 36 until 48 + slot * 36
+                        if (!admitted && i !in checksum..checksum + 3) assertEquals(old[i], new[i], "unrelated byte $i")
+                    }
+                    assertEquals(independentChecksum(new, size == 2328), u32(new, checksum))
+                }
+                source.indices.forEach { i ->
+                    if (i !in ps + fields.min() until ps + 716 && i !in ss + 12 + slot * 36 until ss + 2328)
+                        assertEquals(source[i], candidate[i], "unrelated ciphertext $i")
+                }
+                val canonical = ByteBuffer.allocate(76).order(ByteOrder.LITTLE_ENDIAN).putInt(3)
+                    .put(java.util.HexFormat.of().parseHex(hash(source))).putInt(source.size)
+                    .putInt(if (newItem == 0) 2 else 3).putInt(7).putInt(slot)
+                    .putInt(oldItem).putInt(if (oldItem == 0) 0 else 1).putInt(oldStatus)
+                    .putInt(newItem).putInt(if (newItem == 0) 0 else 1).putInt(if (newItem == 0) 0 else 90).array()
+                assertEquals(hash(canonical), result.provenance.requestSha256())
+            }
+        } }
+    }
+
+    @Test fun inventoryNoOpsAndStatusEndpoints() {
+        for (weight in listOf(0, 1)) {
+            val source = inventorySave(0, emptyWeight = weight)
+            val request = inventoryRequest(source, item = 0, status = 0)
+            assertContentEquals(source, assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request)).candidateBytes)
+        }
+        for (item in listOf(201, 202, 203)) for (status in listOf(1, 100)) {
+            val source = inventorySave(item)
+            val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source,
+                inventoryRequest(source, item = item, newItem = item, newStatus = status))).candidateBytes
+            assertContentEquals(candidate, assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(candidate,
+                inventoryRequest(candidate, item = item, status = status, newItem = item, newStatus = status))).candidateBytes)
+        }
+    }
+
+    @Test fun inventoryStaleAssertionsAndProfileLiveDisagreementFailWithoutBytes() {
+        val source = inventorySave()
+        for (request in listOf(inventoryRequest(source, item = 202), inventoryRequest(source, status = 79),
+            inventoryRequest(source, item = 0, status = 0))) {
+            failure(editor().edit(source, request), SaveEditResult.Reason.EXPECTED_CURRENT_MISMATCH)
+        }
+        for ((start, size, fields) in listOf(Triple(PROFILE_START + 7 * 716, 716, listOf(430, 384, 365)),
+            Triple(PROFILE_END + 1, 2328, listOf(264, 266, 268)))) for (field in fields) {
+            val bad = source.copyOf().also { bytes -> rewrite(bytes, start, size) { it[field]++ } }
+            failure(editor().edit(bad, inventoryRequest(bad)), SaveEditResult.Reason.EXPECTED_CURRENT_MISMATCH)
+        }
+        val request = inventoryRequest(source)
+        source[source.lastIndex]++
+        failure(editor().edit(source, request), SaveEditResult.Reason.SOURCE_IDENTITY_MISMATCH)
+    }
+
+    @Test fun inventoryInvalidStructurePrecedesBulkWork() {
+        var work = 0
+        val editor = editor(observe = { work++ })
+        val source = byteArrayOf()
+        val invalid = listOf(-1, 19, Int.MIN_VALUE, Int.MAX_VALUE).map { inventoryRequest(source, slot = it) } +
+            listOf(-1, 0, 2, 8, 255, Int.MAX_VALUE).flatMap { listOf(inventoryRequest(source, count = it),
+                inventoryRequest(source, newItem = 201, newCount = it)) } +
+            listOf(-1, 0, 101, 255, Int.MAX_VALUE).flatMap { listOf(inventoryRequest(source, status = it),
+                inventoryRequest(source, newItem = 201, newStatus = it)) } +
+            listOf(-1, 0, 65536, Int.MAX_VALUE).map { inventoryRequest(source, newItem = it) } +
+            listOf(SaveEditRequest(SaveEditRequest.SourceIdentity(0, hash(source)), SaveEditRequest.ClearSlot(7, 7, null)))
+        invalid.forEach { failure(editor.edit(source, it), SaveEditResult.Reason.INVALID_REQUEST) }
+        assertEquals(0, work)
+    }
+
+    @Test fun inventoryRejectsSpecialClassesAndNonCanonicalPayloads() {
+        // Guns, launchers, ammo, bombs, armour, utility, attachments, money, keys and unknown IDs.
+        for (item in listOf(1, 40, 71, 137, 164, 204, 207, 219, 233, 234, 240, 271, 350, 65535)) {
+            val plain = inventorySave()
+            failure(editor().edit(plain, inventoryRequest(plain, newItem = item)), SaveEditResult.Reason.UNSUPPORTED_INVENTORY_OBJECT)
+            val special = inventorySave(item)
+            failure(editor().edit(special, inventoryRequest(special, item = item)), SaveEditResult.Reason.UNSUPPORTED_INVENTORY_OBJECT)
+        }
+        for (offset in (3..35).filter { it != 4 }) {
+            val source = inventorySave().also { bytes -> rewrite(bytes, PROFILE_END + 1, 2328) { it[264 + offset]++ } }
+            failure(editor().edit(source, inventoryRequest(source)),
+                if (offset == 28) SaveEditResult.Reason.INVENTORY_UNDROPPABLE else SaveEditResult.Reason.UNSUPPORTED_INVENTORY_OBJECT)
+        }
+    }
+
+    @Test fun inventoryRejectsUndroppableSlotsAndUnqualifiedSlotRoles() {
+        for (slot in 7..10) {
+            val source = inventorySave(slot = slot).also { bytes -> rewrite(bytes, PROFILE_START + 7 * 716, 716) {
+                it[412] = (1 shl (slot - 3)).toByte()
+            } }
+            failure(editor().edit(source, inventoryRequest(source, slot = slot)), SaveEditResult.Reason.INVENTORY_UNDROPPABLE)
+        }
+        for (slot in (0..18).filter { it !in 7..10 }) {
+            val source = inventorySave(slot = slot)
+            failure(editor().edit(source, inventoryRequest(source, slot = slot)), SaveEditResult.Reason.UNSUPPORTED_INVENTORY_SLOT)
+        }
+        // A different pocket's profile flag is preserved, not reset globally.
+        val source = inventorySave().also { bytes -> rewrite(bytes, PROFILE_START + 7 * 716, 716) { it[412] = 32 } }
+        val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, inventoryRequest(source))).candidateBytes
+        assertEquals(32, decrypt(candidate, PROFILE_START + 7 * 716, 716)[412].toInt())
+    }
+
+    @Test fun inventoryTargetFormatAndCapabilityGatesRemainClosed() {
+        val source = inventorySave()
+        failure(editor().edit(source, inventoryRequest(source, id = 0)), SaveEditResult.Reason.TARGET_NOT_UNIQUE_HIRED_MERC)
+        val duplicate = inventorySave(kind = "duplicate")
+        failure(editor().edit(duplicate, inventoryRequest(duplicate)), SaveEditResult.Reason.INVALID_SOURCE)
+        val v102 = source.copyOf().also { it[0] = 102 }
+        assertIs<LiveInventoryInspectionResult.Success>(inspector().inspectLiveInventory(v102))
+        failure(editor().edit(v102, inventoryRequest(v102)), SaveEditResult.Reason.UNSUPPORTED_FORMAT)
+        failure(Ja2SaveEditor().edit(source, inventoryRequest(source)), SaveEditResult.Reason.CAPABILITY_DISABLED)
+    }
+
+    @Test fun inventoryVerifierRejectsRechecksummedCorruptionAndUntouchedStateDrift() {
+        for (newItem in listOf(null, 202)) {
+            val source = inventorySave()
+            val request = inventoryRequest(source, newItem = newItem)
+            val candidate = assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request)).candidateBytes
+            for ((start, size, offsets) in listOf(Triple(PROFILE_START + 7 * 716, 716,
+                listOf(261, 358, 365, 377, 384, 412, 416, 430, 431)),
+                Triple(PROFILE_END + 1, 2328, listOf(12, 264, 266, 268, 280, 292, 296, 868, 1377)))) {
+                for (offset in offsets) {
+                    val wrong = candidate.copyOf().also { bytes -> rewrite(bytes, start, size) { it[offset]++ } }
+                    failure(validate(source, wrong, request), SaveEditResult.Reason.VERIFICATION_MISMATCH)
+                }
+                val badChecksum = candidate.copyOf().also { it[start + if (size == 716) 696 else 2208]++ }
+                failure(validate(source, badChecksum, request), SaveEditResult.Reason.INVALID_CANDIDATE)
+            }
+            for (offset in listOf(284, candidate.lastIndex)) {
+                val wrong = candidate.copyOf().also { it[offset]++ }
+                failure(validate(source, wrong, request), SaveEditResult.Reason.VERIFICATION_MISMATCH)
+            }
+            // Even a plausible cleared object must contain the upstream serialized empty weight.
+            if (newItem == null) {
+                val wrong = candidate.copyOf().also { bytes -> rewrite(bytes, PROFILE_END + 1, 2328) { it[296] = 0 } }
+                failure(validate(source, wrong, request), SaveEditResult.Reason.VERIFICATION_MISMATCH)
+            }
+        }
+    }
+
     private fun validate(source: ByteArray, candidate: ByteArray, request: SaveEditRequest, editor: Ja2SaveEditor = editor()): SaveEditResult =
         Ja2SaveEditor::class.java.getDeclaredMethod("validateCandidate", ByteArray::class.java, ByteArray::class.java,
             SaveEditRequest::class.java, SaveInspectionV01Result.Success::class.java, List::class.java,

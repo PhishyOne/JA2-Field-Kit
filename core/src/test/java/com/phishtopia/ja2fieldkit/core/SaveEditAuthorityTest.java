@@ -15,7 +15,7 @@ public class SaveEditAuthorityTest {
         assertTrue(SaveEditResult.class.isSealed());
         assertTrue(SaveEditResult.VerifiedCandidate.class.isSealed());
         assertTrue(SaveEditRequest.Operation.class.isSealed());
-        assertEquals(Set.of(SaveEditRequest.SetHiredStat.class), Set.of(SaveEditRequest.Operation.class.getPermittedSubclasses()));
+        assertEquals(Set.of(SaveEditRequest.SetHiredStat.class, SaveEditRequest.InventoryOperation.class), Set.of(SaveEditRequest.Operation.class.getPermittedSubclasses()));
         var impl = SaveEditResult.VerifiedCandidate.class.getPermittedSubclasses();
         assertEquals(1, impl.length);
         assertEquals(Ja2SaveEditor.class, impl[0].getNestHost());
@@ -32,7 +32,7 @@ public class SaveEditAuthorityTest {
         var constructor = Ja2SaveEditor.class.getDeclaredConstructor(Ja2SaveInspector.class, SyntheticSaveEditCapability.class, Consumer.class);
         assertThrows(IllegalAccessException.class, () -> constructor.newInstance(new Ja2SaveInspector(),
             new SyntheticSaveEditCapability(1, 1), (Consumer<EditWork>) work -> {}));
-        for (var type : List.of(SaveEditRequest.class, SaveEditRequest.SourceIdentity.class, SaveEditRequest.SetHiredStat.class)) {
+        for (var type : List.of(SaveEditRequest.class, SaveEditRequest.SourceIdentity.class, SaveEditRequest.SetHiredStat.class, SaveEditRequest.ExpectedSlot.class, SaveEditRequest.ClearSlot.class, SaveEditRequest.SetSimpleItem.class)) {
             assertTrue(type.isRecord());
             for (var field : type.getDeclaredFields()) assertTrue(Modifier.isFinal(field.getModifiers()));
         }

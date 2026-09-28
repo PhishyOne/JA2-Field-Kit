@@ -4,8 +4,10 @@
 
 `Ja2SaveEditor` establishes the in-memory transaction boundary on main
 `120fdc9aeba70b3243c55bff7a2a89ae338533a1`. Its closed operation set currently
-contains one typed synchronized hired-merc stat operation, covering ten proven
-non-health stats (see [evidence and domains](hired-stat-edit-evidence.md)). **Production capability
+contains a typed synchronized hired-merc stat operation covering ten proven
+non-health stats (see [evidence and domains](hired-stat-edit-evidence.md)), plus
+closed clear/set inventory operations for three single kits in big pockets
+(see [inventory evidence and guards](inventory-edit-evidence.md)). **Production capability
 remains disabled.** The no-argument editor fails closed; only deliberately
 privileged synthetic tests can inject a capability and synthetic digest oracle.
 This slice does not claim real-save qualification or playable-product completion.
@@ -48,7 +50,7 @@ precondition, checksum, preservation and mandatory verification rules. They can
 reuse source admission, identity, candidate ownership, result and placement
 boundaries. There is no unproven inventory mutation or generic byte-patch API.
 
-## Exact supported operation
+## Stat operation and shared transaction
 
 Synthetic capability admission requires `SUPPORTED`, normal non-Linux **v103**,
 and Build **04.12.02** through the existing public detector/parser. Readable
@@ -77,7 +79,7 @@ Candidate creation is one transaction:
 2. Require capability and its tighter bounds; inspect source, all profiles and
    live state through the public read surfaces; admit the unique target and
    both expected-current preconditions.
-3. Apply the two logical field changes and checksum updates in private records;
+3. Apply the operation's fixed field changes and checksum updates in private records;
    serialize into the sole whole-candidate accumulator, sized before allocation.
 4. Hash and re-admit/reparse the serialized candidate through `inspectV01`,
    `parseBuild041202NormalNonLinuxProfiles` and `inspectLiveMercState`.
@@ -88,8 +90,10 @@ The fixed 12-relation report covers exact format, size/framing and ordered
 record locations, both requested values, all 170 profile facts, all campaign
 facts, ordered roster facts, all live stats/inventory facts, both checksums,
 plaintext envelopes, ciphertext preservation, no-op identity and hash bindings.
-Only the two stat bytes and their checksum fields may differ in plaintext.
-Every byte outside the two encrypted suffixes must match, including opaque
+For stat edits, only the two stat bytes and their checksum fields may differ in plaintext.
+Inventory edits use the four profile bytes and one complete 36-byte object
+plus checksums detailed in the [inventory plan](inventory-edit-evidence.md).
+Every byte outside the two encrypted suffixes must match, including all unrelated
 inventory payloads, tails and suffixes. An identical-value request still
 serializes and reparses and must reproduce the entire input byte for byte.
 
@@ -108,11 +112,11 @@ These runtime hashes must not be published for private saves.
 | Source / candidate | 16,777,216 bytes each; private capability can only tighten |
 | Candidate layout | Exactly source length; two fixed record replacements |
 | Operations | Exactly one, counted structurally; no collection or batch overload |
-| Additional assertions / nesting | Zero; absent from this initial API |
-| Request components | Four fixed integers, one closed stat enum, one exactly 64-character lowercase hex digest |
-| Canonical request | Exactly 60 bytes before hashing |
+| Additional assertions / nesting | Inventory adds one fixed three-integer expected-slot record |
+| Request components | Stat: four integers and a closed enum; inventory: at most nine integers; both have one exactly 64-character lowercase hex digest |
+| Canonical request | Stat: 60 bytes (v2); inventory: 76 bytes (v3), before hashing |
 | Plan / report | Exactly 12 aggregate relations, no dynamic expansion |
-| Profiles / player slots / inventory slots | 170 / 20 / 19 per player |
+| Profiles / player slots / inventory slots | 170 / 20 / 19 per profile and player |
 | Plaintext edit buffers | 716 + 2328 bytes; encrypted replacements have the same sizes |
 | Provenance | Fixed records/enums/integers/digests, less than 2 KiB as explicit UTF-8 fields |
 

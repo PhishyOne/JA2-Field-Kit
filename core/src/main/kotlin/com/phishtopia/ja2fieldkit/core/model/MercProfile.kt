@@ -22,4 +22,9 @@ data class MercProfile(
     val mechanical: Int,
     val medical: Int,
     val experienceLevel: Int,
+    val inventory: List<ProfileInventorySlot> = emptyList(),
+    val inventoryUndroppable: Int = 0,
 )
+
+/** Unsigned serialized profile facts; interpretation never grants write authority. */
+data class ProfileInventorySlot(val itemId: Int, val count: Int, val status: Int)

@@ -52,7 +52,7 @@ def audit(tree, kind):
     strings = {"NAME_LENGTH": 30, "NICKNAME_LENGTH": 10,
                "SOLDIERTYPE_NAME_LENGTH": 10, "PaletteRepID_LENGTH": 30}
     arrays = {"bBuddy": 5, "bHated": 5, "bInvStatus": 19,
-              "bInvNumber": 19, "usApproachFactor": 4}
+              "bInvNumber": 19, "usApproachFactor": 4, "ubRoomRangeStart": 2}
     started = False
     for line in body.splitlines():
         line = line.strip()

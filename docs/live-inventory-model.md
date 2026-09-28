@@ -1,8 +1,13 @@
 # Live inventory read model (Issue #38)
 
-This slice reads the live SOLDIERTYPE inventory of each hired, non-vehicle
+Issue #72 now adds a separate, disabled-by-default
+[inventory transaction construction slice](inventory-edit-evidence.md) and
+profile inventory read facts. Android remains read-only. The historical read
+scope and evidence below do not grant mutation authority.
+
+The original Issue #38 slice reads the live SOLDIERTYPE inventory of each hired, non-vehicle
 player merc in the supported normal non-Linux v102/v103 / Build 04.12.02 domain.
-It does not read inventory from the profile table. There is no editing or write
+It does not read inventory from the profile table. Its read surface grants no editing or write
 capability, inventory serialization, checksum regeneration, output placement,
 bridge or 1.13/NIV support. Optional base-name decoration is separate from this model.
 

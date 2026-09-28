@@ -57,7 +57,9 @@ offset, rotation, digest, key, or encryption details cross this facade.
 
 The [Issue #72 candidate transaction](docs/save-edit-transactions.md) adds a
 source-bound core request/result architecture and privileged synthetic coverage
-for ten synchronized hired-merc stats with stat-specific ranges and injury guards.
+for ten synchronized hired-merc stats with stat-specific ranges and injury guards,
+plus [closed inventory clear/add/replace operations](docs/inventory-edit-evidence.md)
+for single first-aid kits, medical kits and toolkits in the four big pockets.
 Production editing remains disabled;
 Android Save As awaits a qualified create-new placement adapter.
 

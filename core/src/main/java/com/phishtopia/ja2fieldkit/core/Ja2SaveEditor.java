@@ -66,7 +66,7 @@ public final class Ja2SaveEditor {
                 if (profiles.get(id).getProfileId() != id) return failure(stage, INVALID_SOURCE);
             }
             var locations = NormalNonLinuxRosterDecoder.INSTANCE.validatedRecordLocations(snapshot);
-            var operation = (SaveEditRequest.SetHiredStat) request.operation();
+            var operation = request.operation();
             int id = operation.profileId();
             stage = PRECONDITION;
             var targets = locations.stream().filter(it -> it.getProfileIndex() == id).toList();
@@ -75,8 +75,9 @@ public final class Ja2SaveEditor {
                     || baseline.getRoster().stream().filter(it -> it.getProfileIndex() == id).count() != 1) {
                 return failure(stage, TARGET_NOT_UNIQUE_HIRED_MERC);
             }
-            if (operation.stat().profileValue(profiles.get(id)) != operation.expectedCurrent()
-                    || operation.stat().liveValue(liveTargets.getFirst().getStats()) != operation.expectedCurrent()) {
+            if (operation instanceof SaveEditRequest.SetHiredStat stat
+                    && (stat.stat().profileValue(profiles.get(id)) != stat.expectedCurrent()
+                    || stat.stat().liveValue(liveTargets.getFirst().getStats()) != stat.expectedCurrent())) {
                 return failure(stage, EXPECTED_CURRENT_MISMATCH);
             }
             var frame = NormalNonLinuxProfileFramer.INSTANCE.frameBuild041202(snapshot);
@@ -86,9 +87,15 @@ public final class Ja2SaveEditor {
             // The closed operation contributes two fixed record rewrites to the fixed verification plan.
             byte[] profile = decrypt(snapshot, profileStart, 716, rotation);
             byte[] soldier = decrypt(snapshot, soldierStart, 2328, rotation);
-            if (!operation.stat().admitsInjuryState(soldier)) return failure(stage, STAT_INJURY_PRESENT);
-            profile[operation.stat().profileOffset()] = (byte) operation.value();
-            soldier[operation.stat().soldierOffset()] = (byte) operation.value();
+            if (operation instanceof SaveEditRequest.SetHiredStat stat) {
+                if (!stat.stat().admitsInjuryState(soldier)) return failure(stage, STAT_INJURY_PRESENT);
+                profile[stat.stat().profileOffset()] = (byte) stat.value();
+                soldier[stat.stat().soldierOffset()] = (byte) stat.value();
+            } else if (operation instanceof SaveEditRequest.InventoryOperation inventory) {
+                var rejection = InventoryMutation.admit(inventory, profile, soldier);
+                if (rejection != null) return failure(stage, rejection);
+                InventoryMutation.apply(inventory, profile, soldier);
+            } else return failure(stage, INVALID_REQUEST);
             putChecksum(profile, 696, NormalProfileChecksum.INSTANCE.calculate(profile));
             putChecksum(soldier, 2208, NormalSoldierChecksum.INSTANCE.calculate(soldier));
             stage = SERIALIZATION;
@@ -128,11 +135,13 @@ public final class Ja2SaveEditor {
             if (!(liveParsed instanceof LiveMercStateInspectionResult.Success afterLive)) return failure(stage, INVALID_CANDIDATE);
             stage = VERIFICATION;
             if (!SaveEditVerificationKt.verifySaveEdit(source, candidate,
-                    (SaveEditRequest.SetHiredStat) request.operation(), baseline, after,
+                    request.operation(), baseline, after,
                     profiles, candidateProfiles, live, afterLive, rotation)) return failure(stage, VERIFICATION_MISMATCH);
             stage = PROVENANCE;
             var provenance = new Provenance(identity(source), candidateIdentity, baseline.getFormat(), request,
-                    canonicalDigest(request), "PROJECT_AUTHORED_SYNTHETIC_V103", 1, "hired-stat-v2", 2);
+                    canonicalDigest(request), "PROJECT_AUTHORED_SYNTHETIC_V103", 1,
+                    request.operation() instanceof SaveEditRequest.InventoryOperation ? "inventory-v1" : "hired-stat-v2",
+                    request.operation() instanceof SaveEditRequest.InventoryOperation ? 3 : 2);
             if (!provenance.source().equals(request.expectedSource())
                     || !provenance.candidate().equals(identity(candidate))
                     || !provenance.requestSha256().equals(canonicalDigest(provenance.request()))) {
@@ -146,7 +155,7 @@ public final class Ja2SaveEditor {
 
     private static boolean validRequest(SaveEditRequest request) {
         if (request == null || request.expectedSource() == null
-                || !(request.operation() instanceof SaveEditRequest.SetHiredStat op)) return false;
+                || request.operation() == null) return false;
         var source = request.expectedSource();
         if (source.size() < 0 || source.size() > MAX_SAVE_BYTES || source.sha256() == null
                 || source.sha256().length() != 64) return false;
@@ -154,11 +163,24 @@ public final class Ja2SaveEditor {
             char c = source.sha256().charAt(i);
             if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f')) return false;
         }
-        return op.profileId() >= 0 && op.profileId() < 170 && op.stat() != null
-                && op.stat().contains(op.expectedCurrent()) && op.stat().contains(op.value());
+        var op = request.operation();
+        if (op.profileId() < 0 || op.profileId() >= 170) return false;
+        if (op instanceof SaveEditRequest.SetHiredStat stat) return stat.stat() != null
+                && stat.stat().contains(stat.expectedCurrent()) && stat.stat().contains(stat.value());
+        return op instanceof SaveEditRequest.InventoryOperation inventory && InventoryMutation.valid(inventory);
     }
 
     private static String canonicalDigest(SaveEditRequest request) {
+        if (request.operation() instanceof SaveEditRequest.InventoryOperation inventory) {
+            var e = inventory.expected();
+            var value = InventoryMutation.desired(inventory);
+            return sha256(ByteBuffer.allocate(76).order(ByteOrder.LITTLE_ENDIAN).putInt(3)
+                    .put(HexFormat.of().parseHex(request.expectedSource().sha256())).putInt(request.expectedSource().size())
+                    .putInt(inventory instanceof SaveEditRequest.ClearSlot ? 2 : 3)
+                    .putInt(inventory.profileId()).putInt(inventory.slot())
+                    .putInt(e.itemId()).putInt(e.count()).putInt(e.status())
+                    .putInt(value.itemId()).putInt(value.count()).putInt(value.status()).array());
+        }
         var op = (SaveEditRequest.SetHiredStat) request.operation();
         // Version, source digest/size, operation tag, stat tag, target, precondition, value; exactly 60 bytes.
         return sha256(ByteBuffer.allocate(60).order(ByteOrder.LITTLE_ENDIAN).putInt(2)

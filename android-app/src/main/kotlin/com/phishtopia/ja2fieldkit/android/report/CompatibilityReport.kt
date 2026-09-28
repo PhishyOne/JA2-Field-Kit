@@ -150,7 +150,9 @@ data class CompatibilityReportV01(
         private val SHA_256 = Regex("[0-9a-f]{64}")
         private val BUILDS = setOf("04.12.02")
         private val SOURCE_CATEGORIES = setOf("document_picker", "open_with", "share_to")
-        private val LAYOUTS = setOf("normal_non_linux_v103_build_041202", "unknown")
+        private val LAYOUTS = setOf(
+            "normal_non_linux_v102_build_041202", "normal_non_linux_v103_build_041202", "unknown",
+        )
         private val COMPATIBILITIES = setOf(
             "supported", "candidate", "truncated", "unsupported_variant", "inconsistent", "unknown",
         )
@@ -208,6 +210,7 @@ object CompatibilityReportFactory {
         saveVersion = format.version.toIntOrNull()?.takeIf { it >= 0 },
         build = format.build.takeIf { it == "04.12.02" },
         layout = when (format.layout) {
+            "Normal non-Linux v102" -> "normal_non_linux_v102_build_041202"
             "Normal non-Linux v103" -> "normal_non_linux_v103_build_041202"
             else -> "unknown"
         },

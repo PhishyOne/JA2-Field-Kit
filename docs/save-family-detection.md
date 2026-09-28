@@ -136,7 +136,7 @@ narrower adapter.
 
 ## Issue #7 acceptance correction
 
-Evidence supports “detect compatibility with the normal v103 / Build 04.12.02
+Evidence supports “detect compatibility with the normal v102/v103 / Build 04.12.02
 non-Linux layout by binding the header-selected index to an independently
 admitted rotation digest, while leaving producer family unknown.” It does not
 support “detect JA2 Reborn as the producer.” Issue #7 should use the narrower

@@ -58,7 +58,7 @@ stat facts and the same 19 inventory slots in one validated traversal. Its resul
 contains only profile identity, numeric stats, and role/item ID/count inventory
 facts; no raw records or opaque bytes. Android calls `inspectV01` plus this
 combined surface, requiring equal format, equal unique profile identity sets,
-and canonical slot order. Live/current and Profile/base stats are separate;
+and canonical slot order. Android merges live/current and profile/base stats for display;
 leadership and wisdom remain profile/base only. See
 [live-inventory-model.md](live-inventory-model.md) for provenance and boundaries.
 

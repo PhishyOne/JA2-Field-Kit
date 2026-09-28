@@ -2,6 +2,7 @@ package com.phishtopia.ja2fieldkit.android
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -11,6 +12,20 @@ class SuccessRenderOrderTest {
         checkNotNull(System.getProperty("androidAppProjectDir")),
         "src/main/kotlin/com/phishtopia/ja2fieldkit/android/MainActivity.kt",
     ).readText()
+
+    @Test
+    fun mercDetailsRenderOneStatsSectionAndAtMostOneLegendWithSelectableRows() {
+        val detail = activity.substringAfter("private fun LinearLayout.addMerc(merc:")
+            .substringBefore("private fun LinearLayout.addTitle")
+        assertEquals(1, Regex("addHeading\\(\"Stats\"").findAll(detail).count())
+        assertEquals(1, Regex("merc.statsLegend").findAll(detail).count())
+        assertTrue(detail.contains("merc.statsLegend?.let { addBody(it) }"))
+        assertTrue(detail.contains("merc.stats.joinToString(\"\\n\")"))
+        assertFalse(detail.contains("Live/current tactical stats"))
+        assertFalse(detail.contains("Profile/base stats"))
+        assertTrue(activity.contains("setTextIsSelectable(true)"))
+        assertTrue(activity.contains("addLabelValue(\"Sector\", campaign.sector)"))
+    }
 
     @Test
     fun successShowsCampaignAndSelectedMercBeforeTechnicalDetails() {

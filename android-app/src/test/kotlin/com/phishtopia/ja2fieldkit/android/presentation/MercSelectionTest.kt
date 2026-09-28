@@ -38,7 +38,7 @@ class MercSelectionTest {
         val selected = assertIs<InspectionScreenState.Success>(state.withSelectedMerc(4))
         assertEquals(4, selected.selectedProfileIndex)
         assertSame(state.roster[1], selected.selectedMerc)
-        assertEquals("4", selected.selectedMerc!!.liveStats.first().value)
+        assertEquals("4 / 99", selected.selectedMerc!!.stats.first().value)
         assertSame(selected.selectedMerc, selected.copy(roster = selected.roster.reversed()).selectedMerc)
         assertSame(selected, selected.withSelectedMerc(4))
     }
@@ -96,11 +96,9 @@ class MercSelectionTest {
         assertSame(state.roster, selected.roster)
         val merc = assertNotNull(selected.selectedMerc)
         assertEquals(1, selected.roster.count { it === merc })
-        assertSame(state.roster[1].liveStats, merc.liveStats)
-        assertSame(state.roster[1].profileStats, merc.profileStats)
+        assertSame(state.roster[1].stats, merc.stats)
         assertSame(state.roster[1].inventory, merc.inventory)
-        assertEquals(10, merc.liveStats.size)
-        assertEquals(11, merc.profileStats.size)
+        assertEquals(11, merc.stats.size)
         assertEquals(19, merc.inventory.size)
     }
 }

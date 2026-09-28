@@ -8,6 +8,7 @@ import com.phishtopia.ja2fieldkit.core.format.SaveLayout
 import com.phishtopia.ja2fieldkit.core.model.CampaignSector
 import com.phishtopia.ja2fieldkit.core.model.CampaignSummaryV01
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
+import com.phishtopia.ja2fieldkit.core.model.LiveMercStats
 import com.phishtopia.ja2fieldkit.core.model.MercStats
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionDiagnostic
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionFailure
@@ -46,17 +47,88 @@ class InspectionPresentationMapperTest {
         assertEquals("103", state.format.version)
         assertEquals("04.12.02", state.format.build)
         assertEquals("Day 12, 07:05", state.campaign.dayAndTime)
-        assertEquals("9, 4, level 0", state.campaign.sector)
+        assertEquals("D9", state.campaign.sector)
         assertEquals("1 shown (1 recorded)", state.campaign.rosterCount)
         assertEquals("Ira", state.roster.single().name)
         assertEquals(
             listOf(
-                "Health", "Agility", "Dexterity", "Strength", "Leadership", "Wisdom",
+                "Health (current / max)", "Agility", "Dexterity", "Strength", "Leadership (base)", "Wisdom (base)",
                 "Experience", "Marksmanship", "Mechanical", "Explosives", "Medical",
             ),
-            state.roster.single().profileStats.map { it.label },
+            state.roster.single().stats.map { it.label },
         )
-        assertEquals((80..90).map(Int::toString), state.roster.single().profileStats.map { it.value })
+        assertEquals(listOf("1 / 99", "-128 / 81", "-2 / 82", "127 / 83", "84", "85",
+            "-3 / 86", "-4 / 87", "-5 / 88", "-6 / 89", "-7 / 90"),
+            state.roster.single().stats.map { it.value })
+    }
+
+    @Test
+    fun sectorsUseRowsFromYAndColumnsFromXOnlyWithinDisplayDomain() {
+        listOf(
+            CampaignSector(1, 1, 0) to "A1",
+            CampaignSector(9, 1, 0) to "A9",
+            CampaignSector(16, 16, 0) to "P16",
+            CampaignSector(9, 1, 1) to "A9-1",
+            CampaignSector(9, 1, 2) to "A9-2",
+            CampaignSector(9, 1, 3) to "A9-3",
+        ).forEach { (sector, expected) ->
+            assertEquals(expected, InspectionPresentationMapper.sectorLabel(sector))
+        }
+        listOf(
+            CampaignSector(0, 1, 0), CampaignSector(17, 1, 0),
+            CampaignSector(1, 0, 0), CampaignSector(1, 17, 0),
+            CampaignSector(1, 1, -1), CampaignSector(1, 1, 4),
+            CampaignSector(18, 0, 9), CampaignSector(Int.MIN_VALUE, Int.MAX_VALUE, -9),
+        ).forEach { sector ->
+            assertEquals("Sector ${sector.x}, ${sector.y}, level ${sector.z}",
+                InspectionPresentationMapper.sectorLabel(sector))
+        }
+    }
+
+    @Test
+    fun equalStatsCollapseWhileHealthKeepsCurrentMaxWithoutComparisonLegend() {
+        val merc = statsMerc()
+        assertEquals(listOf("-8 / 99", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90"),
+            merc.stats.map { it.value })
+        assertEquals(StatValueKind.CURRENT_MAX, merc.stats.first().kind)
+        assertEquals(listOf("Leadership (base)", "Wisdom (base)"),
+            merc.stats.filter { it.kind == StatValueKind.BASE_ONLY }.map { it.label })
+        assertEquals(11, merc.stats.map { it.label }.distinct().size)
+        assertNull(merc.statsLegend)
+    }
+
+    @Test
+    fun differingPairsPreserveSignedIntsAndProduceOneLegend() {
+        val merc = statsMerc(live = equalLive.copy(agility = -128, medical = Int.MIN_VALUE))
+        assertEquals("-128 / 81", merc.stats.single { it.label == "Agility" }.value)
+        assertEquals("${Int.MIN_VALUE} / 90", merc.stats.single { it.label == "Medical" }.value)
+        assertEquals(2, merc.stats.count { it.kind == StatValueKind.LIVE_BASE })
+        assertEquals("Different values are live / base.", merc.statsLegend)
+        val negativeBase = statsMerc(base = equalBase.copy(agility = -2),
+            live = equalLive.copy(agility = -128))
+        assertEquals("-128 / -2", negativeBase.stats.single { it.label == "Agility" }.value)
+        val equalNegative = statsMerc(base = equalBase.copy(agility = -128),
+            live = equalLive.copy(agility = -128))
+        assertEquals("-128", equalNegative.stats.single { it.label == "Agility" }.value)
+        assertNull(equalNegative.statsLegend)
+    }
+
+    @Test
+    fun missingBaseIsExplicitAndDoesNotClaimEqualityOrDifference() {
+        val merc = statsMerc(base = equalBase.copy(agility = null, wisdom = null))
+        assertEquals("81 (base unknown)", merc.stats.single { it.label == "Agility" }.value)
+        assertEquals("Unknown", merc.stats.single { it.label == "Wisdom (base)" }.value)
+        assertNull(merc.statsLegend)
+    }
+
+    private val equalBase = MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90)
+    private val equalLive = LiveMercStats(-8, 99, 81, 82, 83, 86, 87, 88, 89, 90)
+
+    private fun statsMerc(base: MercStats = equalBase, live: LiveMercStats = equalLive): MercPresentation {
+        val result = successResult(stats = base)
+        return assertIs<InspectionScreenState.Success>(InspectionPresentationMapper.map(
+            source, result, inventorySuccess(result.format, listOf(inventoryEntry(1, stats = live))),
+        )).roster.single()
     }
 
     @Test
@@ -258,6 +330,7 @@ class InspectionPresentationMapperTest {
         name: String = "Ira",
         nickname: String? = "Ira",
         buildLabel: String? = "04.12.02",
+        stats: MercStats = MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90),
     ): SaveInspectionV01Result.Success {
         val constructor = SaveInspectionV01Result.Success::class.java.declaredConstructors
             .single { it.parameterCount == 3 }
@@ -270,7 +343,7 @@ class InspectionPresentationMapperTest {
                     profileIndex = 1,
                     name = name,
                     nickname = nickname,
-                    stats = MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90),
+                    stats = stats,
                 ),
             ),
         ) as SaveInspectionV01Result.Success

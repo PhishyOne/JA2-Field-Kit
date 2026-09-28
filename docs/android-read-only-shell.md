@@ -12,11 +12,13 @@ counts and SHA-256 hashes the bytes while reading, closes the stream, lends the
 private byte snapshot only to the two immediate inspection calls, and discards it
 after presentation mapping. The mapper requires an exact one-to-one profile-index
 match, equal format, and all 19 canonical slots before presenting live state; it retains
-only safe text/numeric facts. Separate Live/current tactical stats and Profile/base
-stats sections distinguish their provenance. Leadership and wisdom appear only in
-Profile/base stats. Live life and max life are separate exact signed values, with
-no gameplay-range clamping. Inventory retains only slot labels, empty state,
-numeric item IDs, and object counts. Core receives
+only safe text/numeric facts. One Stats section shows health as current / max,
+equal live/base stats once, and differing stats as live / base with one conditional
+legend. Leadership and
+wisdom are base-only; unavailable base values are explicit. Signed values are not
+clamped. Campaign sectors use A1–P16 with underground suffixes -1 through -3;
+out-of-domain coordinates retain all three numeric facts. Inventory retains only
+slot labels, empty state, numeric item IDs, and object counts. Core receives
 bytes only; it never receives the URI, source category, or provider metadata.
 
 The maximum accepted and retained complete payload is **16 MiB**. The admitted
@@ -46,7 +48,7 @@ bytes, or parser-internal diagnostic reaches presentation.
 A labeled platform Spinner selects by exact validated numeric profile index.
 Names and nicknames are display text only; each option also shows its profile
 index so duplicate names remain distinguishable. Exactly one selected merc's
-Live/current tactical stats, Profile/base stats, and all 19 inventory slots
+merged stats and all 19 inventory slots
 appear at a time. An empty roster shows “No roster members found.” without a
 selector.
 

@@ -7,6 +7,7 @@ import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 import com.phishtopia.ja2fieldkit.core.format.SaveCompatibility
 import com.phishtopia.ja2fieldkit.core.format.SaveFamily
 import com.phishtopia.ja2fieldkit.core.format.SaveLayout
+import com.phishtopia.ja2fieldkit.core.model.CampaignSector
 import com.phishtopia.ja2fieldkit.core.model.LiveMercState
 import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
 import com.phishtopia.ja2fieldkit.core.model.LiveMercStateInspectionResult
@@ -65,12 +66,22 @@ data class MercPresentation(
     val profileIndex: Int,
     val name: String,
     val nickname: String?,
-    val profileStats: List<StatPresentation>,
-    val liveStats: List<StatPresentation>,
+    val stats: List<StatPresentation>,
     val inventory: List<InventorySlotPresentation>,
-)
+) {
+    val statsLegend: String?
+        get() = if (stats.any { it.kind == StatValueKind.LIVE_BASE }) {
+            "Different values are live / base."
+        } else null
+}
 
-data class StatPresentation(val label: String, val value: String)
+enum class StatValueKind { SINGLE, CURRENT_MAX, LIVE_BASE, BASE_ONLY, BASE_UNKNOWN }
+
+data class StatPresentation(
+    val label: String,
+    val value: String,
+    val kind: StatValueKind = StatValueKind.SINGLE,
+)
 
 data class InventorySlotPresentation(
     val role: InventorySlotRole,
@@ -122,8 +133,7 @@ object InspectionPresentationMapper {
             campaign = CampaignPresentation(
                 dayAndTime = "Day ${result.campaign.day}, " +
                     String.format(Locale.ROOT, "%02d:%02d", result.campaign.hour, result.campaign.minute),
-                sector = "${result.campaign.sector.x}, ${result.campaign.sector.y}, " +
-                    "level ${result.campaign.sector.z}",
+                sector = sectorLabel(result.campaign.sector),
                 rosterCount = "${result.roster.size} shown " +
                     "(${result.campaign.playerMercCount} recorded)",
                 balance = result.campaign.balance.toString(),
@@ -232,30 +242,19 @@ object InspectionPresentationMapper {
             .takeUnless(String::isBlank)
             ?: "Unknown merc",
         nickname = merc.nickname?.let(PresentationTextSanitizer::sanitize),
-        profileStats = listOf(
-            StatPresentation("Health", merc.stats.health.display()),
-            StatPresentation("Agility", merc.stats.agility.display()),
-            StatPresentation("Dexterity", merc.stats.dexterity.display()),
-            StatPresentation("Strength", merc.stats.strength.display()),
-            StatPresentation("Leadership", merc.stats.leadership.display()),
-            StatPresentation("Wisdom", merc.stats.wisdom.display()),
-            StatPresentation("Experience", merc.stats.experienceLevel.display()),
-            StatPresentation("Marksmanship", merc.stats.marksmanship.display()),
-            StatPresentation("Mechanical", merc.stats.mechanical.display()),
-            StatPresentation("Explosives", merc.stats.explosives.display()),
-            StatPresentation("Medical", merc.stats.medical.display()),
-        ),
-        liveStats = listOf(
-            StatPresentation("Life", live.stats.life.toString()),
-            StatPresentation("Max life", live.stats.lifeMax.toString()),
-            StatPresentation("Agility", live.stats.agility.toString()),
-            StatPresentation("Dexterity", live.stats.dexterity.toString()),
-            StatPresentation("Strength", live.stats.strength.toString()),
-            StatPresentation("Experience", live.stats.experienceLevel.toString()),
-            StatPresentation("Marksmanship", live.stats.marksmanship.toString()),
-            StatPresentation("Mechanical", live.stats.mechanical.toString()),
-            StatPresentation("Explosives", live.stats.explosives.toString()),
-            StatPresentation("Medical", live.stats.medical.toString()),
+        stats = listOf(
+            StatPresentation("Health (current / max)", "${live.stats.life} / ${live.stats.lifeMax}",
+                StatValueKind.CURRENT_MAX),
+            pairedStat("Agility", live.stats.agility, merc.stats.agility),
+            pairedStat("Dexterity", live.stats.dexterity, merc.stats.dexterity),
+            pairedStat("Strength", live.stats.strength, merc.stats.strength),
+            StatPresentation("Leadership (base)", merc.stats.leadership.display(), StatValueKind.BASE_ONLY),
+            StatPresentation("Wisdom (base)", merc.stats.wisdom.display(), StatValueKind.BASE_ONLY),
+            pairedStat("Experience", live.stats.experienceLevel, merc.stats.experienceLevel),
+            pairedStat("Marksmanship", live.stats.marksmanship, merc.stats.marksmanship),
+            pairedStat("Mechanical", live.stats.mechanical, merc.stats.mechanical),
+            pairedStat("Explosives", live.stats.explosives, merc.stats.explosives),
+            pairedStat("Medical", live.stats.medical, merc.stats.medical),
         ),
         inventory = live.slots.map { slot ->
             InventorySlotPresentation(
@@ -272,6 +271,21 @@ object InspectionPresentationMapper {
             )
         },
     )
+
+    internal fun sectorLabel(sector: CampaignSector): String {
+        val (x, y, z) = sector
+        if (x !in 1..16 || y !in 1..16 || z !in 0..3) {
+            return "Sector $x, $y, level $z"
+        }
+        val surface = "${'A' + (y - 1)}$x"
+        return if (z == 0) surface else "$surface-$z"
+    }
+
+    private fun pairedStat(label: String, live: Int, base: Int?): StatPresentation = when {
+        base == null -> StatPresentation(label, "$live (base unknown)", StatValueKind.BASE_UNKNOWN)
+        live == base -> StatPresentation(label, live.toString())
+        else -> StatPresentation(label, "$live / $base", StatValueKind.LIVE_BASE)
+    }
 
     private fun Int?.display(): String = this?.toString() ?: "Unknown"
 

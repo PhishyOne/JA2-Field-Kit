@@ -136,7 +136,7 @@ class Ja2SaveInspector private constructor(
         val format = detection.toInspectionFormat()
         if (
             detection.compatibility != SaveCompatibility.SUPPORTED ||
-            detection.layout != SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX
+            !detection.layout.supportsBuild041202Read
         ) {
             return failure(format, detection.toInspectionFailure())
         }
@@ -188,7 +188,7 @@ class Ja2SaveInspector private constructor(
         val (snapshot, detection) = checkedDetection(bytes)
         if (
             detection.compatibility != SaveCompatibility.SUPPORTED ||
-            detection.layout != SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX
+            !detection.layout.supportsBuild041202Read
         ) {
             throw SaveInterpretationAdmissionException(
                 compatibility = detection.compatibility,

@@ -186,11 +186,11 @@ class NormalNonLinuxProfileFramerTest {
 
     @Test
     fun propagatesExistingUnsupportedHeaderContractWithoutGuessing() {
-        val wrongVersion = syntheticSave(0).also { it.putU32Le(0, 102) }
+        val wrongVersion = syntheticSave(0).also { it.putU32Le(0, 104) }
         val versionError = assertFailsWith<UnsupportedSaveHeaderException> {
             NormalNonLinuxProfileFramer.frameBuild041202(wrongVersion)
         }
-        assertEquals(102L, versionError.saveVersion)
+        assertEquals(104L, versionError.saveVersion)
         assertEquals("Build 04.12.02", versionError.gameVersion)
 
         val wrongBuild = syntheticSave(0).also {

@@ -47,7 +47,7 @@ data class OpaqueHeaderRange(
 }
 
 /**
- * The mapped fields of the 432-byte normal v103 / `Build 04.12.02` header.
+ * The mapped fields of the 432-byte normal v102/v103 / `Build 04.12.02` header.
  *
  * This is a structural result only. It does not identify a save family and it
  * does not select an encryption scheme for any later save blocks.
@@ -94,10 +94,14 @@ data class SaveHeaderIdentity(
     val hasCompleteIdentity: Boolean,
 )
 
-/** Bounds-checked parser for the evidenced v103 / Build 04.12.02 normal header only. */
+/** Bounds-checked parser for the evidenced v102/v103 / Build 04.12.02 normal header only. */
 object SaveHeaderParser {
     const val SUPPORTED_SAVE_VERSION = 103L
     const val SUPPORTED_GAME_VERSION = "Build 04.12.02"
+
+    /** Explicit allowlist; this is not a minimum-version compatibility promise. */
+    internal fun isSupportedSaveVersion(version: Long?): Boolean =
+        version == 102L || version == SUPPORTED_SAVE_VERSION
 
     /** Read only the bounded version/build identity used by diagnostics and detection. */
     fun probeIdentity(bytes: ByteArray): SaveHeaderIdentity {
@@ -124,7 +128,7 @@ object SaveHeaderParser {
         val saveVersion = reader.u32(0)
         val gameVersion = readNullTerminatedSingleByteString(reader, offset = 4, length = 16)
 
-        if (saveVersion != SUPPORTED_SAVE_VERSION || gameVersion != SUPPORTED_GAME_VERSION) {
+        if (!isSupportedSaveVersion(saveVersion) || gameVersion != SUPPORTED_GAME_VERSION) {
             throw UnsupportedSaveHeaderException(saveVersion, gameVersion)
         }
 

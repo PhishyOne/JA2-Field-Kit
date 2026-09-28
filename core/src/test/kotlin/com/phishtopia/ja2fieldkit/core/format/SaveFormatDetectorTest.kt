@@ -21,6 +21,64 @@ class SaveFormatDetectorTest {
     )
 
     @Test
+    fun v102KeepsItsIdentityAndEveryDetectionBoundary() {
+        fun v102(bytes: ByteArray) = bytes.copyOf().also { it.putU32Le(0, 102) }
+        val save = v102(syntheticSave(0))
+        val matched = SaveFormatDetector.detect(save, oracle(139 to SYNTHETIC_ROTATION_DIGEST))
+        assertEquals(SaveLayout.NORMAL_V102_BUILD_041202_NON_LINUX, matched.layout)
+        assertEquals(102, matched.saveVersion)
+        assertEquals(102L, matched.facts.rawSaveVersion)
+        assertEquals("04.12.02", matched.buildLabel)
+        assertEquals(SaveCompatibility.SUPPORTED, matched.compatibility)
+        assertEquals(SaveFamily.UNKNOWN, matched.family)
+        assertEquals(102L, SaveHeaderParser.parseBuild041202(save).saveVersion)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_MISMATCH, SaveFormatDetector.detect(save).reason)
+        assertEquals(SaveDetectionReason.ROTATION_DIGEST_ORACLE_MISSING,
+            SaveFormatDetector.detect(save, oracle()).reason)
+        val cases = listOf(
+            header.copyOf(20),
+            header,
+            header.copyOf().also { it[303] = 2 },
+            syntheticSave(0, orderUsedCount = 1),
+            syntheticSave(0).also { it[expectedProfileStart(0) + 80]++ },
+            syntheticSave(0).also { it[expectedProfileStart(0) + STORED_CHECKSUM_OFFSET]++ },
+            syntheticSave(0).also { it[LOAD_SCREEN_ID_OFFSET]++ },
+        )
+        for (original in cases) {
+            val expected = SaveFormatDetector.detect(original)
+            val actual = SaveFormatDetector.detect(v102(original))
+            assertEquals(expected.compatibility, actual.compatibility)
+            assertEquals(expected.reason, actual.reason)
+            assertEquals(expected.facts.copy(rawSaveVersion = 102), actual.facts)
+        }
+        val ambiguous = recoveryVector.copyOfRange(
+            PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_OFFSET, PROFILE_VECTOR_AMBIGUITY_CIPHERTEXT_END)
+        val profiles = ByteArray(encryptedProfiles.size).also { block ->
+            repeat(170) { ambiguous.copyInto(block, it * ambiguous.size) }
+        }
+        assertEquals(SaveDetectionReason.PROFILE_ROTATION_AMBIGUOUS,
+            SaveFormatDetector.detect(v102(syntheticSave(0, profiles = profiles))).reason)
+    }
+
+    @Test
+    fun versionAllowlistAndExactBuildFailClosed() {
+        for (version in listOf(0, 101, 104, 999)) {
+            val bytes = header.copyOf().also { it.putU32Le(0, version) }
+            assertFailsWith<UnsupportedSaveHeaderException> { SaveHeaderParser.parseBuild041202(bytes) }
+            assertEquals(SaveLayout.UNKNOWN, SaveFormatDetector.detect(bytes).layout)
+        }
+        for (version in listOf(102, 103)) {
+            val bytes = header.copyOf().also {
+                it.putU32Le(0, version)
+                it.putSingleByteString(4, 16, "Build 04.12.03")
+            }
+            assertFailsWith<UnsupportedSaveHeaderException> { SaveHeaderParser.parseBuild041202(bytes) }
+            assertEquals(SaveDetectionReason.CONTRADICTORY_HEADER_IDENTITY,
+                SaveFormatDetector.detect(bytes).reason)
+        }
+    }
+
+    @Test
     fun oracleMatchForSharedRebornStracciatellaLayoutDoesNotAttributeProducerFamily() {
         val save = syntheticSave(eventCount = 2)
 
@@ -191,7 +249,7 @@ class SaveFormatDetectorTest {
         val knownVersionWrongBuild = header.copyOf().also {
             it.putSingleByteString(4, 16, "Build 99.99.99")
         }
-        val wrongVersionKnownBuild = header.copyOf().also { it.putU32Le(0, 102) }
+        val wrongVersionKnownBuild = header.copyOf().also { it.putU32Le(0, 104) }
         for (bytes in listOf(knownVersionWrongBuild, wrongVersionKnownBuild)) {
             val result = SaveFormatDetector.detect(bytes)
             assertEquals(SaveFamily.UNKNOWN, result.family)

@@ -4,8 +4,8 @@
 
 Detection reports three facts that must not be collapsed into one another:
 
-- `layout` identifies a serialized byte layout. The only named value currently
-  emitted is `NORMAL_V103_BUILD_041202_NON_LINUX`.
+- `layout` identifies a serialized byte layout. The named values are
+  `NORMAL_V102_BUILD_041202_NON_LINUX` and `NORMAL_V103_BUILD_041202_NON_LINUX`.
 - `compatibility` says how far the current read-only implementation can safely
   proceed: `SUPPORTED`, `CANDIDATE`, `TRUNCATED`, `UNSUPPORTED_VARIANT`,
   `INCONSISTENT`, or `UNKNOWN`.
@@ -23,7 +23,7 @@ because the layout is usable.
 
 A `SUPPORTED` result requires all of the following:
 
-1. the complete identity is exactly saved-game version `103` and game-version
+1. the complete identity is exactly saved-game version `102` or `103` and game-version
    string `Build 04.12.02`;
 2. all normal-selector header values have evidenced encodings and ranges;
 3. `NormalSaveEncryptionSelector.select` computes the rotation-table index from
@@ -63,13 +63,13 @@ clearance or a formal clean-room claim.
 
 | Observed evidence | Compatibility | Layout | Family |
 | --- | --- | --- | --- |
-| Complete frame, unique recovered rotation, and matching digest for the selected index | `SUPPORTED` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
-| Complete frame and unique recovered rotation, but an injected test oracle has no digest for the selected index | `CANDIDATE` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
-| Complete frame and ambiguous recovered rotation | `CANDIDATE` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
-| Selected-index digest mismatch, conflicting rotation constraints, or no checksum survivor | `INCONSISTENT` | `NORMAL_V103_BUILD_041202_NON_LINUX` | `UNKNOWN` |
+| Complete frame, unique recovered rotation, and matching digest for the selected index | `SUPPORTED` | Version-specific normal non-Linux layout | `UNKNOWN` |
+| Complete frame and unique recovered rotation, but an injected test oracle has no digest for the selected index | `CANDIDATE` | Version-specific normal non-Linux layout | `UNKNOWN` |
+| Complete frame and ambiguous recovered rotation | `CANDIDATE` | Version-specific normal non-Linux layout | `UNKNOWN` |
+| Selected-index digest mismatch, conflicting rotation constraints, or no checksum survivor | `INCONSISTENT` | Version-specific normal non-Linux layout | `UNKNOWN` |
 | Exact identity but incomplete header or body | `TRUNCATED` | `UNKNOWN` | `UNKNOWN` |
 | Unsupported selector values or dynamic laptop tails | `UNSUPPORTED_VARIANT` | `UNKNOWN` | `UNKNOWN` |
-| Exactly one of version `103` and build `Build 04.12.02` matches | `INCONSISTENT` | `UNKNOWN` | `UNKNOWN` |
+| Exactly one of version `102` or `103` and build `Build 04.12.02` matches | `INCONSISTENT` | `UNKNOWN` | `UNKNOWN` |
 | Incomplete or otherwise unknown identity | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 
 Changing a selector-affecting header byte while retaining the body changes the
@@ -86,9 +86,36 @@ names, paths, recovered rotation material, or digest values.
 All layout-specific interpretation methods on `Ja2SaveInspector` snapshot the
 input and apply this detector before returning a header, encrypted-profile
 frame, profile table, or roster. They continue only for exactly `SUPPORTED`
-plus `NORMAL_V103_BUILD_041202_NON_LINUX`; every other compatibility fails with
+plus either explicitly admitted v102/v103 layout; every other compatibility fails with
 sanitized enum diagnostics. Lower-level format primitives remain explicit
 research and unit-test boundaries and do not replace this public admission.
+
+## Issue #66 read-only v102 evidence
+
+Version 102 retains its own layout identity; it is never relabeled as 103.
+The issue's established source comparison pins the initial public release
+`dba730f20f7677e37448ba7dd60ea7d3861d6b93` at version 102 and sync
+`a54aa1320d5bd259b0e3591469a0b94d4876ebf2` at version 103. The latter
+replaces four SOLDIERTYPE padding bytes with agility/dexterity/strength/wisdom
+damage fields inside an unchanged 12-byte region. Later offsets do not shift.
+These four bytes remain uninterpreted by Field Kit. The 432-byte
+`SaveLoadGame.h` header and `Tactical_Save` selector/rotation source are
+unchanged across that transition.
+
+The issue also records one authorized private v102 / exact `Build 04.12.02`
+save passing the existing framing, unique recovery, production selected-index
+digest, all 170 profiles, complete 20-slot soldier traversal, checksum,
+path/keyring, profile identity/uniqueness, header count, live stats, and
+19-slot inventory checks when only the v103 identity gate was bypassed.
+No private bytes, filenames, campaign values, or roster data are incorporated
+here. This construction slice uses only public synthetic tests; it does not
+claim a new private-fixture acceptance run or full candidate qualification.
+
+The shared reader preserves every existing validation gate and only admits
+versions 102 and 103 with the exact build. Other versions and Linux layouts
+remain outside scope. No save-writing authority changes:
+`Ja2MarksmanshipEditor` production capability remains disabled, and its
+existing v103-only checks are unchanged.
 
 ## Evidence limits
 

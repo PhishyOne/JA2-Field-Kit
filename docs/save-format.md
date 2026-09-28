@@ -21,7 +21,7 @@ For the examined normal Windows/Stracciatella-style layout used by that save:
 
 ## Encoded structural slice
 
-The exact v103 / `Build 04.12.02` normal-header offsets and the narrow,
+The exact v102/v103 / `Build 04.12.02` normal-header offsets and the narrow,
 layout-only parser are recorded in
 [`save-header-04.12.02.md`](save-header-04.12.02.md). Public tests use an
 admitted synthetic vector because real-save evidence remains local-only. A
@@ -63,7 +63,7 @@ independently establish those later slices.
 
 ## Bounded encrypted-profile framing
 
-For the explicitly normal, non-Linux v103 / `Build 04.12.02` layout, the
+For the explicitly normal, non-Linux v102/v103 / `Build 04.12.02` layout, the
 read-only framer now advances through the 432-byte header, 316-byte tactical
 status, 5-byte current sector, 62-byte game clock, little-endian `u32` event
 count, `count * 28` strategic-event bytes, and 7440-byte fixed laptop block.
@@ -138,7 +138,7 @@ save-family detection.
 ## Compatibility strategy
 
 The implemented v0.1 decision matrix and deferred-family boundary are recorded
-in [`save-family-detection.md`](save-family-detection.md). Only a complete v103 /
+in [`save-family-detection.md`](save-family-detection.md). Only a complete v102/v103 /
 `Build 04.12.02` normal non-Linux path whose recovered rotation matches the
 admitted digest for its header-selected index is classified as compatible and
 `SUPPORTED`. Producer family remains `UNKNOWN`: the examined Reborn and

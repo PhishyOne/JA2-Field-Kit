@@ -80,7 +80,7 @@ class EncryptedProfileFrame internal constructor(
 }
 
 /**
- * Read-only framer for the evidenced normal non-Linux v103 / Build 04.12.02 layout.
+ * Read-only framer for the evidenced normal non-Linux v102/v103 / Build 04.12.02 layout.
  *
  * This validates the existing narrow header identity, walks only fixed-size structures and the
  * counted strategic-event array, and fails closed when either platform-dependent laptop tail is

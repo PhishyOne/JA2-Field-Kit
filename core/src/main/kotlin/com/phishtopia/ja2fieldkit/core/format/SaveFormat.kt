@@ -14,7 +14,13 @@ enum class SaveFamily {
 /** Serialized layout identity, independent of the executable that produced the bytes. */
 enum class SaveLayout {
     NORMAL_V103_BUILD_041202_NON_LINUX,
-    UNKNOWN,
+    NORMAL_V102_BUILD_041202_NON_LINUX,
+    UNKNOWN;
+
+    /** Shared interpreted offsets only; never grants editing authority. */
+    internal val supportsBuild041202Read: Boolean
+        get() = this == NORMAL_V102_BUILD_041202_NON_LINUX ||
+            this == NORMAL_V103_BUILD_041202_NON_LINUX
 }
 
 /** Compatibility of the supplied bytes with the current read-only core. */
@@ -133,7 +139,7 @@ internal fun interface RotationDigestOracle {
     fun digestFor(index: NormalRotationTableIndex): RotationTableDigest?
 }
 
-/** Evidence-based, fail-closed detector for the single currently evidenced layout. */
+/** Evidence-based, fail-closed detector for the explicitly admitted layouts. */
 object SaveFormatDetector {
     private const val NORMALIZED_BUILD_LABEL = "04.12.02"
 
@@ -165,7 +171,7 @@ object SaveFormatDetector {
             )
         }
 
-        val versionMatches = identity.saveVersion == SaveHeaderParser.SUPPORTED_SAVE_VERSION
+        val versionMatches = SaveHeaderParser.isSupportedSaveVersion(identity.saveVersion)
         val buildMatches = identity.gameVersion == SaveHeaderParser.SUPPORTED_GAME_VERSION
         if (!versionMatches || !buildMatches) {
             val contradictory = versionMatches != buildMatches
@@ -188,6 +194,12 @@ object SaveFormatDetector {
             )
         }
 
+        val layout = if (identity.saveVersion == 102L) {
+            SaveLayout.NORMAL_V102_BUILD_041202_NON_LINUX
+        } else {
+            SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX
+        }
+
         if (bytes.size < SaveLayoutFacts.NORMAL_HEADER_SIZE) {
             return result(
                 compatibility = SaveCompatibility.TRUNCATED,
@@ -195,7 +207,7 @@ object SaveFormatDetector {
                 identity = identity,
                 facts = baseFacts.copy(requiredEndExclusive = SaveLayoutFacts.NORMAL_HEADER_SIZE.toLong()),
                 evidence = listOf(
-                    "The v103 / Build 04.12.02 identity is recognized, but the 432-byte header is incomplete.",
+                    "The v${identity.saveVersion} / Build 04.12.02 identity is recognized, but the 432-byte header is incomplete.",
                 ),
             )
         }
@@ -257,7 +269,7 @@ object SaveFormatDetector {
             NormalProfileRotationRecovery.recoverBuild041202(frame.encryptedProfileBytes)
         } catch (failure: ProfileRotationRecoveryException) {
             return result(
-                layout = SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,
+                layout = layout,
                 compatibility = when (failure.reason) {
                     ProfileRotationRecoveryFailure.AMBIGUOUS -> SaveCompatibility.CANDIDATE
                     ProfileRotationRecoveryFailure.CONFLICTING_RESERVED_CONSTRAINT,
@@ -287,7 +299,7 @@ object SaveFormatDetector {
 
         val expectedDigest = rotationDigestOracle.digestFor(selectedIndex)
             ?: return result(
-                layout = SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,
+                layout = layout,
                 compatibility = SaveCompatibility.CANDIDATE,
                 reason = SaveDetectionReason.ROTATION_DIGEST_ORACLE_MISSING,
                 identity = identity,
@@ -299,7 +311,7 @@ object SaveFormatDetector {
 
         if (RotationTableDigest.from(recoveredRotation) != expectedDigest) {
             return result(
-                layout = SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,
+                layout = layout,
                 compatibility = SaveCompatibility.INCONSISTENT,
                 reason = SaveDetectionReason.ROTATION_DIGEST_MISMATCH,
                 identity = identity,
@@ -314,7 +326,7 @@ object SaveFormatDetector {
         }
 
         return result(
-            layout = SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,
+            layout = layout,
             compatibility = SaveCompatibility.SUPPORTED,
             reason = SaveDetectionReason.SELECTOR_BODY_ROTATION_MATCH,
             identity = identity,
@@ -323,7 +335,7 @@ object SaveFormatDetector {
                 rotationDigestMatched = true,
             ),
             evidence = listOf(
-                "Matched the v103 / Build 04.12.02 identity and complete normal non-Linux profile frame.",
+                "Matched the v${identity.saveVersion} / Build 04.12.02 identity and complete normal non-Linux profile frame.",
                 "Matched the recovered body rotation to the admitted digest for the header-selected index.",
                 "No byte discriminator attributes the producer family.",
             ),
@@ -343,7 +355,7 @@ object SaveFormatDetector {
         reason = reason,
         saveVersion = identity.saveVersion?.takeIf { it <= Int.MAX_VALUE }?.toInt(),
         buildLabel = if (
-            identity.saveVersion == SaveHeaderParser.SUPPORTED_SAVE_VERSION &&
+            SaveHeaderParser.isSupportedSaveVersion(identity.saveVersion) &&
             identity.gameVersion == SaveHeaderParser.SUPPORTED_GAME_VERSION
         ) NORMALIZED_BUILD_LABEL else null,
         facts = facts,

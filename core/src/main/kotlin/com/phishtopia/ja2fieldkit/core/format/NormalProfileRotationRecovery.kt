@@ -20,7 +20,7 @@ class ProfileRotationRecoveryException(
     )
 
 /**
- * Recovery for an already-framed canonical normal v103 / Build 04.12.02 profile block.
+ * Recovery for an already-framed canonical normal v102/v103 / Build 04.12.02 profile block.
  * This establishes zero/checksum consistency only, not family, authenticity, or stat validity.
  * The returned table belongs to this invocation; do not cache it under a selector index.
  * See docs/profile-rotation-recovery.md for evidence and the independent framing prerequisite.

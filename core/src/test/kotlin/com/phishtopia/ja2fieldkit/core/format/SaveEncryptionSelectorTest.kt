@@ -177,7 +177,7 @@ class SaveEncryptionSelectorTest {
         val header = SaveHeaderParser.parseBuild041202(syntheticBuild041202Header())
 
         val identityError = assertFailsWith<InvalidEncryptionHeaderInputException> {
-            NormalEncryptionHeaderInputs.fromBuild041202(header.copy(saveVersion = 102))
+            NormalEncryptionHeaderInputs.fromBuild041202(header.copy(saveVersion = 104))
         }
         assertEquals("headerIdentity", identityError.fieldName)
 

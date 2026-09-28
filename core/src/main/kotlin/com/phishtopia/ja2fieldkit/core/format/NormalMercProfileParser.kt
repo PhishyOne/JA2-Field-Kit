@@ -29,7 +29,7 @@ class MercProfileParseException(
 )
 
 /**
- * Parser for an already-decrypted canonical normal v103 / Build 04.12.02 profile table.
+ * Parser for an already-decrypted canonical normal v102/v103 / Build 04.12.02 profile table.
  *
  * Exactly 170 consecutive 716-byte records are required. Only the v0.1 fields evidenced by the
  * pinned serializer are interpreted; every other byte remains opaque and no roster meaning is

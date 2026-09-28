@@ -52,7 +52,7 @@ There is no independently evidenced serialized profile-ID field. The public
 whole-save entry point. For each invocation it:
 
 1. snapshots the caller-owned bytes and requires the production detector to
-   return exactly `SUPPORTED` for `NORMAL_V103_BUILD_041202_NON_LINUX`;
+   return exactly `SUPPORTED` for `NORMAL_V102_BUILD_041202_NON_LINUX` or `NORMAL_V103_BUILD_041202_NON_LINUX`;
 2. frames the exact 121720-byte encrypted table;
 3. recovers one invocation-owned 49-byte rotation table;
 4. decrypts 170 separate 716-byte operations, resetting feedback and rotation

@@ -4,7 +4,7 @@ object SaveLayoutFacts {
     /** Confirmed for the normal Windows/Stracciatella-style header used by the examined Reborn save. */
     const val NORMAL_HEADER_SIZE = 432
 
-    /** Evidenced normal non-Linux v103 / Build 04.12.02 body-prefix sizes. */
+    /** Evidenced normal non-Linux v102/v103 / Build 04.12.02 body-prefix sizes. */
     const val NORMAL_NON_LINUX_TACTICAL_STATUS_SIZE = 316
     const val NORMAL_NON_LINUX_CURRENT_SECTOR_SIZE = 5
     const val NORMAL_NON_LINUX_GAME_CLOCK_SIZE = 62

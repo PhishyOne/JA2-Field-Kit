@@ -111,11 +111,11 @@ class SaveHeaderParserTest {
 
     @Test
     fun rejectsUnsupportedVersionOrBuildInsteadOfGuessing() {
-        val wrongVersion = syntheticBuild041202Header().apply { putU32Le(0, 102) }
+        val wrongVersion = syntheticBuild041202Header().apply { putU32Le(0, 104) }
         val versionError = assertFailsWith<UnsupportedSaveHeaderException> {
             SaveHeaderParser.parseBuild041202(wrongVersion)
         }
-        assertEquals(102L, versionError.saveVersion)
+        assertEquals(104L, versionError.saveVersion)
 
         val wrongBuild = syntheticBuild041202Header().apply {
             putSingleByteString(4, 16, "Build 99.99.99")

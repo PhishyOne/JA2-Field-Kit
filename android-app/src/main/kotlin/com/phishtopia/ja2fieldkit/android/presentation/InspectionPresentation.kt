@@ -215,6 +215,8 @@ object InspectionPresentationMapper {
             layout = when (format.layout) {
                 SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX ->
                     "Normal non-Linux v103"
+                SaveLayout.NORMAL_V102_BUILD_041202_NON_LINUX ->
+                    "Normal non-Linux v102"
                 SaveLayout.UNKNOWN -> "Unknown"
             },
             compatibility = when (format.compatibility) {

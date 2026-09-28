@@ -1,7 +1,7 @@
 # Live inventory read model (Issue #38)
 
 This slice reads the live SOLDIERTYPE inventory of each hired, non-vehicle
-player merc in the supported normal non-Linux v103 / Build 04.12.02 domain.
+player merc in the supported normal non-Linux v102/v103 / Build 04.12.02 domain.
 It does not read inventory from the profile table. There is no editing or write
 capability, inventory serialization, checksum regeneration, output placement,
 bridge or 1.13/NIV support. Optional base-name decoration is separate from this model.
@@ -188,7 +188,7 @@ revisions. These are evidence references, not incorporated source:
 The audit found identical Git blob IDs for the relevant object/soldier structure
 sources between these revisions: the source blobs supporting these inventory
 facts are unchanged. Stracciatella's `SaveLoadGame.cc` at the audited revision
-contains v104+ profile-extension framing drift, outside this v103-gated slice;
+contains v104+ profile-extension framing drift, outside this v102/v103-gated slice;
 the reviewed 36-byte object and SOLDIERTYPE facts remain stable.
 
 The source-derived factual tables and interpretation require a separate

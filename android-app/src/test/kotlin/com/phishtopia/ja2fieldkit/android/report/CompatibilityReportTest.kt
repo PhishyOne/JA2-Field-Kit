@@ -49,6 +49,42 @@ class CompatibilityReportTest {
     }
 
     @Test
+    fun v102FailureReportRetainsEstablishedLayoutAndNonSuccessFacts() {
+        val inputs = CompatibilityReportFactory.captureInputs(
+            source = source(),
+            format = FormatPresentation(
+                version = "102",
+                build = "04.12.02",
+                layout = "Normal non-Linux v102",
+                compatibility = "Inconsistent",
+                producer = "Not established",
+            ),
+            failureKind = "INCONSISTENT_INPUT",
+            failureDiagnostic = "HEADER_BODY_MISMATCH",
+        )
+        val report = CompatibilityReportFactory.create("0.1.0", inputs)
+        val text = report.toJson()
+
+        assertEquals(102, report.saveVersion)
+        assertEquals("04.12.02", report.build)
+        assertEquals("normal_non_linux_v102_build_041202", report.layout)
+        assertEquals("inconsistent", report.compatibility)
+        assertEquals("unknown", report.producer)
+        assertEquals("inconsistent_input", report.failureKind)
+        assertEquals("header_body_mismatch", report.failureDiagnostic)
+        listOf(
+            "\"save_version\": 102",
+            "\"build\": \"04.12.02\"",
+            "\"layout\": \"normal_non_linux_v102_build_041202\"",
+            "\"compatibility\": \"inconsistent\"",
+            "\"producer\": \"unknown\"",
+            "\"kind\": \"inconsistent_input\"",
+            "\"diagnostic\": \"header_body_mismatch\"",
+        ).forEach { fact -> assertTrue(text.contains(fact), fact) }
+        assertFalse(text.contains("\"layout\": \"unknown\""))
+    }
+
+    @Test
     fun rejectsInvalidActualSizeAndHash() {
         assertFailsWith<IllegalArgumentException> { report(actualSizeBytes = -1) }
         assertFailsWith<IllegalArgumentException> {

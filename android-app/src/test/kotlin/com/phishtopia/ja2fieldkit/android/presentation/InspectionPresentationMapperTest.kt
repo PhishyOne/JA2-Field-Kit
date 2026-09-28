@@ -36,6 +36,15 @@ class InspectionPresentationMapperTest {
     )
 
     @Test
+    fun v102PresentationKeepsTheDistinctLayoutAndVersion() {
+        val result = successResult(layout = SaveLayout.NORMAL_V102_BUILD_041202_NON_LINUX, version = 102)
+        val state = assertIs<InspectionScreenState.Success>(map(result))
+        assertEquals("102", state.format.version)
+        assertEquals("Normal non-Linux v102", state.format.layout)
+        assertEquals("04.12.02", state.format.build)
+    }
+
+    @Test
     fun mapsSuccessToCampaignRosterAndEveryCoreStat() {
         val result = successResult()
 
@@ -331,12 +340,14 @@ class InspectionPresentationMapperTest {
         nickname: String? = "Ira",
         buildLabel: String? = "04.12.02",
         stats: MercStats = MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90),
+        layout: SaveLayout = SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,
+        version: Int = 103,
     ): SaveInspectionV01Result.Success {
         val constructor = SaveInspectionV01Result.Success::class.java.declaredConstructors
             .single { it.parameterCount == 3 }
             .apply { isAccessible = true }
         return constructor.newInstance(
-            format(SaveCompatibility.SUPPORTED, buildLabel),
+            format(SaveCompatibility.SUPPORTED, buildLabel).copy(layout = layout, saveVersion = version),
             CampaignSummaryV01(12, 7, 5, CampaignSector(9, 4, 0), 1, 45_000),
             listOf(
                 MercRosterEntry(

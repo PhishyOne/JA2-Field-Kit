@@ -20,7 +20,7 @@ save bytes
 
 The current core implements the non-destructive structural probe, an
 [evidence-based fail-closed detector](save-family-detection.md), general
-little-endian primitives, a narrow parser for the evidenced v103 /
+little-endian primitives, a narrow parser for the evidenced v102/v103 /
 `Build 04.12.02` normal header, and the source-derived normal encryption
 selector and block transform. The bounded normal non-Linux path can also frame
 the encrypted profile table, recover its per-save rotation, decrypt each record,

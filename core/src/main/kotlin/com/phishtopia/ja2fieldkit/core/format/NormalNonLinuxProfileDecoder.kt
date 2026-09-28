@@ -3,7 +3,7 @@ package com.phishtopia.ja2fieldkit.core.format
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
 
 /**
- * Whole-save, read-only profile pipeline for the evidenced normal non-Linux v103 / Build 04.12.02
+ * Whole-save, read-only profile pipeline for the evidenced normal non-Linux v102/v103 / Build 04.12.02
  * layout. The recovered rotation belongs only to this invocation and is not retained or cached.
  */
 object NormalNonLinuxProfileDecoder {

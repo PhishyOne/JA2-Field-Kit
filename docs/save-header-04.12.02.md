@@ -3,9 +3,9 @@
 ## Scope and evidence
 
 This is the 432-byte normal Windows/Stracciatella-style header map evidenced
-for saved-game version `103` and game-version string `Build 04.12.02`. It is an
+for saved-game versions `102` and `103` and game-version string `Build 04.12.02`. It is an
 interoperability layout, not a save-family detector. A file having 432 bytes,
-version `103`, or this string is not by itself proof that the file is a JA2
+version `102` or `103`, or this string is not by itself proof that the file is a JA2
 Reborn save.
 
 The map was re-derived for this change from two independent evidence lines:
@@ -32,6 +32,9 @@ The map was re-derived for this change from two independent evidence lines:
 Multi-byte numbers in this normal header are little-endian. The distinct
 historical 688-byte Stracciatella Linux header is outside this parser's scope.
 
+Issue #66 extends this map to v102 using the unchanged header layout; see the
+[read-only compatibility evidence](save-family-detection.md#issue-66-read-only-v102-evidence).
+
 ## Field map
 
 Offsets are zero-based and end offsets are exclusive. `BOOLEAN` is serialized
@@ -40,7 +43,7 @@ any other raw byte without assigning it a Boolean meaning.
 
 | Range | Width | Representation | Meaning |
 | ---: | ---: | --- | --- |
-| `0..4` | 4 | unsigned 32-bit, little-endian | Saved-game serialization version; exactly `103` for this parser |
+| `0..4` | 4 | unsigned 32-bit, little-endian | Saved-game serialization version; exactly `102` or `103` for this parser |
 | `4..20` | 16 | fixed single-byte, NUL-terminated string | Game-version string; exactly `Build 04.12.02` for this parser |
 | `20..276` | 256 | 128 UTF-16LE code units, NUL-terminated | Save description |
 | `276..280` | 4 | opaque bytes | Unknown/reserved legacy range |
@@ -70,7 +73,7 @@ any other raw byte without assigning it a Boolean meaning.
 The known and opaque ranges exactly partition all 432 header bytes. The four
 opaque ranges are returned verbatim. The parser reads exactly the first 432
 bytes, rejects every shorter input, and rejects any version/build identity
-other than `103` / `Build 04.12.02`. Successful parsing does not select a save
+other than `102` or `103` / `Build 04.12.02`. Successful parsing does not select a save
 family, infer that later blocks exist, or choose an encryption table.
 
 ## Synthetic and authorized real-save coverage

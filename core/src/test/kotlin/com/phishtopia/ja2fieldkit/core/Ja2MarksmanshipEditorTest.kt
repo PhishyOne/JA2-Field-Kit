@@ -127,6 +127,19 @@ class Ja2MarksmanshipEditorTest {
     }
 
     @Test
+    fun admittedV102ReadDoesNotGrantEditingAuthority() {
+        val source = save().also { it[0] = 102 }
+        val original = source.copyOf()
+        assertEquals(SaveCompatibility.SUPPORTED, inspector().detect(source).compatibility)
+        assertEquals(SaveLayout.NORMAL_V102_BUILD_041202_NON_LINUX, inspector().detect(source).layout)
+        fail(Ja2MarksmanshipEditor().edit(source, request()),
+            MarksmanshipEditStage.CAPABILITY, MarksmanshipEditReason.CAPABILITY_DISABLED)
+        fail(editor().edit(source, request()),
+            MarksmanshipEditStage.SOURCE_PARSE, MarksmanshipEditReason.UNSUPPORTED_FORMAT)
+        assertContentEquals(original, source)
+    }
+
+    @Test
     fun mismatchDisabledCapabilityAndInvalidSourceFailClosed() {
         val source = save()
         fail(editor().edit(source, request().copy(expectedCurrentMarksmanship = 127)),
@@ -135,7 +148,7 @@ class Ja2MarksmanshipEditorTest {
             MarksmanshipEditStage.CAPABILITY, MarksmanshipEditReason.CAPABILITY_DISABLED)
         assertIs<SaveInspectionV01Result.Failure>(Ja2SaveInspector().inspectV01(source))
         for (invalid in listOf(ByteArray(0), source.copyOf(20), source.copyOf().also { it[303] = 2 },
-            source.copyOf().also { it[0] = 102 }, source.copyOf().also { it[PROFILE_START + 80]++ },
+            source.copyOf().also { it[0] = 104 }, source.copyOf().also { it[PROFILE_START + 80]++ },
             source.copyOf().also { it[PROFILE_END] = 2 })) {
             fail(editor().edit(invalid, request()), MarksmanshipEditStage.SOURCE_PARSE, MarksmanshipEditReason.INVALID_SOURCE)
         }

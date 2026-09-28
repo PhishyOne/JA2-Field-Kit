@@ -20,6 +20,35 @@ class NormalNonLinuxRosterDecoderTest {
     private val encryptedProfiles = encryptRecords(profilePlaintext, 716)
 
     @Test
+    fun v102ReadsSharedProfileRosterStatsAndInventoryOffsetsWithoutRelabeling() {
+        val v103 = syntheticSave(mapOf(
+            0 to SoldierSpec(7, pathNodeCount = 2, hasKeyring = true),
+            19 to SoldierSpec(42, hasKeyring = true),
+        ), 2)
+        val v102 = v103.copyOf().also { it.putU32Le(0, 102) }
+        val original = v102.copyOf()
+        val inspector = admittedInspector()
+        val result = assertIs<LiveMercStateInspectionResult.Success>(inspector.inspectLiveMercState(v102))
+        val baseline = assertIs<LiveMercStateInspectionResult.Success>(inspector.inspectLiveMercState(v103))
+        assertEquals(SaveLayout.NORMAL_V102_BUILD_041202_NON_LINUX, result.format.layout)
+        assertEquals(102, result.format.saveVersion)
+        baseline.mercs.zip(result.mercs).forEach { (expected, actual) ->
+            assertEquals(expected.profileIndex, actual.profileIndex)
+            assertEquals(expected.stats, actual.stats)
+            assertEquals(expected.slots, actual.slots)
+        }
+        assertTrue(result.mercs.all { it.slots.size == 19 })
+        assertEquals(170, inspector.parseBuild041202NormalNonLinuxProfiles(v102).size)
+        assertEquals(inspector.parseBuild041202NormalNonLinuxProfiles(v103),
+            inspector.parseBuild041202NormalNonLinuxProfiles(v102))
+        assertEquals(inspector.parseBuild041202NormalNonLinuxRoster(v103),
+            inspector.parseBuild041202NormalNonLinuxRoster(v102))
+        assertIs<SaveInspectionV01Result.Success>(inspector.inspectV01(v102))
+        assertIs<LiveInventoryInspectionResult.Success>(inspector.inspectLiveInventory(v102))
+        assertContentEquals(original, v102)
+    }
+
+    @Test
     fun combinedLiveStatePreservesAllTenSignedFactsAndProfileBinding() {
         val offsets = listOf(868, 917, 880, 840, 886, 849, 1377, 916, 1378, 1372)
         val values = listOf(-128, 127, -3, -4, -5, -6, -7, -8, -9, -10)
@@ -525,6 +554,12 @@ class NormalNonLinuxRosterDecoderTest {
         assertFailsWith<RosterMembershipException> {
             NormalNonLinuxRosterDecoder.decodeBuild041202(save)
         }.also {
+            val v102 = save.copyOf().also { bytes -> bytes.putU32Le(0, 102) }
+            val v102Error = assertFailsWith<RosterMembershipException> {
+                NormalNonLinuxRosterDecoder.decodeBuild041202(v102)
+            }
+            assertEquals(it.message, v102Error.message)
+            assertIs<LiveMercStateInspectionResult.Failure>(admittedInspector().inspectLiveMercState(v102))
             assertEquals(reason, it.reason)
             assertEquals(slot, it.slotIndex)
             val original = save.copyOf()

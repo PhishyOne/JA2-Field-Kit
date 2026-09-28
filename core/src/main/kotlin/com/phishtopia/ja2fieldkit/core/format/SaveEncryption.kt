@@ -89,13 +89,13 @@ data class NormalEncryptionHeaderInputs(
 
         fun fromBuild041202(header: SaveHeader): NormalEncryptionHeaderInputs {
             if (
-                header.saveVersion != SaveHeaderParser.SUPPORTED_SAVE_VERSION ||
+                !SaveHeaderParser.isSupportedSaveVersion(header.saveVersion) ||
                 header.gameVersion != SaveHeaderParser.SUPPORTED_GAME_VERSION
             ) {
                 throw InvalidEncryptionHeaderInputException(
                     fieldName = "headerIdentity",
                     rawValue = "${header.saveVersion}/${header.gameVersion}",
-                    detail = "requires save version 103 and game version Build 04.12.02",
+                    detail = "requires save version 102 or 103 and game version Build 04.12.02",
                 )
             }
 

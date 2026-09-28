@@ -56,8 +56,8 @@ is added. Membership and checksum authority are unchanged.
 Android uses two logical calls: `inspectV01` for campaign/profile roster and
 `inspectLiveMercState` for tactical stats plus inventory. It joins by exact
 profile index only after equal unique identity sets, equal format, and canonical
-19-slot role order are verified. Live/current tactical stats and Profile/base
-stats are visibly separate; leadership and wisdom remain profile/base only.
+19-slot role order are verified. Android merges live/current and profile/base
+stats for display; leadership and wisdom remain profile/base only.
 This slice grants no editing, writing, or save-export authority.
 
 ## Classification boundary

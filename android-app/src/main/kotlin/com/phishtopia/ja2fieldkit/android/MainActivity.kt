@@ -315,10 +315,9 @@ class MainActivity : ComponentActivity() {
 
     private fun LinearLayout.addMerc(merc: MercPresentation) {
         addHeading(merc.displayName(), 19f)
-        addBody("Live/current tactical stats")
-        addBody(merc.liveStats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
-        addBody("Profile/base stats")
-        addBody(merc.profileStats.joinToString("  ·  ") { "${it.label}: ${it.value}" })
+        addHeading("Stats", 17f)
+        merc.statsLegend?.let { addBody(it) }
+        addBody(merc.stats.joinToString("\n") { "${it.label}: ${it.value}" })
         addHeading("Inventory", 17f)
         val groups = groupInventory(merc.inventory)
         if (groups == null) {

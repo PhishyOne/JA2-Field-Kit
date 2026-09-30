@@ -72,10 +72,10 @@ class RosterMembershipException(
  */
 object NormalNonLinuxRosterDecoder {
     fun decodeBuild041202(saveBytes: ByteArray): List<MercRosterEntry> =
-        Collections.unmodifiableList(scanBuild041202(saveBytes).map { it.rosterEntry })
+        Collections.unmodifiableList(scanBuild041202(saveBytes).players.map { it.rosterEntry })
 
     internal fun decodeInventoriesBuild041202(saveBytes: ByteArray): List<MercInventoryEntry> =
-        Collections.unmodifiableList(scanBuild041202(saveBytes).map { soldier ->
+        Collections.unmodifiableList(scanBuild041202(saveBytes).players.map { soldier ->
             MercInventoryEntry(
                 profileIndex = soldier.rosterEntry.profileIndex,
                 name = soldier.rosterEntry.name,
@@ -85,7 +85,7 @@ object NormalNonLinuxRosterDecoder {
         })
 
     internal fun decodeLiveMercStatesBuild041202(saveBytes: ByteArray): List<LiveMercState> =
-        Collections.unmodifiableList(scanBuild041202(saveBytes).map { soldier ->
+        Collections.unmodifiableList(scanBuild041202(saveBytes).players.map { soldier ->
             LiveMercState(
                 soldier.rosterEntry.profileIndex,
                 soldier.stats,
@@ -109,7 +109,16 @@ object NormalNonLinuxRosterDecoder {
         }
     }
 
-    private fun scanBuild041202(saveBytes: ByteArray): List<ValidatedPlayer> {
+    // Framing descriptors confer no write authority. Include vehicles to detect target aliases.
+    internal data class RecordLocation(val profileIndex: Int, val absoluteOffset: Int, val playerMerc: Boolean)
+
+    @JvmName("validatedRecordLocations")
+    internal fun validatedRecordLocations(saveBytes: ByteArray): List<RecordLocation> =
+        scanBuild041202(saveBytes).locations
+
+    private class ValidatedRoster(val players: List<ValidatedPlayer>, val locations: List<RecordLocation>)
+
+    private fun scanBuild041202(saveBytes: ByteArray): ValidatedRoster {
         val context = NormalNonLinuxProfileDecoder.decodeContextBuild041202(saveBytes)
         validateCanonicalPlayerTeamRange(saveBytes)
 
@@ -117,6 +126,7 @@ object NormalNonLinuxRosterDecoder {
         val profileIds = ArrayList<Int>()
         val uniqueProfileIds = HashSet<Int>()
         val players = ArrayList<ValidatedPlayer>()
+        val locations = ArrayList<RecordLocation>()
 
         repeat(PLAYER_SLOT_COUNT) { slotIndex ->
             requireAvailable(
@@ -156,6 +166,9 @@ object NormalNonLinuxRosterDecoder {
             )
             val previousCount = profileIds.size
             validateSoldier(decrypted, slotIndex, saveBytes.size, profileIds, uniqueProfileIds)
+            locations += RecordLocation(
+                LittleEndianReader(decrypted).u8(PROFILE_OFFSET), offset.toInt(), profileIds.size != previousCount,
+            )
             if (profileIds.size != previousCount) {
                 players += ValidatedPlayer(
                     context.profiles[profileIds.last()].toRosterEntry(),
@@ -235,7 +248,7 @@ object NormalNonLinuxRosterDecoder {
             )
         }
 
-        return Collections.unmodifiableList(players)
+        return ValidatedRoster(Collections.unmodifiableList(players), Collections.unmodifiableList(locations))
     }
 
     private fun validateCanonicalPlayerTeamRange(saveBytes: ByteArray) {
@@ -317,6 +330,8 @@ object NormalNonLinuxRosterDecoder {
         mechanical = reader.i8(MECHANICAL_OFFSET).toInt(),
         explosives = reader.i8(EXPLOSIVE_OFFSET).toInt(),
         medical = reader.i8(MEDICAL_OFFSET).toInt(),
+        leadership = reader.i8(895).toInt(),
+        wisdom = reader.i8(841).toInt(),
     )
 
     private fun sourceChecksum(reader: LittleEndianReader): Long {

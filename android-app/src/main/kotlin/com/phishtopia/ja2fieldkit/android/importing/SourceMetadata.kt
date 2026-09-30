@@ -42,7 +42,7 @@ data class ImportedSaveProvenance(
  * callers may only lend it directly to the immediate inspection call.
  */
 class ImportedSave internal constructor(
-    private val exactBytes: ByteArray,
+    private var exactBytes: ByteArray?,
     val provenance: ImportedSaveProvenance,
 ) {
     /** Runs both read-only views while the imported bytes remain task-local. */
@@ -50,9 +50,21 @@ class ImportedSave internal constructor(
         inspector: Ja2SaveInspector,
         transform: (SaveInspectionV01Result, LiveMercStateInspectionResult) -> T,
     ): T = transform(
-        inspector.inspectV01(exactBytes),
-        inspector.inspectLiveMercState(exactBytes),
+        inspector.inspectV01(checkNotNull(exactBytes)),
+        inspector.inspectLiveMercState(checkNotNull(exactBytes)),
     )
+    /** Transfer into the debug session, erasing the task-local buffer after defensive capture. */
+    internal fun takeEditSession(
+        prepare: (ByteArray) -> com.phishtopia.ja2fieldkit.android.editing.EditSession = {
+            com.phishtopia.ja2fieldkit.android.editing.EditSession(it)
+        },
+    ): com.phishtopia.ja2fieldkit.android.editing.EditSession? {
+        val bytes = checkNotNull(exactBytes)
+        try { return prepare(bytes) }
+        // Editor preparation is optional: never replace a successful read-only presentation.
+        catch (_: RuntimeException) { return null }
+        finally { bytes.fill(0); exactBytes = null }
+    }
 }
 
 /** The one source-agnostic stream boundary shared by every Android content-URI entry point. */

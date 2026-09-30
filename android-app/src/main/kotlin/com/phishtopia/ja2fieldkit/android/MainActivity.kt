@@ -65,6 +65,11 @@ class MainActivity : ComponentActivity() {
         handleRequest(consumed.request)
     }
 
+    override fun onResume() {
+        super.onResume()
+        model.reconcileExport(applicationContext)
+    }
+
     override fun onDestroy() {
         model.detach(stateObserver)
         super.onDestroy()
@@ -129,7 +134,15 @@ class MainActivity : ComponentActivity() {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addTitle(getString(R.string.app_name))
-            addBody(getString(R.string.read_only_notice))
+            addBody(if (model.editorAvailable) "Debug test build: inspect or export one edit as a NEW save. Original untouched."
+                else getString(R.string.read_only_notice))
+            if (model.editorAvailable) {
+                model.exportStatus?.let { addBody(it) }
+                addView(Button(this@MainActivity).apply {
+                    text = "Recheck export status"
+                    setOnClickListener { model.reconcileExport(applicationContext) }
+                }, matchWidth())
+            }
         }
 
         when (screenState) {
@@ -315,6 +328,17 @@ class MainActivity : ComponentActivity() {
 
     private fun LinearLayout.addMerc(merc: MercPresentation) {
         addHeading(merc.displayName(), 19f)
+        val editable = model.editMerc(merc.profileIndex)
+        if (editable != null) {
+            addView(Button(this@MainActivity).apply {
+                text = "Edit → create NEW save"
+                setOnClickListener {
+                    showEditDialog(this@MainActivity, editable) { choice ->
+                        model.exportEdit(applicationContext, editable, choice)
+                    }
+                }
+            }, matchWidth())
+        } else addBody("Read-only: editing requires a debug build, Android 10+, and a uniquely hired merc in supported v103. After export, reopen the new save.")
         addHeading("Stats", 17f)
         merc.statsLegend?.let { addBody(it) }
         addBody(merc.stats.joinToString("\n") { "${it.label}: ${it.value}" })

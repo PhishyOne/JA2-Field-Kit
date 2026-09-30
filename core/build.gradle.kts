@@ -90,3 +90,15 @@ sourceSets.test {
 tasks.processTestResources {
     dependsOn(materializeProfileRecoveryTestFixture)
 }
+
+// JVM-only fixture support consumed by Android unit tests; never a runtime APK dependency.
+val syntheticTestSupport by configurations.creating {
+    isCanBeConsumed = true
+    isCanBeResolved = false
+}
+val syntheticTestSupportJar by tasks.registering(Jar::class) {
+    dependsOn(tasks.testClasses)
+    archiveClassifier.set("synthetic-test-support")
+    from(sourceSets.test.get().output)
+}
+artifacts { add(syntheticTestSupport.name, syntheticTestSupportJar) }

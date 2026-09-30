@@ -2,6 +2,7 @@ package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.io.LittleEndianReader
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
+import com.phishtopia.ja2fieldkit.core.model.ProfileInventorySlot
 import java.util.Collections
 
 enum class MercProfileParseFailure {
@@ -71,6 +72,10 @@ object NormalMercProfileParser {
                 mechanical = reader.i8(411).toInt(),
                 medical = reader.i8(261).toInt(),
                 experienceLevel = reader.i8(352).toInt(),
+                inventory = Collections.unmodifiableList(List(19) { slot ->
+                    ProfileInventorySlot(reader.u16(416 + 2 * slot), reader.u8(377 + slot), reader.u8(358 + slot))
+                }),
+                inventoryUndroppable = reader.u8(412),
             )
         }
         return Collections.unmodifiableList(profiles)

@@ -40,6 +40,7 @@ class InventoryGroupingWiringTest {
         val lines = dependencies.lines().map { it.trim() }.filter { it.contains("implementation(", true) }
         kotlin.test.assertEquals(listOf("implementation(project(\":core\"))",
             "implementation(\"androidx.activity:activity-ktx:1.13.0\")",
-            "testImplementation(\"org.jetbrains.kotlin:kotlin-test-junit5:2.4.10\")"), lines)
+            "testImplementation(\"org.jetbrains.kotlin:kotlin-test-junit5:2.4.10\")",
+            "testImplementation(project(path = \":core\", configuration = \"syntheticTestSupport\"))"), lines)
     }
 }

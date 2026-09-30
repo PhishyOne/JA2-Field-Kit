@@ -2,7 +2,7 @@ package com.phishtopia.ja2fieldkit.core.model
 
 import java.util.Collections
 
-/** Exact signed-byte tactical facts already used by the validated soldier checksum. */
+/** Exact signed-byte tactical facts from the validated soldier record. */
 data class LiveMercStats(
     val life: Int,
     val lifeMax: Int,
@@ -14,6 +14,8 @@ data class LiveMercStats(
     val mechanical: Int,
     val explosives: Int,
     val medical: Int,
+    val leadership: Int,
+    val wisdom: Int,
 )
 
 /** Common inventory facts only; no raw record, opaque payload, or item classification. */

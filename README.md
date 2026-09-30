@@ -1,32 +1,36 @@
 # JA2 Field Kit
 
+> Debug/test construction only; device qualification remains outstanding.
+> See the [construction status and gate results](docs/issue-72-debug-editor-construction-status.md).
+
 Android-first companion and save-game inspector/editor for Jagged Alliance 2.
 
 JA2 Field Kit is intentionally separate from JA2 Reborn and from other game projects. The phone is where the tool runs; supported save files may originate on PC, JA2 Reborn, Stracciatella, or other compatible builds.
 
 ## Current status
 
-The project has a first read-only Android shell over the v0.1 core.
+The project has an Android inspector and a debug-only create-new editor slice over the verified core.
 
 Milestone v0.1 is deliberately narrow:
 
 `open .sav -> detect format/version -> campaign summary -> roster -> merc stats + live inventory`
 
-No save-writing API exists yet. Editing will only be added after reliable parse/rewrite/reread validation exists.
+Release builds remain read-only. The debug editor runs parse/rewrite/reread verification and requires separate on-device placement qualification.
 
 The `android-app/` shell can select a save with Android's document picker and
 accept narrowly advertised open-with/share-to content URIs. It accepts and
 retains complete payloads up to 16 MiB; an oversized rejected stream may be
 transiently read beyond that boundary by up to one current 64 KiB buffer read
-and is not retained as an accepted save. It lends one task-local byte snapshot
+and is not retained as an accepted save. It lends a private byte snapshot
 to `inspectV01` and `inspectLiveMercState`, and displays the source filename,
 actual and optional provider sizes, optional provider timestamp,
 lowercase SHA-256, format, campaign summary, roster, profile/base stats, verified
 live/current tactical stats, 19-slot grouped read-only live inventory, or sanitized
 failure codes. Local/Downloads, USB, and cloud documents use Android Storage Access
 Framework providers; open-with and share-to converge on the same importer. It
-requests no storage permission, retains no URI grant or save bytes, performs no
-scanning/upload, and never writes, exports, or modifies a save.
+requests no storage permission or persistent URI grant and performs no scanning/upload.
+Debug API 29+ builds retain one ephemeral source snapshot while open and can
+export a new verified save. The original is never modified.
 For a completed import that fails inspection, the user can explicitly preview,
 copy, or share a versioned privacy-bounded compatibility report; save
 contribution remains unimplemented.
@@ -54,6 +58,14 @@ The core v0.1 presentation facade is
 covering format/version/layout compatibility, the minimal campaign summary, and
 the verified roster/core stats. Inputs are copied before inspection; no raw
 offset, rotation, digest, key, or encryption details cross this facade.
+
+The [Issue #72 candidate transaction](docs/save-edit-transactions.md) adds a
+source-bound core request/result architecture and privileged synthetic coverage
+for ten synchronized hired-merc stats with stat-specific ranges and injury guards,
+plus [closed inventory clear/add/replace operations](docs/inventory-edit-evidence.md)
+for single first-aid kits, medical kits and toolkits in the four big pockets.
+Production editing remains disabled;
+the debug Android create-new adapter is deterministically tested and awaits device qualification.
 
 ## Architecture
 
@@ -146,3 +158,17 @@ comments, and tables must not be copied or translated into this repository.
 The current engineering boundary review and its remaining decision gate are in
 [`docs/licensing-boundary-review.md`](docs/licensing-boundary-review.md). No
 project license has been selected or added.
+
+### Debug editor qualification slice (Issue #72)
+
+Debug/test builds on Android 10+ now offer **Edit → create NEW save** for a
+selected, uniquely hired merc in supported v103 Build 04.12.02 saves. Choose one
+admitted stat or a plain slot 7..10 operation; verify and export a new `.sav` to
+Downloads/JA2 Field Kit. The original stays untouched. Reopen the generated save
+for another edit. Reborn can use a configured external save directory; Field Kit
+does not replace files there. v102 and release builds remain read-only.
+
+This is deterministic-test qualification only; device validation is still
+required before production enablement. Read the [adapter, privacy and recovery
+model](docs/android-debug-editor.md), including its application-process-crash
+scope and conservative handling of interrupted exports.

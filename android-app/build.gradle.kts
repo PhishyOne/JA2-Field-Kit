@@ -62,4 +62,6 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.13.0")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.4.10")
+    // Reuse manifested synthetic core fixtures without bundling any test code in the APK.
+    testImplementation(project(path = ":core", configuration = "syntheticTestSupport"))
 }

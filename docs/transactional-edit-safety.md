@@ -487,6 +487,25 @@ publication readback implement the create-new model. Display names are metadata,
 never no-replace authority. Staging and final publication remain within that
 same provider object/domain; no source URI is supplied to placement.
 
+For this adapter, MediaStore indexed `SIZE` is nullable advisory metadata, not
+byte-length authority. It can be null, zero or stale before or after publication.
+Reopening the exact provider URI establishes exact byte count/EOF and SHA-256
+against candidate provenance, after writer sync/close and again after same-URI
+publication. Conflicting indexed size is ignored under this declared contract:
+the exact stream establishes content while surrounding URI/collection, owner,
+actual-name, path and pending-state checks establish binding. An index match
+never excuses a stream mismatch. Verified-pending evidence is durably journaled
+before publication intent and the sole `IS_PENDING=0` update.
+
+Reconciliation can durably mark exact pending content `VERIFIED_RETAINED_PENDING`
+only with a recorded actual name and a pre-publication receipt proving no update
+was attempted (`CREATED_PENDING`, `BYTES_VERIFIED_PENDING` or `FAILED`). It does
+not publish or delete that object or claim export success. A later requested
+export rechecks that retained receipt and creates a separate new URI. This
+removes blocking caused solely by stale indexed size after a complete write;
+missing/wrong content or binding, unknown insert outcomes and pending publication
+attempts/uncertainty continue to block. No sensitive journal fields are added.
+
 Its declared model is Field Kit application-process death with provider, OS and
 kernel still running. The app-private journal uses file fsync, same-directory
 atomic rename and directory fsync before publication intent is consumed. This

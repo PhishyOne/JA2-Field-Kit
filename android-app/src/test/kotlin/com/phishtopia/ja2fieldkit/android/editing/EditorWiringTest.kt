@@ -7,6 +7,15 @@ class EditorWiringTest {
     private val project = File(checkNotNull(System.getProperty("androidAppProjectDir")))
     private fun source(name: String) = project.resolve("src/main/kotlin/com/phishtopia/ja2fieldkit/android/$name.kt").readText()
 
+    @Test fun downloadsQueryPreservesNullSizeButRequiresBindingColumns() {
+        val backend = source("editing/AndroidDownloadsBackend")
+        assertTrue(backend.contains("if (it != MediaStore.MediaColumns.SIZE) check(!cursor.isNull(index))"))
+        assertTrue(backend.contains("val indexedSize = if (cursor.isNull(2)) null else cursor.getLong(2)"))
+        assertTrue(backend.contains("check(ContentUris.withAppendedId(collection, id) == destination)"))
+        assertTrue(backend.contains("check(pending == 0 || pending == 1)"))
+        assertTrue(backend.contains("cursor.getString(4) == ownerPackage"))
+    }
+
     @Test fun releaseAndApiGateProtectUiExecutionAndProviderConstruction() {
         val model = source("InspectionViewModel")
         assertTrue(model.contains("EditSession.available(BuildConfig.DEBUG, Build.VERSION.SDK_INT)"))

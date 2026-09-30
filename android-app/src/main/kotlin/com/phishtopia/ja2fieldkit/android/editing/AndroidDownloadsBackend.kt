@@ -73,12 +73,17 @@ internal class AndroidDownloadsBackend(
             MediaStore.MediaColumns.OWNER_PACKAGE_NAME, MediaStore.MediaColumns.RELATIVE_PATH)
         return checkNotNull(resolver.query(destination, columns, null, null, null)).use { cursor ->
             check(cursor.count == 1 && cursor.moveToFirst())
-            columns.forEach { check(!cursor.isNull(cursor.getColumnIndexOrThrow(it))) }
+            columns.forEach {
+                val index = cursor.getColumnIndexOrThrow(it)
+                if (it != MediaStore.MediaColumns.SIZE) check(!cursor.isNull(index))
+            }
             val id = cursor.getLong(0)
             check(ContentUris.withAppendedId(collection, id) == destination)
             val pending = cursor.getInt(3)
             check(pending == 0 || pending == 1)
-            ObjectMetadata(destination.toString(), cursor.getString(1), cursor.getLong(2), pending == 1,
+            // Pending rows may not be scanned yet; preserve absent SIZE instead of forging zero.
+            val indexedSize = if (cursor.isNull(2)) null else cursor.getLong(2)
+            ObjectMetadata(destination.toString(), cursor.getString(1), indexedSize, pending == 1,
                 cursor.getString(4) == ownerPackage, cursor.getString(5))
         }
     }

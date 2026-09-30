@@ -69,12 +69,24 @@ The backend grants one writable descriptor only to the just-inserted URI and
 consumes that authority even on write failure. It writes the candidate, flushes,
 `FileDescriptor.sync()`s, and closes before pending readback. The machine checks
 exact EOF/size/SHA-256 and queries the same object before and after each read:
-ID-to-URI binding, owner package, path, actual name, size and pending state.
+ID-to-URI binding, owner package, path, actual name and pending state.
 Missing or inaccessible owner metadata fails closed. Publication is exactly one
 `ContentResolver.update` to that URI with only `IS_PENDING=0`. Exact readback and
 metadata checks repeat after publication before recording success. The app
 never shares a pending writable descriptor. Its only write path is serialized
 and cannot address an imported source or arbitrary destination.
+
+MediaStore indexed `SIZE` is nullable, advisory metadata, never byte authority
+for this adapter. Pending rows can retain null, zero or stale nonzero size until
+a deferred scan; the index can also lag after publication. The query preserves
+null rather than manufacturing a size. Exact byte count, EOF and SHA-256 are
+established by reopening the exact provider URI after writer sync/close, and
+again after publication. Indexed-size disagreement is intentionally ignored:
+under this adapter's contract it is not evidence of different content when
+bounded exact stream readback matches candidate provenance and all URI, owner,
+name, path and pending-state checks pass on both sides of the read. No index
+value can substitute for or bypass these checks. Receipt size is the candidate
+size proven by readback, not the provider's indexed value.
 
 The platform provider and OS are trusted to preserve newly inserted row identity
 and enforce pending ownership; root, provider compromise, app-private storage
@@ -122,16 +134,26 @@ may expire pending items according to its own policy. No app-driven delete,
 cleanup, overwrite, restoration or publication retry is implemented.
 
 Startup/resume and **Recheck export status** reread/query only the exact recorded
-URI. Published matching bytes/metadata reconcile to success; exact pending bytes
-are reported as retained and blocked. Missing, changed, unknown or unverifiable
-objects become UNCERTAIN. Recovery performs no media writes even when a pending
-record proves publication was not attempted. This deliberately conservative
-slice leaves unresolved receipts blocking new exports, including after provider
-expiry; resolving/retiring failed receipts is future work, not a hidden reset or
-retry button. A successful receipt can be replaced by the next explicitly
-requested export, keeping only the current/last operation. No export history is
-kept. A temporary receipt without a committed record is ambiguous; with a
-committed record, the last atomic committed state is recovery authority.
+URI. Published matching bytes/binding reconcile to success even with null/stale
+indexed size. Exact pending bytes with a recorded actual name and a durable
+`CREATED_PENDING`, `BYTES_VERIFIED_PENDING` or `FAILED` receipt prove publication
+was not attempted; reconciliation persists `VERIFIED_RETAINED_PENDING`. This
+also recovers old receipts blocked by indexed SIZE after a complete write.
+It reports retained/not published, never published success. A later explicitly
+requested export rechecks the retained object before replacing its receipt and
+inserts a separate fresh URI. The old object is neither rewritten, published nor
+deleted; provider expiry may eventually remove it. A request that first resolves
+an old receipt reports that the current edit was not exported.
+
+Missing, changed, unknown or unverifiable objects remain UNCERTAIN and block
+exports, including an old null-SIZE failure before any bytes were written.
+`PUBLICATION_ATTEMPTED` and `UNCERTAIN` pending receipts remain blocked even when
+bytes match. A formerly published object observed pending remains UNCERTAIN.
+Recovery performs no media writes, retries or cleanup. Successful or verified
+retained receipts can be replaced by a later export, keeping only the current/last
+operation. No export history is kept. A temporary receipt without a committed
+record is ambiguous; with a committed record, the last atomic committed state is
+recovery authority.
 
 ## Qualification boundary
 
@@ -144,13 +166,20 @@ write, publication or deletion API. Static wiring tests check source isolation,
 closed UI inputs, snapshot clearing, permission absence and release/API gates.
 File-journal tests exercise serialization bounds, atomic receipt replacement,
 interrupted temporary records and failed directory-sync reporting.
+Independent indexed-size scenarios include null on insert, zero after writing,
+stale nonzero values, null/stale published metadata and Android-10-like scanning
+deferred until publication, with a synchronous-index control. Stream truncation,
+extension and same-length hash drift refuse even if the index claims the expected
+size. Recovery tests cover safe retained receipts, subsequent fresh exports,
+receipt persistence failures and unresolved publication attempts.
 
 These tests qualify the deterministic state machine under its backend contract.
 They do **not** establish actual OEM/provider behavior. Before future release
 or production enablement, Chris's device qualification must include Android 10+
 (on API 29 as well as a current supported device), duplicate/concurrent names,
-actual provider-assigned name and size, exclusive pending access from another
-app, complete-only reader visibility across publication, writable-handle closure,
+actual provider-assigned name, indexed-size lag and exact stream size,
+exclusive pending access from another app, complete-only reader visibility across
+publication, writable-handle closure,
 actual owner metadata, URI binding, injected process death at every transition,
 reconciliation after death, and file/directory sync behavior. Verify the new save
 in Reborn with the original independently preserved. No private user save is

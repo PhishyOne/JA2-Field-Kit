@@ -9,7 +9,7 @@ import java.util.UUID
 internal const val OUTPUT_DIRECTORY = "Download/JA2 Field Kit/"
 internal enum class PlacementStage {
     PREPARING, CREATED_PENDING, BYTES_VERIFIED_PENDING, PUBLICATION_ATTEMPTED,
-    VERIFIED_PUBLISHED, FAILED, UNCERTAIN,
+    VERIFIED_PUBLISHED, FAILED, UNCERTAIN, VERIFIED_RETAINED_PENDING,
 }
 
 /** Exactly one bounded receipt, never save content, source identity or requested edits. */
@@ -36,7 +36,7 @@ internal fun validOutputName(name: String): Boolean = name.length in 1..180 &&
     name.endsWith(".sav") && name.none { it == '/' || it == '\\' || it.isISOControl() }
 
 internal data class ObjectMetadata(
-    val uri: String, val displayName: String, val size: Long,
+    val uri: String, val displayName: String, val indexedSize: Long?,
     val pending: Boolean, val owned: Boolean, val relativePath: String,
 )
 
@@ -78,7 +78,11 @@ internal class PlacementMachine(private val backend: PlacementBackend, private v
         }
         if (previous != null && previous.stage != PlacementStage.VERIFIED_PUBLISHED) {
             val recovered = reconcile()
-            return recovered.copy(status = "Previous export status (current edit NOT exported): ${recovered.status}")
+            // Recheck a retained receipt before replacing it with a separately requested export.
+            if (previous.stage != PlacementStage.VERIFIED_RETAINED_PENDING ||
+                recovered.record?.stage != PlacementStage.VERIFIED_RETAINED_PENDING) {
+                return recovered.copy(status = "Previous export status (current edit NOT exported): ${recovered.status}")
+            }
         }
         val identity = candidate.provenance.candidate()
         // A constant sanitized stem avoids persisting the original filename in the receipt.
@@ -90,7 +94,7 @@ internal class PlacementMachine(private val backend: PlacementBackend, private v
             val uri = backend.createPending(record.expectedName)
             record = record.copy(uri = uri, stage = PlacementStage.CREATED_PENDING)
             journal.store(record)
-            val created = checkedMetadata(record, pending = true, checkSize = false)
+            val created = checkedMetadata(record, pending = true)
             record = record.copy(actualName = created.displayName)
             journal.store(record)
             val bytes = candidate.candidateBytes
@@ -128,6 +132,15 @@ internal class PlacementMachine(private val backend: PlacementBackend, private v
             val metadata = backend.metadata(record.uri!!)
             if (metadata.pending) {
                 verify(record, pending = true)
+                if (record.actualName != null && record.stage in setOf(PlacementStage.CREATED_PENDING,
+                        PlacementStage.BYTES_VERIFIED_PENDING, PlacementStage.FAILED,
+                        PlacementStage.VERIFIED_RETAINED_PENDING)) {
+                    // These durable stages prove no publication was attempted. Retain the exact
+                    // object without publishing/deleting it; a later export gets a fresh Uri.
+                    record = record.copy(stage = PlacementStage.VERIFIED_RETAINED_PENDING)
+                    journal.store(record)
+                    return PlacementOutcome("Verified pending output retained, not published. A new export is allowed.", record)
+                }
                 // A previously published object becoming pending is a changed outcome, not a receipt.
                 if (record.stage == PlacementStage.VERIFIED_PUBLISHED) {
                     record = record.copy(stage = PlacementStage.UNCERTAIN)
@@ -147,12 +160,14 @@ internal class PlacementMachine(private val backend: PlacementBackend, private v
         }
     }
 
-    private fun checkedMetadata(record: PlacementRecord, pending: Boolean, checkSize: Boolean = true): ObjectMetadata {
+    private fun checkedMetadata(record: PlacementRecord, pending: Boolean): ObjectMetadata {
         val metadata = backend.metadata(checkNotNull(record.uri))
         check(metadata.uri == record.uri && metadata.owned && metadata.pending == pending)
         check(metadata.relativePath == OUTPUT_DIRECTORY && validOutputName(metadata.displayName))
         check(record.actualName == null || metadata.displayName == record.actualName)
-        if (checkSize) check(metadata.size == record.size.toLong())
+        // MediaStore SIZE is an advisory index: null/zero/stale even after publication.
+        // Only the exact reopened stream establishes byte count/EOF and SHA-256. Ignoring
+        // index disagreement cannot admit different bytes or relax any binding check.
         return metadata
     }
 

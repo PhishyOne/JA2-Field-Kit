@@ -25,6 +25,10 @@ class PlacementMachineTest {
         val uri = "content://media/external_primary/downloads/$id"
         val events = mutableListOf<String>()
         var bytes = byteArrayOf()
+        // Independently programmable index, including deferred provider scanning.
+        var indexedSize: () -> Long? = { bytes.size.toLong() }
+        var readBytes: (ByteArray) -> ByteArray = { it }
+        var prior: Backend? = null
         var pending = true
         var name = "save-fieldkit-provider-renamed.sav"
         var owned = true
@@ -61,14 +65,16 @@ class PlacementMachineTest {
             event("close-writer")
         }
         override fun metadata(uri: String): ObjectMetadata {
+            if (uri != this.uri) return checkNotNull(prior).metadata(uri)
             assertEquals(this.uri, uri)
             event(if (pending) "query-pending" else "query-published")
-            return ObjectMetadata(binding, name, bytes.size.toLong(), pending, owned, path)
+            return ObjectMetadata(binding, name, indexedSize(), pending, owned, path)
         }
         override fun openRead(uri: String): ByteArrayInputStream {
+            if (uri != this.uri) return checkNotNull(prior).openRead(uri)
             assertEquals(this.uri, uri)
             event(if (pending) "read-pending" else "read-published")
-            return ByteArrayInputStream(if (badPending && pending || badPublished && !pending) bytes + 1 else bytes)
+            return ByteArrayInputStream(readBytes(if (badPending && pending || badPublished && !pending) bytes + 1 else bytes))
         }
         override fun publish(uri: String): Boolean {
             assertEquals(this.uri, uri)
@@ -145,7 +151,7 @@ class PlacementMachineTest {
     }
 
     @Test fun journalFailuresBeforePublicationPreventItAndAfterPublicationRemainUncertain() {
-        for (stage in PlacementStage.entries.filter { it !in listOf(PlacementStage.FAILED, PlacementStage.UNCERTAIN) }) {
+        for (stage in placementStages) {
             val backend = Backend(); val journal = Journal().also { it.failAt = stage }
             val result = PlacementMachine(backend, journal).place(candidate)
             assertFalse(result.verified)
@@ -155,7 +161,7 @@ class PlacementMachineTest {
     }
 
     @Test fun processCrashAtEveryDurableTransitionReconcilesWithoutMutation() {
-        for (stage in PlacementStage.entries.filter { it !in listOf(PlacementStage.FAILED, PlacementStage.UNCERTAIN) }) {
+        for (stage in placementStages) {
             val backend = Backend(); val journal = Journal().also { it.crashAt = stage }
             assertFailsWith<Crash> { PlacementMachine(backend, journal).place(candidate) }
             journal.crashAt = null
@@ -226,7 +232,201 @@ class PlacementMachineTest {
         assertFails { hashExact(bytes.inputStream(), 4) }
         assertNotEquals(hash, hashExact(byteArrayOf(1, 2, 4).inputStream(), 3))
     }
+
+    private fun assertIndexDoesNotVetoExactBytes(index: Backend.() -> Long?) {
+        val backend = Backend().also { it.indexedSize = { it.index() } }
+        val journal = Journal()
+        backend.onPublish = {
+            assertTrue(PlacementStage.BYTES_VERIFIED_PENDING in journal.stages)
+            assertEquals(PlacementStage.PUBLICATION_ATTEMPTED, journal.record?.stage)
+            assertTrue("read-pending" in backend.events)
+        }
+        val result = PlacementMachine(backend, journal).place(candidate)
+        assertTrue(result.verified)
+        assertEquals(backend.uri, result.record?.uri)
+        assertContentEquals(candidate.candidateBytes, backend.bytes)
+        assertTrue("read-published" in backend.events)
+        assertEquals(1, backend.events.count { it == "publish-same-uri" })
+    }
+
+    @Test fun pendingNullImmediatelyAfterInsertAllowsWriteAndPublication() =
+        assertIndexDoesNotVetoExactBytes { if (pending) null else bytes.size.toLong() }
+
+    @Test fun pendingZeroAfterFullWriteAllowsPublication() =
+        assertIndexDoesNotVetoExactBytes { if (pending) 0L else bytes.size.toLong() }
+
+    @Test fun pendingStaleNonzeroAllowsPublication() =
+        assertIndexDoesNotVetoExactBytes { if (pending) 7L else bytes.size.toLong() }
+
+    @Test fun publishedNullIndexAllowsExactReadbackSuccess() =
+        assertIndexDoesNotVetoExactBytes { if (pending) bytes.size.toLong() else null }
+
+    @Test fun publishedStaleIndexAllowsExactReadbackSuccess() =
+        assertIndexDoesNotVetoExactBytes { if (pending) bytes.size.toLong() else 7L }
+
+    @Test fun android10DeferredScanReproductionAndSynchronousControl() {
+        // Android-10-like provider: insert leaves SIZE null/0, writing/closing does not
+        // update it; scanning at publication finally indexes the real content length.
+        for (initialSize in listOf(null, 0L)) {
+            val backend = Backend(); val journal = Journal()
+            var index = initialSize
+            backend.indexedSize = { index }
+            backend.onPublish = {
+                assertEquals(initialSize, backend.metadata(backend.uri).indexedSize)
+                assertContentEquals(candidate.candidateBytes, backend.bytes)
+                assertTrue("close-writer" in backend.events && "read-pending" in backend.events)
+                index = backend.bytes.size.toLong() // Deferred scan, not write-time accounting.
+            }
+            assertTrue(PlacementMachine(backend, journal).place(candidate).verified)
+        }
+        assertTrue(PlacementMachine(Backend(), Journal()).place(candidate).verified)
+    }
+
+    private fun assertStreamMismatchBlocks(transform: (ByteArray) -> ByteArray) {
+        val backend = Backend().also {
+            it.indexedSize = { candidate.provenance.candidate().size().toLong() }
+            it.readBytes = transform
+        }
+        val journal = Journal(); val machine = PlacementMachine(backend, journal)
+        assertEquals(PlacementStage.FAILED, machine.place(candidate).record?.stage)
+        assertTrue("read-pending" in backend.events)
+        assertEquals(PlacementStage.UNCERTAIN, machine.reconcile().record?.stage)
+        assertFalse(machine.place(candidate).verified)
+        assertFalse("publish-same-uri" in backend.events)
+        assertEquals(1, backend.events.count { it == "insert-pending" })
+    }
+
+    @Test fun shorterStreamRefusesEvenWhenIndexClaimsCandidateSize() =
+        assertStreamMismatchBlocks { it.copyOf(it.size - 1) }
+
+    @Test fun longerStreamRefusesEvenWhenIndexClaimsCandidateSize() =
+        assertStreamMismatchBlocks { it + 0 }
+
+    @Test fun wrongHashAtCorrectLengthRefusesEvenWhenIndexClaimsCandidateSize() =
+        assertStreamMismatchBlocks { it.copyOf().apply { this[0] = (this[0].toInt() xor 1).toByte() } }
+
+    @Test fun publishedStreamMismatchRemainsUncertainWithStaleOrCorrectIndex() {
+        for (index in listOf(null, 0L, candidate.provenance.candidate().size().toLong())) {
+            for (transform in listOf<(ByteArray) -> ByteArray>(
+                { it.copyOf(it.size - 1) }, { it + 0 },
+                { it.copyOf().apply { this[0] = (this[0].toInt() xor 1).toByte() } })) {
+                val backend = Backend().also {
+                    it.indexedSize = { index }
+                    it.onPublish = { it.readBytes = transform }
+                }
+                val journal = Journal(); val machine = PlacementMachine(backend, journal)
+                assertEquals(PlacementStage.UNCERTAIN, machine.place(candidate).record?.stage)
+                assertEquals(PlacementStage.UNCERTAIN, machine.reconcile().record?.stage)
+                assertFalse(machine.place(candidate).verified)
+                assertEquals(1, backend.events.count { it == "publish-same-uri" })
+                assertEquals(1, backend.events.count { it == "insert-pending" })
+            }
+        }
+    }
+
+    private fun pendingReceipt(backend: Backend, journal: Journal, stage: PlacementStage) {
+        backend.crashAfter = "close-writer"
+        assertFailsWith<Crash> { PlacementMachine(backend, journal).place(candidate) }
+        backend.crashAfter = null
+        // Models old FAILED receipts (SIZE veto after writing), and durable pre-publish states.
+        journal.record = checkNotNull(journal.record).copy(stage = stage)
+    }
+
+    @Test fun exactPendingReceiptWithNullOrZeroIndexReconcilesAndAllowsSeparateNewExport() {
+        for (index in listOf(null, 0L)) {
+            for (stage in listOf(PlacementStage.CREATED_PENDING, PlacementStage.BYTES_VERIFIED_PENDING, PlacementStage.FAILED)) {
+                val old = Backend().also { it.indexedSize = { index } }; val journal = Journal()
+                pendingReceipt(old, journal, stage)
+                val before = old.events.filter { it in mutationEvents }
+                val result = PlacementMachine(old, journal).reconcile()
+                assertFalse(result.verified) // Retained is never a published-success receipt.
+                assertEquals(PlacementStage.VERIFIED_RETAINED_PENDING, result.record?.stage)
+                assertEquals(before, old.events.filter { it in mutationEvents })
+                val fresh = Backend(id = 28).also { it.prior = old }
+                val newResult = PlacementMachine(fresh, journal).place(candidate)
+                assertTrue(newResult.verified)
+                assertEquals(fresh.uri, newResult.record?.uri)
+                assertTrue(old.pending)
+                assertContentEquals(candidate.candidateBytes, old.bytes)
+                assertEquals(before, old.events.filter { it in mutationEvents })
+            }
+        }
+    }
+
+    @Test fun recoveryDuringNewRequestDoesNotClaimTheCurrentEditWasExported() {
+        val backend = Backend().also { it.indexedSize = { 0L } }; val journal = Journal()
+        pendingReceipt(backend, journal, PlacementStage.FAILED)
+        val result = PlacementMachine(backend, journal).place(candidate)
+        assertFalse(result.verified)
+        assertTrue(result.status.contains("current edit NOT exported"))
+        assertEquals(PlacementStage.VERIFIED_RETAINED_PENDING, journal.record?.stage)
+        assertEquals(1, backend.events.count { it == "insert-pending" })
+        assertFalse("publish-same-uri" in backend.events)
+    }
+
+    @Test fun retainedPendingMustStillMatchBeforeSubsequentExport() {
+        for (fault in listOf<(Backend) -> Unit>({ it.bytes = it.bytes + 0 }, { it.owned = false },
+            { it.name = "changed.sav" }, { it.binding = "content://media/external_primary/downloads/99" })) {
+            val old = Backend(); val journal = Journal()
+            pendingReceipt(old, journal, PlacementStage.FAILED)
+            PlacementMachine(old, journal).reconcile()
+            fault(old)
+            val fresh = Backend(id = 28).also { it.prior = old }
+            assertFalse(PlacementMachine(fresh, journal).place(candidate).verified)
+            assertEquals(PlacementStage.UNCERTAIN, journal.record?.stage)
+            assertTrue(fresh.events.isEmpty())
+            assertFalse("publish-same-uri" in old.events)
+        }
+    }
+
+    @Test fun nullOrZeroIndexNeverResolvesPublicationUncertaintyOrMissingWrite() {
+        for (index in listOf(null, 0L)) {
+            for (stage in listOf(PlacementStage.PUBLICATION_ATTEMPTED, PlacementStage.UNCERTAIN,
+                PlacementStage.VERIFIED_PUBLISHED, PlacementStage.PREPARING)) {
+                val backend = Backend().also { it.indexedSize = { index } }; val journal = Journal()
+                pendingReceipt(backend, journal, stage)
+                assertFalse(PlacementMachine(backend, journal).reconcile().verified)
+                assertNotEquals(PlacementStage.VERIFIED_RETAINED_PENDING, journal.record?.stage)
+                assertFalse(PlacementMachine(backend, journal).place(candidate).verified)
+                assertFalse("publish-same-uri" in backend.events)
+                assertEquals(1, backend.events.count { it == "insert-pending" })
+            }
+            val backend = Backend().also { it.indexedSize = { index } }; val journal = Journal()
+            pendingReceipt(backend, journal, PlacementStage.FAILED)
+            backend.bytes = byteArrayOf() // Old null-SIZE rejection before any write cannot be salvaged.
+            assertEquals(PlacementStage.UNCERTAIN, PlacementMachine(backend, journal).reconcile().record?.stage)
+            assertFalse(PlacementMachine(backend, journal).place(candidate).verified)
+            assertFalse("publish-same-uri" in backend.events)
+            assertEquals(1, backend.events.count { it == "insert-pending" })
+        }
+    }
+
+    @Test fun retainedReceiptMustPersistBeforeNewExportsAreAllowed() {
+        val backend = Backend(); val journal = Journal()
+        pendingReceipt(backend, journal, PlacementStage.FAILED)
+        journal.failAt = PlacementStage.VERIFIED_RETAINED_PENDING
+        assertEquals(PlacementStage.UNCERTAIN, PlacementMachine(backend, journal).reconcile().record?.stage)
+        assertFalse(PlacementMachine(backend, journal).place(candidate).verified)
+        assertFalse("publish-same-uri" in backend.events)
+        assertEquals(1, backend.events.count { it == "insert-pending" })
+    }
+
+    @Test fun crashAfterRetainedReceiptPersistenceRechecksWithoutMediaMutation() {
+        val backend = Backend(); val journal = Journal()
+        pendingReceipt(backend, journal, PlacementStage.FAILED)
+        journal.crashAt = PlacementStage.VERIFIED_RETAINED_PENDING
+        val before = backend.events.filter { it in mutationEvents }
+        assertFailsWith<Crash> { PlacementMachine(backend, journal).reconcile() }
+        journal.crashAt = null
+        val result = PlacementMachine(backend, journal).reconcile()
+        assertEquals(PlacementStage.VERIFIED_RETAINED_PENDING, result.record?.stage)
+        assertFalse(result.verified)
+        assertEquals(before, backend.events.filter { it in mutationEvents })
+    }
     companion object {
+        private val placementStages = PlacementStage.entries.filter {
+            it !in listOf(PlacementStage.FAILED, PlacementStage.UNCERTAIN, PlacementStage.VERIFIED_RETAINED_PENDING)
+        }
         private val mutationEvents = setOf("insert-pending", "write", "flush", "fsync", "publish-same-uri", "published")
     }
 }

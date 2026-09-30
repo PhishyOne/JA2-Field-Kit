@@ -68,7 +68,9 @@ replacing the earlier profile-only proof. It binds a typed hired-stat request to
 source identity, synchronizes profile/live values, and constructs verified
 in-memory candidates only under privileged synthetic test evidence. Java sealed
 results and private constructors guard authority. Production capability remains
-disabled; the inspector and Android remain read-only, with no output placement.
+disabled by default. An explicit Android create-new testing factory now grants
+candidate execution only. The debug-only Android adapter and qualification
+boundary are described in [android-debug-editor.md](android-debug-editor.md).
 
 ## Planned boundaries
 
@@ -107,7 +109,7 @@ An oversized rejected stream may be transiently read beyond that boundary by up
 to one current 64 KiB buffer read before throwing `SaveTooLargeException` and is
 not retained as an accepted save. Provider-declared size is advisory:
 it cannot reject readable content or authorize bytes beyond that measured limit.
-Only a private, task-local byte snapshot enters `inspectV01` and `inspectLiveMercState`;
+Only private byte snapshots enter `inspectV01` and `inspectLiveMercState`;
 URI and provider details never enter core. Presentation retains import provenance
 (including lowercase SHA-256 for integrity diagnostics), but no save bytes, raw
 URI/path, provider-private identifier, offsets, rotation indexes, keys,
@@ -118,8 +120,11 @@ Framework document providers. `ACTION_OPEN_DOCUMENT`, `ACTION_VIEW`, and
 `ACTION_SEND` converge on this same importer; there is no filesystem scanning,
 provider SDK, persistent URI grant, account access, or automatic upload.
 
-The current shell has no permissions, persistence, network, analytics, save
-write/export, or URI-to-filesystem-path code. It can serialize an explicit,
+The release shell has no broad storage permissions, network, analytics or
+URI-to-filesystem-path code. Debug API 29+ builds retain one bounded source
+snapshot in memory while open and can export one verified edit through the
+pending Downloads adapter. A bounded app-private placement receipt contains only
+output identity/status; see [android-debug-editor.md](android-debug-editor.md). It can serialize an explicit,
 privacy-bounded compatibility report from safe retained provenance and
 `inspectV01` failure presentation, then preview and copy it or share only its
 text through Android's chooser. Save sharing/contribution remains future scope.
@@ -181,17 +186,17 @@ text through Android's chooser. Save sharing/contribution remains future scope.
 The mandatory authority boundary, state machine, format enablement gate, and
 output-placement separation for any future editor are defined in
 [transactional-edit-safety.md](transactional-edit-safety.md). This is a design
-gate only; current `SUPPORTED` detection remains read-only support and does not
-authorize serialization or editing.
+gate; `SUPPORTED` detection alone remains read-only support. The explicit core
+test factory and debug placement gate separately authorize this narrow slice.
 
 ## What we are deliberately not building yet
 
 - full item databases
 - broader active soldier state decoding
-- save rewriting
+- broader save rewriting or source replacement
 - 1.13 compatibility
 - a generic binary-schema framework
 - dependency injection/framework plumbing
-- persistence/database/networking
+- general persistence/database/networking (only the bounded debug placement receipt exists)
 
-Each of those adds surface area before the first useful read-only path is proven.
+These remain outside the inspector and narrow debug create-new slice.

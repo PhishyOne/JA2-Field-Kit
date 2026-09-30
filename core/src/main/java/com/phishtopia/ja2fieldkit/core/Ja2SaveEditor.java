@@ -7,7 +7,8 @@ import java.nio.ByteOrder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.HexFormat;
+import java.util.Collections;
+import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -28,7 +29,17 @@ public final class Ja2SaveEditor {
 
     public Ja2SaveEditor() { this(new Ja2SaveInspector(), null, work -> {}); }
 
-    // Deliberate access suppression is required by synthetic tests; no public capability route.
+    /**
+     * Explicit test-build candidate authority for the closed v103 operations only.
+     * Grants no placement/replacement authority. Android must independently gate its adapter.
+     * The default constructor remains disabled; production enablement is not qualified.
+     */
+    public static Ja2SaveEditor forAndroidCreateNewTesting() {
+        return new Ja2SaveEditor(new Ja2SaveInspector(),
+                new SyntheticSaveEditCapability(MAX_SAVE_BYTES, MAX_SAVE_BYTES), work -> {});
+    }
+
+    // Synthetic tests alone can inject a detector or tighter capability bounds.
     private Ja2SaveEditor(Ja2SaveInspector inspector, SyntheticSaveEditCapability capability,
             Consumer<EditWork> observe) {
         this.inspector = Objects.requireNonNull(inspector);
@@ -69,21 +80,21 @@ public final class Ja2SaveEditor {
             var operation = request.operation();
             int id = operation.profileId();
             stage = PRECONDITION;
-            var targets = locations.stream().filter(it -> it.getProfileIndex() == id).toList();
-            var liveTargets = live.getMercs().stream().filter(it -> it.getProfileIndex() == id).toList();
-            if (targets.size() != 1 || !targets.getFirst().getPlayerMerc() || liveTargets.size() != 1
+            var targets = locations.stream().filter(it -> it.getProfileIndex() == id).collect(Collectors.toList());
+            var liveTargets = live.getMercs().stream().filter(it -> it.getProfileIndex() == id).collect(Collectors.toList());
+            if (targets.size() != 1 || !targets.get(0).getPlayerMerc() || liveTargets.size() != 1
                     || baseline.getRoster().stream().filter(it -> it.getProfileIndex() == id).count() != 1) {
                 return failure(stage, TARGET_NOT_UNIQUE_HIRED_MERC);
             }
             if (operation instanceof SaveEditRequest.SetHiredStat stat
                     && (stat.stat().profileValue(profiles.get(id)) != stat.expectedCurrent()
-                    || stat.stat().liveValue(liveTargets.getFirst().getStats()) != stat.expectedCurrent())) {
+                    || stat.stat().liveValue(liveTargets.get(0).getStats()) != stat.expectedCurrent())) {
                 return failure(stage, EXPECTED_CURRENT_MISMATCH);
             }
             var frame = NormalNonLinuxProfileFramer.INSTANCE.frameBuild041202(snapshot);
             var rotation = NormalProfileRotationRecovery.INSTANCE.recoverBuild041202(frame.getEncryptedProfileBytes());
             int profileStart = frame.getProfileStartOffset() + id * 716;
-            int soldierStart = targets.getFirst().getAbsoluteOffset();
+            int soldierStart = targets.get(0).getAbsoluteOffset();
             // The closed operation contributes two fixed record rewrites to the fixed verification plan.
             byte[] profile = decrypt(snapshot, profileStart, 716, rotation);
             byte[] soldier = decrypt(snapshot, soldierStart, 2328, rotation);
@@ -175,7 +186,7 @@ public final class Ja2SaveEditor {
             var e = inventory.expected();
             var value = InventoryMutation.desired(inventory);
             return sha256(ByteBuffer.allocate(76).order(ByteOrder.LITTLE_ENDIAN).putInt(3)
-                    .put(HexFormat.of().parseHex(request.expectedSource().sha256())).putInt(request.expectedSource().size())
+                    .put(parseHash(request.expectedSource().sha256())).putInt(request.expectedSource().size())
                     .putInt(inventory instanceof SaveEditRequest.ClearSlot ? 2 : 3)
                     .putInt(inventory.profileId()).putInt(inventory.slot())
                     .putInt(e.itemId()).putInt(e.count()).putInt(e.status())
@@ -184,7 +195,7 @@ public final class Ja2SaveEditor {
         var op = (SaveEditRequest.SetHiredStat) request.operation();
         // Version, source digest/size, operation tag, stat tag, target, precondition, value; exactly 60 bytes.
         return sha256(ByteBuffer.allocate(60).order(ByteOrder.LITTLE_ENDIAN).putInt(2)
-                .put(HexFormat.of().parseHex(request.expectedSource().sha256())).putInt(request.expectedSource().size())
+                .put(parseHash(request.expectedSource().sha256())).putInt(request.expectedSource().size())
                 .putInt(1).putInt(op.stat().tag()).putInt(op.profileId()).putInt(op.expectedCurrent()).putInt(op.value()).array());
     }
 
@@ -203,8 +214,23 @@ public final class Ja2SaveEditor {
         return new SaveEditRequest.SourceIdentity(bytes.length, sha256(bytes));
     }
     private static String sha256(byte[] bytes) {
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
+        try {
+            var result = new StringBuilder(64);
+            for (byte value : MessageDigest.getInstance("SHA-256").digest(bytes)) {
+                result.append(Character.forDigit((value & 255) >>> 4, 16));
+                result.append(Character.forDigit(value & 15, 16));
+            }
+            return result.toString();
+        }
         catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException("SHA-256 unavailable"); }
+    }
+    private static byte[] parseHash(String hash) {
+        byte[] bytes = new byte[32];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) ((Character.digit(hash.charAt(i * 2), 16) << 4)
+                    | Character.digit(hash.charAt(i * 2 + 1), 16));
+        }
+        return bytes;
     }
     private static Failure failure(Stage stage, Reason reason) { return new Failure(stage, reason); }
 
@@ -218,9 +244,9 @@ public final class Ja2SaveEditor {
         public byte[] getCandidateBytes() { return snapshot.clone(); }
         public Provenance getProvenance() { return provenance; }
         public List<Check> getVerification() {
-            return List.of(Check.FORMAT, Check.LAYOUT, Check.REQUESTED_VALUES, Check.PROFILE_FACTS,
+            return Collections.unmodifiableList(Arrays.asList(Check.FORMAT, Check.LAYOUT, Check.REQUESTED_VALUES, Check.PROFILE_FACTS,
                     Check.CAMPAIGN_FACTS, Check.ROSTER_FACTS, Check.LIVE_FACTS, Check.RECORD_INTEGRITY,
-                    Check.PLAINTEXT_PRESERVATION, Check.CIPHERTEXT_PRESERVATION, Check.NO_OP_IDENTITY, Check.HASH_BINDINGS);
+                    Check.PLAINTEXT_PRESERVATION, Check.CIPHERTEXT_PRESERVATION, Check.NO_OP_IDENTITY, Check.HASH_BINDINGS));
         }
     }
 

@@ -26,6 +26,27 @@ class SaveEditTransactionTest {
     ): Ja2SaveEditor = Ja2SaveEditor::class.java.getDeclaredConstructor(
         Ja2SaveInspector::class.java, SyntheticSaveEditCapability::class.java, Consumer::class.java,
     ).apply { isAccessible = true }.newInstance(inspector, capability, Consumer<EditWork> { observe(it) })
+    // JVM-only integration fixture: uses the same manifested synthetic data and verifier.
+    fun androidFixture(item: Int = 201, status: Int = if (item == 0) 0 else 80,
+        slot: Int = 7, kind: String = "normal"): Pair<ByteArray, Ja2SaveInspector> =
+        inventorySave(item, status, slot, kind) to inspector()
+    fun androidEditor(): Ja2SaveEditor = editor()
+    fun androidDisagreement(profile: Boolean, field: String): Pair<ByteArray, Ja2SaveInspector> {
+        val bytes = inventorySave()
+        val offset = if (profile) when (field) { "item" -> 430; "count" -> 384; else -> 365 }
+            else when (field) { "item" -> 264; "count" -> 266; else -> 268 }
+        rewrite(bytes, if (profile) PROFILE_START + 7 * 716 else PROFILE_END + 1,
+            if (profile) 716 else 2328) {
+            // Count zero on a nonempty profile is deliberately structurally invalid.
+            it[offset] = when (field) { "item" -> 202.toByte(); "count" -> 0; else -> 79 }
+        }
+        return bytes to inspector()
+    }
+    fun androidCandidate(): SaveEditResult.VerifiedCandidate {
+        val source = inventorySave()
+        return assertIs<SaveEditResult.VerifiedCandidate>(editor().edit(source, request(source)))
+    }
+
     private fun request(source: ByteArray, id: Int = 7, expected: Int = 89, value: Int = 90) = SaveEditRequest(
         SaveEditRequest.SourceIdentity(source.size, hash(source)), SaveEditRequest.SetHiredStat(id, HiredMercStat.MARKSMANSHIP, expected, value),
     )

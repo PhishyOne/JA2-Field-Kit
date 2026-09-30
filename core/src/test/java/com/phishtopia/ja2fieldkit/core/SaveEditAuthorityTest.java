@@ -27,7 +27,7 @@ public class SaveEditAuthorityTest {
         assertEquals(1, Ja2SaveEditor.class.getConstructors().length);
         assertEquals(0, Ja2SaveEditor.class.getConstructors()[0].getParameterCount());
         for (var method : Ja2SaveEditor.class.getDeclaredMethods()) {
-            if (!method.getName().equals("edit")) assertTrue(Modifier.isPrivate(method.getModifiers()), method.toString());
+            if (!Set.of("edit", "forAndroidCreateNewTesting").contains(method.getName())) assertTrue(Modifier.isPrivate(method.getModifiers()), method.toString());
         }
         var constructor = Ja2SaveEditor.class.getDeclaredConstructor(Ja2SaveInspector.class, SyntheticSaveEditCapability.class, Consumer.class);
         assertThrows(IllegalAccessException.class, () -> constructor.newInstance(new Ja2SaveInspector(),
@@ -38,6 +38,18 @@ public class SaveEditAuthorityTest {
         }
         for (var field : SaveEditResult.Failure.class.getDeclaredFields()) assertTrue(field.getType().isEnum());
         assertFalse(Arrays.stream(SaveEditResult.Failure.class.getMethods()).anyMatch(m -> m.getReturnType() == byte[].class));
+    }
+
+    @Test public void explicitTestFactoryGrantsOnlyCandidateExecution() throws Exception {
+        var editor = Ja2SaveEditor.forAndroidCreateNewTesting();
+        var request = new SaveEditRequest(new SaveEditRequest.SourceIdentity(0,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+            new SaveEditRequest.SetHiredStat(7, HiredMercStat.MARKSMANSHIP, 80, 90));
+        assertEquals(SaveEditResult.Reason.CAPABILITY_DISABLED,
+            ((SaveEditResult.Failure) new Ja2SaveEditor().edit(new byte[0], request)).reason());
+        assertEquals(SaveEditResult.Reason.INVALID_SOURCE,
+            ((SaveEditResult.Failure) editor.edit(new byte[0], request)).reason());
+        assertTrue(compile("adversary", "class Probe { Object x = Ja2SaveEditor.forAndroidCreateNewTesting(); }"));
     }
 
     @Test public void adversarialCompilationCannotMintSuccessOrSupplyCapabilities() throws Exception {

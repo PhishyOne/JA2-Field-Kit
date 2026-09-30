@@ -4,10 +4,12 @@
 
 This document is the Issue #12 design gate. It specifies the safety contract a
 future editor must satisfy; it does not authorize or implement save editing.
-There is still no public editor, serializer, writer, export path, inventory
-schema, Android write flow, or PC bridge.
+Issue #72 now implements a closed core candidate transaction and a debug/test-only
+Android pending-MediaStore create-new slice. The specific model and qualification
+boundary are recorded below; this does not relax any generic requirement or
+qualify source replacement, release editing, or a PC bridge.
 
-The current public core boundary remains the read-only
+The inspection boundary remains the read-only
 `Ja2SaveInspector.inspectV01(ByteArray)` facade described in
 [architecture.md](architecture.md). Its `SUPPORTED` detector result means only
 that the current read path may inspect the evidenced layout. Read support does
@@ -472,6 +474,29 @@ establishes the actual outcome; verified-candidate success does not resolve it.
 Create-new does not replace an expected original. Replacement's expected-original
 comparison, continuous qualified guard, independent backup, and guarded
 restoration remain separate requirements below.
+
+### Issue #72 debug/test pending-MediaStore adapter
+
+The specific API 29+ Android slice is documented in
+[Android debug editor](android-debug-editor.md), including platform references,
+state transitions, bounded journal schema, lifecycle, failure behavior, test
+evidence and outstanding device qualification. It consumes only the core's
+verified candidate. Provider-assigned newly inserted Downloads URI identity,
+owner-only IS_PENDING staging, complete synchronized writes and exact pre/post
+publication readback implement the create-new model. Display names are metadata,
+never no-replace authority. Staging and final publication remain within that
+same provider object/domain; no source URI is supplied to placement.
+
+Its declared model is Field Kit application-process death with provider, OS and
+kernel still running. The app-private journal uses file fsync, same-directory
+atomic rename and directory fsync before publication intent is consumed. This
+does not qualify provider namespace durability across power loss, reboot or
+provider/system crash. Uncertain objects and records are preserved and reconciled
+without media mutation; even proven pending objects are not automatically retried
+or deleted. Release UI/execution remain gated off. Deterministic/fake-backend
+qualification is distinct from pending on-device validation of the platform
+contract and declared crash model. The generic obligations above and the future
+output-adapter evidence below remain the release/production gate.
 
 ### Qualified replacement
 

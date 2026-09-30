@@ -8,8 +8,9 @@ contains a typed synchronized hired-merc stat operation covering ten proven
 non-health stats (see [evidence and domains](hired-stat-edit-evidence.md)), plus
 closed clear/set inventory operations for three single kits in big pockets
 (see [inventory evidence and guards](inventory-edit-evidence.md)). **Production capability
-remains disabled.** The no-argument editor fails closed; only deliberately
-privileged synthetic tests can inject a capability and synthetic digest oracle.
+remains disabled.** The no-argument editor fails closed; the explicit `forAndroidCreateNewTesting()` factory enables only the existing
+closed candidate operations. Only deliberately privileged synthetic tests can
+inject a detector or tighter capability bounds.
 This slice does not claim real-save qualification or playable-product completion.
 
 The older profile-only proof has been retired. `Ja2SaveEditor` is the sole
@@ -17,7 +18,7 @@ editing path; source binding and hired-player synchronization are mandatory.
 
 [Issue #12](transactional-edit-safety.md) governs both candidate creation and
 future placement. Core performs no filesystem, URI, process or network writes.
-Android remains read-only. No private save was used in this construction.
+Release Android remains read-only; the [debug editor](android-debug-editor.md) adds a separately gated pending-MediaStore adapter. No private save was used in this construction.
 
 ## Request, identity and authority
 

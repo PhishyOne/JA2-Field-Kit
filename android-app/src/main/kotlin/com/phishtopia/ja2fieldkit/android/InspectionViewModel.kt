@@ -2,6 +2,10 @@ package com.phishtopia.ja2fieldkit.android
 
 import com.phishtopia.ja2fieldkit.android.importing.CatalogReader
 import com.phishtopia.ja2fieldkit.android.presentation.CatalogSession
+import android.content.Context
+import android.os.Build
+import com.phishtopia.ja2fieldkit.android.editing.*
+import com.phishtopia.ja2fieldkit.core.SaveEditResult
 import android.content.ContentResolver
 import android.database.Cursor
 import android.net.Uri
@@ -29,7 +33,7 @@ import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
-/** Retains only presentation state across configuration changes; save bytes stay task-local. */
+/** Holds presentation and one ephemeral debug edit snapshot across configuration changes. */
 class InspectionViewModel : ViewModel() {
     private val catalogSession = CatalogSession()
     private val inspector = Ja2SaveInspector()
@@ -39,6 +43,56 @@ class InspectionViewModel : ViewModel() {
     private val requestSequence = AtomicLong()
     private var state: InspectionScreenState = InspectionScreenState.Initial
     private var observer: ((InspectionScreenState) -> Unit)? = null
+
+    private var editSession: EditSession? = null
+    private var exportBusy = false
+    internal var exportStatus: String? = null
+        private set
+    internal val editorAvailable: Boolean get() = EditSession.available(BuildConfig.DEBUG, Build.VERSION.SDK_INT)
+    internal fun editMerc(profileId: Int): EditMerc? =
+        if (!editorAvailable || exportBusy) null else editSession?.merc(profileId)
+
+    internal fun exportEdit(context: Context, merc: EditMerc, choice: EditChoice) {
+        if (!editorAvailable || exportBusy) return
+        val session = editSession ?: return
+        if (session.merc(merc.profileId) !== merc) return
+        exportBusy = true
+        exportStatus = "Verifying one edit and creating a new save…"
+        publish(state)
+        executor.execute {
+            val message = try {
+                when (val result = session.generate(merc.profileId, choice)) {
+                    is SaveEditResult.Failure -> "Edit refused: ${result.reason()}. Original untouched."
+                    is SaveEditResult.VerifiedCandidate -> {
+                        // Once placement starts, reopen a save before another operation.
+                        session.consume()
+                        DebugPlacement.get(context).place(result).text()
+                    }
+                }
+            } catch (_: Exception) { "Export refused. Original untouched; check export status before another attempt." }
+            mainHandler.post {
+                exportBusy = false
+                exportStatus = message
+                publish(state)
+            }
+        }
+    }
+
+    internal fun reconcileExport(context: Context) {
+        if (!editorAvailable || exportBusy) return
+        exportBusy = true
+        executor.execute {
+            val message = try { DebugPlacement.get(context).reconcile().text() }
+                catch (_: Exception) { "UNCERTAIN: export status unavailable; export blocked" }
+            mainHandler.post {
+                exportBusy = false
+                exportStatus = message
+                publish(state)
+            }
+        }
+    }
+
+    private fun clearEditSession() { editSession?.clear(); editSession = null }
 
     fun attach(nextObserver: (InspectionScreenState) -> Unit) {
         observer = nextObserver
@@ -54,6 +108,7 @@ class InspectionViewModel : ViewModel() {
         uri: Uri,
         provenance: SourceProvenance,
     ) {
+        clearEditSession()
         if (uri.scheme != ContentResolver.SCHEME_CONTENT) {
             showSourceFailure(SourceFailureKind.NOT_CONTENT_URI)
             return
@@ -62,6 +117,7 @@ class InspectionViewModel : ViewModel() {
         val request = requestSequence.incrementAndGet()
         publish(InspectionScreenState.Loading(sourceName = null))
         executor.execute {
+            var nextSession: EditSession? = null
             val nextState = try {
                 val providerMetadata = querySourceMetadata(resolver, uri, provenance)
                 post(
@@ -75,6 +131,8 @@ class InspectionViewModel : ViewModel() {
                 } ?: throw FileNotFoundException()
                 imported.inspectWith(inspector) { inspection, inventory ->
                     InspectionPresentationMapper.map(imported.provenance, inspection, inventory)
+                }.also { mapped ->
+                    if (editorAvailable && mapped is InspectionScreenState.Success) nextSession = imported.takeEditSession()
                 }
             } catch (_: SaveTooLargeException) {
                 InspectionPresentationMapper.sourceFailure(SourceFailureKind.SIZE_LIMIT)
@@ -87,11 +145,18 @@ class InspectionViewModel : ViewModel() {
             } catch (_: RuntimeException) {
                 InspectionPresentationMapper.sourceFailure(SourceFailureKind.READ_FAILED)
             }
-            post(request, nextState)
+            mainHandler.post {
+                if (requestSequence.get() == request) {
+                    clearEditSession()
+                    editSession = nextSession
+                    publish(nextState)
+                } else nextSession?.clear()
+            }
         }
     }
 
     fun showSourceFailure(kind: SourceFailureKind) {
+        clearEditSession()
         requestSequence.incrementAndGet()
         publish(InspectionPresentationMapper.sourceFailure(kind))
     }
@@ -168,6 +233,8 @@ class InspectionViewModel : ViewModel() {
 
     override fun onCleared() {
         requestSequence.incrementAndGet()
+        clearEditSession()
+        observer = null
         catalogSession.clear()
         executor.shutdownNow()
     }

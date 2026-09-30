@@ -46,6 +46,11 @@ internal fun inspectionSuccess(
             MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90),
         )
     },
+    profileIndices.distinct().map { personnelProfile(it) },
+)
+
+internal fun personnelProfile(id: Int, name: String = "Person $id", nickname: String = "") = MercProfile(
+    id, name, nickname, 70, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 5,
 )
 
 internal fun inventoryEntry(

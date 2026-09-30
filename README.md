@@ -35,6 +35,11 @@ For a completed import that fails inspection, the user can explicitly preview,
 copy, or share a versioned privacy-bounded compatibility report; save
 contribution remains unimplemented.
 
+The success screen also opens **Personnel**, a read-only database of named profiles.
+Dossiers show profile attributes, both skill slots, personality, attitude, career counters,
+derived shooting accuracy, and established relationships. Current squad markers come from
+the validated roster. See the [pinned field evidence](docs/personnel-dossier-evidence.md).
+
 The success screen offers **Load item names** / **Replace item names** through a
 separate explicit document picker for a user-owned `Binarydata.slf`. The only
 admitted catalog is **GOG English v1.12 (Build 04.12.02)**: exactly 2,047,959 bytes,
@@ -56,7 +61,7 @@ storage permission, and is not available through Open With or Share To.
 The core v0.1 presentation facade is
 `Ja2SaveInspector.inspectV01(ByteArray)`. It returns a sealed, sanitized result
 covering format/version/layout compatibility, the minimal campaign summary, and
-the verified roster/core stats. Inputs are copied before inspection; no raw
+the verified roster/core stats plus an immutable profile database. Inputs are copied before inspection; no raw
 offset, rotation, digest, key, or encryption details cross this facade.
 
 The [Issue #72 candidate transaction](docs/save-edit-transactions.md) adds a

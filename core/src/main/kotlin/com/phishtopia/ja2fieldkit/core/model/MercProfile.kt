@@ -24,6 +24,12 @@ data class MercProfile(
     val experienceLevel: Int,
     val inventory: List<ProfileInventorySlot> = emptyList(),
     val inventoryUndroppable: Int = 0,
+    val skillTrait1: SkillTraitId = SkillTraitId(0),
+    val skillTrait2: SkillTraitId = SkillTraitId(0),
+    val personalityTrait: PersonalityTraitId = PersonalityTraitId(0),
+    val attitude: AttitudeId = AttitudeId(0),
+    val career: ProfileCareerRecord = ProfileCareerRecord(),
+    val relationships: ProfileRelationships = ProfileRelationships(),
 )
 
 /** Unsigned serialized profile facts; interpretation never grants write authority. */

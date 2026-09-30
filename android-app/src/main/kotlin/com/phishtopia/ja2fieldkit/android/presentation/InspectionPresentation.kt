@@ -31,6 +31,9 @@ sealed interface InspectionScreenState {
         val roster: List<MercPresentation>,
         val selectedProfileIndex: Int? = roster.firstOrNull()?.profileIndex,
         val catalog: CatalogPresentation = CatalogPresentation(),
+        val personnel: List<PersonnelPresentation> = emptyList(),
+        val personnelVisible: Boolean = false,
+        val dossierProfileId: Int? = null,
     ) : InspectionScreenState {
         val selectedMerc: MercPresentation?
             get() = roster.firstOrNull { it.profileIndex == selectedProfileIndex } ?: roster.firstOrNull()
@@ -126,6 +129,8 @@ object InspectionPresentationMapper {
             }
         if (!coherent) return coherenceFailure(source, result.format)
 
+        val personnel = PersonnelPresentationMapper.map(result.profiles, result.roster)
+            ?: return coherenceFailure(source, result.format)
         val liveByProfile = liveResult.mercs.associateBy { it.profileIndex }
         return InspectionScreenState.Success(
             source = source,
@@ -138,6 +143,7 @@ object InspectionPresentationMapper {
                     "(${result.campaign.playerMercCount} recorded)",
                 balance = result.campaign.balance.toString(),
             ),
+            personnel = personnel,
             roster = result.roster.map { merc ->
                 mapMerc(merc, liveByProfile.getValue(merc.profileIndex))
             },

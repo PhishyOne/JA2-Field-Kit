@@ -29,6 +29,42 @@ class Ja2SaveInspectorV01Test {
     private val encryptedProfiles = encryptRecords(profilePlaintext, PROFILE_RECORD_SIZE)
 
     @Test
+    fun personnelDatabaseIsIdenticalInBothAdmittedVersionsAndDetachedFromInput() {
+        val results = listOf(102, 103).map { version ->
+            val save = syntheticSave(listOf(7, 42)).also { it.putU32Le(0, version) }
+            val result = assertIs<SaveInspectionV01Result.Success>(admittedInspector().inspectV01(save))
+            assertEquals(version, result.format.saveVersion)
+            assertEquals((0..169).toList(), result.profiles.map { it.profileId })
+            val p = result.profiles[7]
+            assertEquals(15, p.skillTrait1.raw)
+            assertEquals(4, p.skillTrait2.raw)
+            assertEquals(7, p.personalityTrait.raw)
+            assertEquals(9, p.attitude.raw)
+            assertEquals(listOf(32768, 32769, 32770, 32771, 32772, 32773, 32774), p.career.run {
+                listOf(kills, assists, shotsFired, shotsHit, battlesFought, timesWounded, totalDaysServed)
+            })
+            assertEquals(0xffff_ffffL, p.career.totalCostPaid)
+            assertEquals(42, p.relationships.friend1.profileId)
+            assertTrue(p.relationships.enemy1.isAbsent)
+            assertEquals(result.roster[0].name, p.name)
+            save.fill(0)
+            assertFailsWith<UnsupportedOperationException> { (result.profiles as MutableList).clear() }
+            assertFailsWith<UnsupportedOperationException> { (p.inventory as MutableList).clear() }
+            result.profiles
+        }
+        assertEquals(results[0], results[1])
+    }
+
+    @Test
+    fun personnelNeverEscapesFailedRosterIdentityValidation() {
+        for (version in listOf(102, 103)) for (ids in listOf(listOf(7, 7), listOf(7, 170), listOf(7, 255))) {
+            val bytes = syntheticSave(ids).also { it.putU32Le(0, version) }
+            val result = assertIs<SaveInspectionV01Result.Failure>(admittedInspector().inspectV01(bytes))
+            assertEquals(SaveInspectionDiagnostic.CONTENT_CORRUPT, result.failure.diagnostic)
+        }
+    }
+
+    @Test
     fun completeFacadeIsDeterministicUsesOneDetectionAndDoesNotMutateInput() {
         val save = syntheticSave(listOf(7, 42))
         val original = save.copyOf()
@@ -317,6 +353,14 @@ class Ja2SaveInspectorV01Test {
         repeat(170) { profile ->
             bytes.putUtf16Le(profile * PROFILE_RECORD_SIZE, 30, "Synthetic $profile")
             bytes.putUtf16Le(profile * PROFILE_RECORD_SIZE + 60, 10, "P$profile")
+            val start = profile * PROFILE_RECORD_SIZE
+            bytes[start + 336] = 7; bytes[start + 337] = 15
+            bytes[start + 340] = 4; bytes[start + 549] = 9
+            listOf(310, 312, 314, 316, 318, 320, 322).forEachIndexed { i, offset ->
+                bytes.putU16Le(start + offset, 32768 + i)
+            }
+            bytes.putU32Le(start + 708, 0xffff_ffffL)
+            bytes[start + 342] = 42; bytes[start + 347] = -1
         }
     }
 

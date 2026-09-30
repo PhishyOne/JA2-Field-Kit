@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,8 @@ import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.groupInventory
 import com.phishtopia.ja2fieldkit.android.presentation.visibleText
+import com.phishtopia.ja2fieldkit.android.presentation.PersonnelPresentation
+import com.phishtopia.ja2fieldkit.android.presentation.StatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.MercPresentation
 import com.phishtopia.ja2fieldkit.android.report.CompatibilityReportPreview
 
@@ -40,6 +43,9 @@ class MainActivity : ComponentActivity() {
     private var displayedCatalog: CatalogNames? = null
     private var mercSelector: Spinner? = null
     private var selectedMercDetail: LinearLayout? = null
+    private val personnelBack = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() = model.closePersonnel()
+    }
 
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) model.inspect(applicationContext.contentResolver, uri, SourceProvenance.DOCUMENT_PICKER)
@@ -54,6 +60,7 @@ class MainActivity : ComponentActivity() {
         val consumed = consumeIntent(if (savedInstanceState == null) intent else null)
         retainIntent(consumed.storedIntent)
         enableEdgeToEdge()
+        onBackPressedDispatcher.addCallback(this, personnelBack)
         model.attach(stateObserver)
         handleRequest(consumed.request)
     }
@@ -124,6 +131,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun render(screenState: InspectionScreenState) {
+        personnelBack.isEnabled = (screenState as? InspectionScreenState.Success)?.personnelVisible == true
         if (updateMercSelection(screenState)) return
 
         // A full render replaces the view tree, including after Activity recreation.
@@ -156,9 +164,15 @@ class MainActivity : ComponentActivity() {
                 screenState.sourceName?.let { content.addLabelValue("Source", it) }
             }
 
-            is InspectionScreenState.Success -> {
+            is InspectionScreenState.Success -> if (screenState.personnelVisible) {
+                content.addPersonnel(screenState)
+            } else {
                 content.addHeading("Inspection complete")
                 content.addCampaign(screenState.campaign)
+                content.addView(Button(this).apply {
+                    text = "Personnel"
+                    setOnClickListener { model.openPersonnel() }
+                }, matchWidth())
                 content.addHeading("Roster")
                 if (screenState.roster.isEmpty()) content.addBody("No roster members found.")
                 else content.addMercSelector(screenState)
@@ -210,6 +224,43 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
         renderedSuccess = screenState as? InspectionScreenState.Success
         ViewCompat.requestApplyInsets(root)
+    }
+
+    private fun LinearLayout.addPersonnel(state: InspectionScreenState.Success) {
+        val dossier = state.personnel.firstOrNull { it.profileId == state.dossierProfileId }
+        addView(Button(this@MainActivity).apply {
+            text = if (dossier == null) "Back to inspection" else "Back to Personnel"
+            setOnClickListener { model.closePersonnel() }
+        }, matchWidth())
+        if (dossier != null) {
+            addDossier(dossier)
+        } else {
+            addHeading("Personnel")
+            addBody("${state.personnel.size} named profiles")
+            if (state.personnel.isEmpty()) addBody("No named profiles found.")
+            state.personnel.forEach { person ->
+                addView(Button(this@MainActivity).apply {
+                    text = person.listLabel
+                    isAllCaps = false
+                    setOnClickListener { model.openPersonnel(person.profileId) }
+                }, matchWidth())
+            }
+        }
+    }
+
+    private fun LinearLayout.addDossier(person: PersonnelPresentation) {
+        addHeading(person.name)
+        addBody("Profile #${person.profileId}" + if (person.currentSquad) " · Current squad" else "")
+        addBody("Read-only profile dossier. Attributes are profile values.")
+        fun section(title: String, facts: List<StatPresentation>) {
+            addHeading(title, 17f)
+            addBody(facts.joinToString("\n") { "${it.label}: ${it.value}" })
+        }
+        section("Attributes", person.attributes)
+        section("Traits", person.traits)
+        section("Personality", person.personality)
+        section("Record", person.record)
+        section("Relationships", person.relationships)
     }
 
     private fun updateMercSelection(screenState: InspectionScreenState): Boolean {

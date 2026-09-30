@@ -29,14 +29,15 @@ class SuccessRenderOrderTest {
 
     @Test
     fun successShowsCampaignAndSelectedMercBeforeTechnicalDetails() {
-        val success = activity.substringAfter("is InspectionScreenState.Success -> {")
+        assertTrue(activity.contains("content.addHeading(\"Inspection complete\")"))
+        val success = activity.substringAfter("content.addHeading(\"Inspection complete\")")
             .substringBefore("is InspectionScreenState.Failure -> {")
         val calls = Regex("content\\.add\\w+\\([^\\n]*\\)")
             .findAll(success).map { it.value }.toList()
         assertEquals(
             listOf(
-                "content.addHeading(\"Inspection complete\")",
                 "content.addCampaign(screenState.campaign)",
+                "content.addView(Button(this)",
                 "content.addHeading(\"Roster\")",
                 "content.addBody(\"No roster members found.\")",
                 "content.addMercSelector(screenState)",

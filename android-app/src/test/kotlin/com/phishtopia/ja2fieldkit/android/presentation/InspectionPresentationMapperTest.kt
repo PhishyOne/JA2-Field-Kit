@@ -344,7 +344,7 @@ class InspectionPresentationMapperTest {
         version: Int = 103,
     ): SaveInspectionV01Result.Success {
         val constructor = SaveInspectionV01Result.Success::class.java.declaredConstructors
-            .single { it.parameterCount == 3 }
+            .single { it.parameterCount == 4 }
             .apply { isAccessible = true }
         return constructor.newInstance(
             format(SaveCompatibility.SUPPORTED, buildLabel).copy(layout = layout, saveVersion = version),
@@ -357,6 +357,7 @@ class InspectionPresentationMapperTest {
                     stats = stats,
                 ),
             ),
+            listOf(personnelProfile(1, name, nickname.orEmpty())),
         ) as SaveInspectionV01Result.Success
     }
 

@@ -74,6 +74,14 @@ object NormalNonLinuxRosterDecoder {
     fun decodeBuild041202(saveBytes: ByteArray): List<MercRosterEntry> =
         Collections.unmodifiableList(scanBuild041202(saveBytes).players.map { it.rosterEntry })
 
+    /** Reuse the same decoded profile table that supplied validated roster identities and stats. */
+    internal fun decodePersonnelBuild041202(saveBytes: ByteArray): PersonnelScan =
+        scanBuild041202(saveBytes).let { scan ->
+            PersonnelScan(scan.profiles, Collections.unmodifiableList(scan.players.map { it.rosterEntry }))
+        }
+
+    internal class PersonnelScan(val profiles: List<MercProfile>, val roster: List<MercRosterEntry>)
+
     internal fun decodeInventoriesBuild041202(saveBytes: ByteArray): List<MercInventoryEntry> =
         Collections.unmodifiableList(scanBuild041202(saveBytes).players.map { soldier ->
             MercInventoryEntry(
@@ -116,7 +124,7 @@ object NormalNonLinuxRosterDecoder {
     internal fun validatedRecordLocations(saveBytes: ByteArray): List<RecordLocation> =
         scanBuild041202(saveBytes).locations
 
-    private class ValidatedRoster(val players: List<ValidatedPlayer>, val locations: List<RecordLocation>)
+    private class ValidatedRoster(val players: List<ValidatedPlayer>, val locations: List<RecordLocation>, val profiles: List<MercProfile>)
 
     private fun scanBuild041202(saveBytes: ByteArray): ValidatedRoster {
         val context = NormalNonLinuxProfileDecoder.decodeContextBuild041202(saveBytes)
@@ -248,7 +256,7 @@ object NormalNonLinuxRosterDecoder {
             )
         }
 
-        return ValidatedRoster(Collections.unmodifiableList(players), Collections.unmodifiableList(locations))
+        return ValidatedRoster(Collections.unmodifiableList(players), Collections.unmodifiableList(locations), context.profiles)
     }
 
     private fun validateCanonicalPlayerTeamRange(saveBytes: ByteArray) {

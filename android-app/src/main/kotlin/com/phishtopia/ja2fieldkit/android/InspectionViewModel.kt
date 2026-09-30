@@ -26,6 +26,8 @@ import com.phishtopia.ja2fieldkit.android.presentation.InspectionPresentationMap
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.SourceFailureKind
 import com.phishtopia.ja2fieldkit.android.presentation.withCompatibilityReportPreview
+import com.phishtopia.ja2fieldkit.android.presentation.openPersonnel
+import com.phishtopia.ja2fieldkit.android.presentation.closePersonnel
 import com.phishtopia.ja2fieldkit.android.presentation.withSelectedMerc
 import com.phishtopia.ja2fieldkit.core.Ja2SaveInspector
 import java.io.FileNotFoundException
@@ -168,6 +170,16 @@ class InspectionViewModel : ViewModel() {
 
     fun selectMerc(profileIndex: Int) {
         val next = state.withSelectedMerc(profileIndex)
+        if (next !== state) publish(next)
+    }
+
+    fun openPersonnel(profileId: Int? = null) {
+        val next = state.openPersonnel(profileId)
+        if (next !== state) publish(next)
+    }
+
+    fun closePersonnel() {
+        val next = state.closePersonnel()
         if (next !== state) publish(next)
     }
 

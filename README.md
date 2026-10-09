@@ -39,6 +39,9 @@ The success screen also opens **Personnel**, a read-only database of named profi
 Dossiers show profile attributes, both skill slots, personality, attitude, career counters,
 derived shooting accuracy, and established relationships. Current squad markers come from
 the validated roster. See the [pinned field evidence](docs/personnel-dossier-evidence.md).
+Non-current dossiers also show recorded profile inventory with raw counts/statuses and
+optional Base catalog names; current-squad dossiers refer to live roster detail.
+See [profile inventory evidence](docs/profile-inventory-dossier-evidence.md).
 Each dossier shows its standard default profile category. A.I.M./M.E.R.C. dossiers also
 show recorded **Profile economics**, without inferring hireability or live contracts;
 see [economics evidence and category caveat](docs/profile-economics-evidence.md).

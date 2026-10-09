@@ -31,6 +31,7 @@ import com.phishtopia.ja2fieldkit.android.presentation.FormatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.groupInventory
 import com.phishtopia.ja2fieldkit.android.presentation.visibleText
+import com.phishtopia.ja2fieldkit.android.presentation.profileInventoryText
 import com.phishtopia.ja2fieldkit.android.presentation.PersonnelPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.StatPresentation
 import com.phishtopia.ja2fieldkit.android.presentation.MercPresentation
@@ -267,6 +268,8 @@ class MainActivity : ComponentActivity() {
         section("Personality", person.personality)
         section("Record", person.record)
         section("Relationships", person.relationships)
+        addHeading("Profile inventory", 17f)
+        addBody(person.profileInventoryText(displayedCatalog))
     }
 
     private fun updateMercSelection(screenState: InspectionScreenState): Boolean {

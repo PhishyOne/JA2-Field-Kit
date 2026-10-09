@@ -29,6 +29,9 @@ class PersonnelWiringTest {
         for (forbidden in listOf("editMerc", "export", "inspector", "ByteArray", "MercProfile")) {
             assertFalse(dossier.contains(forbidden))
         }
+        assertTrue(dossier.contains("addHeading(\"Profile inventory\", 17f)"))
+        assertTrue(dossier.contains("person.profileInventoryText(displayedCatalog)"))
+        assertTrue(activity.contains("displayedCatalog = (screenState as? InspectionScreenState.Success)?.catalog?.active"))
         val navigation = model.substringAfter("fun openPersonnel(").substringBefore("private fun withCatalog(")
         for (forbidden in listOf("inspector", "editSession", "resolver", "ByteArray", "SavedStateHandle")) {
             assertFalse(navigation.contains(forbidden))

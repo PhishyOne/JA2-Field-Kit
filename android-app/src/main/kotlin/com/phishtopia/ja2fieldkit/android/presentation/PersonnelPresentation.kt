@@ -19,6 +19,7 @@ data class PersonnelPresentation(
     val personality: List<StatPresentation>,
     val record: List<StatPresentation>,
     val relationships: List<StatPresentation>,
+    val profileInventory: List<ProfileInventoryPresentation>? = null,
 ) {
     val listLabel: String get() = "$name · Profile #$profileId" + if (currentSquad) " · Current squad" else ""
 }
@@ -43,6 +44,7 @@ object PersonnelPresentationMapper {
                 currentSquad = profile.profileId in squad,
                 standardCategory = categoryLabel(StandardProfileCategory.fromProfileId(profile.profileId)),
                 economics = economics(profile),
+                profileInventory = if (profile.profileId in squad) null else profileInventory(profile.inventory),
                 attributes = immutable(listOf(
                     StatPresentation("Health (profile current / max)", "${profile.life} / ${profile.lifeMax}"),
                     StatPresentation("Agility", profile.agility.toString()),

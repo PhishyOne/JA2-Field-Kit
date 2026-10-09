@@ -38,6 +38,12 @@ class Ja2SaveInspectorV01Test {
             val p = result.profiles[7]
             assertEquals(com.phishtopia.ja2fieldkit.core.model.ProfileEconomicsFacts(
                 0xffff_ffffL, -32768, 0x8000_0000L, 0xfedc_ba98L, -128, 65535, 32768, -3, Int.MIN_VALUE), p.economics)
+            assertEquals(19, p.inventory.size)
+            p.inventory.forEachIndexed { i, slot ->
+                assertEquals(if (i == 0) 0 else 60000 + i, slot.itemId)
+                assertEquals(listOf(0, 8, 9, 255)[i % 4], slot.count)
+                assertEquals(listOf(0, 100, 101, 128, 255)[i % 5], slot.status)
+            }
             assertEquals(15, p.skillTrait1.raw)
             assertEquals(4, p.skillTrait2.raw)
             assertEquals(7, p.personalityTrait.raw)
@@ -356,6 +362,19 @@ class Ja2SaveInspectorV01Test {
             bytes.putUtf16Le(profile * PROFILE_RECORD_SIZE, 30, "Synthetic $profile")
             bytes.putUtf16Le(profile * PROFILE_RECORD_SIZE + 60, 10, "P$profile")
             val start = profile * PROFILE_RECORD_SIZE
+            // Inventory IDs/counts participate in the profile checksum; statuses do not.
+            var inventoryDelta = 0L
+            repeat(19) { i ->
+                inventoryDelta -= bytes.u16Le(start + 416 + i * 2) + (bytes[start + 377 + i].toInt() and 255)
+                inventoryDelta += (if (i == 0) 0 else 60000 + i) + listOf(0, 8, 9, 255)[i % 4]
+                bytes.putU16Le(start + 416 + i * 2, if (i == 0) 0 else 60000 + i)
+                bytes[start + 377 + i] = listOf(0, 8, 9, 255)[i % 4].toByte()
+                bytes[start + 358 + i] = listOf(0, 100, 101, 128, 255)[i % 5].toByte()
+            }
+            val checksum = (0..3).fold(0L) { acc, i ->
+                acc or ((bytes[start + 696 + i].toLong() and 255) shl (i * 8))
+            }
+            bytes.putU32Le(start + 696, (checksum + inventoryDelta) and 0xffff_ffffL)
             bytes[start + 336] = 7; bytes[start + 337] = 15
             bytes[start + 340] = 4; bytes[start + 549] = 9
             listOf(310, 312, 314, 316, 318, 320, 322).forEachIndexed { i, offset ->

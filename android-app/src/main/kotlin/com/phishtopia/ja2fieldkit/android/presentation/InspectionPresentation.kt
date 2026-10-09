@@ -298,28 +298,6 @@ object InspectionPresentationMapper {
     }
 
     private fun Int?.display(): String = this?.toString() ?: "Unknown"
-
-    private fun InventorySlotRole.displayLabel(): String = when (this) {
-        InventorySlotRole.HELMET -> "Helmet"
-        InventorySlotRole.VEST -> "Vest"
-        InventorySlotRole.LEGS -> "Legs"
-        InventorySlotRole.HEAD_1 -> "Head 1"
-        InventorySlotRole.HEAD_2 -> "Head 2"
-        InventorySlotRole.MAIN_HAND -> "Main hand"
-        InventorySlotRole.OFF_HAND -> "Off hand"
-        InventorySlotRole.BIG_POCKET_1 -> "Big pocket 1"
-        InventorySlotRole.BIG_POCKET_2 -> "Big pocket 2"
-        InventorySlotRole.BIG_POCKET_3 -> "Big pocket 3"
-        InventorySlotRole.BIG_POCKET_4 -> "Big pocket 4"
-        InventorySlotRole.SMALL_POCKET_1 -> "Small pocket 1"
-        InventorySlotRole.SMALL_POCKET_2 -> "Small pocket 2"
-        InventorySlotRole.SMALL_POCKET_3 -> "Small pocket 3"
-        InventorySlotRole.SMALL_POCKET_4 -> "Small pocket 4"
-        InventorySlotRole.SMALL_POCKET_5 -> "Small pocket 5"
-        InventorySlotRole.SMALL_POCKET_6 -> "Small pocket 6"
-        InventorySlotRole.SMALL_POCKET_7 -> "Small pocket 7"
-        InventorySlotRole.SMALL_POCKET_8 -> "Small pocket 8"
-    }
 }
 
 /** Selection consumes only retained safe presentation facts, never save bytes or an inspector. */

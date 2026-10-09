@@ -13,6 +13,11 @@ is a pinned default metadata classification computed from profile ID, not save b
 live employment. See [economics evidence](profile-economics-evidence.md). No raw bytes or
 new persistence cross this presentation boundary.
 
+Profile inventory dossiers retain immutable numeric slot facts only, using the shared
+canonical role labels. Exactly 19 source slots are required; current-squad dossiers
+suppress profile rows. Catalog names resolve at rendering time through the retained
+catalog session, without save reparse. See [evidence](profile-inventory-dossier-evidence.md).
+
 ## Read-only data flow
 
 ```text

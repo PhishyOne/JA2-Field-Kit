@@ -57,11 +57,13 @@ internal fun inventoryEntry(
     profileIndex: Int,
     slots: List<LiveInventorySlot> = InventorySlotRole.entries.map { inventorySlot(it, 0, 0) },
     stats: LiveMercStats = LiveMercStats(profileIndex, 99, -128, -2, 127, -3, -4, -5, -6, -7, 0, 0),
+    location: LiveMercLocation = LiveMercLocation.Unavailable,
 ): LiveMercState = construct(
     LiveMercState::class.java,
     profileIndex,
     stats,
     slots,
+    location,
 )
 
 internal fun inventorySlot(role: InventorySlotRole, itemId: Int, objectCount: Int): LiveInventorySlot =

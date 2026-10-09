@@ -71,6 +71,7 @@ data class MercPresentation(
     val nickname: String?,
     val stats: List<StatPresentation>,
     val inventory: List<InventorySlotPresentation>,
+    val location: String,
 ) {
     val statsLegend: String?
         get() = if (stats.any { it.kind == StatValueKind.LIVE_BASE }) {
@@ -246,6 +247,7 @@ object InspectionPresentationMapper {
         live: LiveMercState,
     ): MercPresentation = MercPresentation(
         profileIndex = merc.profileIndex,
+        location = live.location.displayLocation(),
         name = PresentationTextSanitizer.sanitize(merc.name)
             .takeUnless(String::isBlank)
             ?: "Unknown merc",

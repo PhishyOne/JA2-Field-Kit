@@ -8,6 +8,7 @@ import com.phishtopia.ja2fieldkit.core.format.SaveLayout
 import com.phishtopia.ja2fieldkit.core.model.CampaignSector
 import com.phishtopia.ja2fieldkit.core.model.CampaignSummaryV01
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
+import com.phishtopia.ja2fieldkit.core.model.LiveMercLocation
 import com.phishtopia.ja2fieldkit.core.model.LiveMercStats
 import com.phishtopia.ja2fieldkit.core.model.MercStats
 import com.phishtopia.ja2fieldkit.core.model.SaveInspectionDiagnostic
@@ -34,6 +35,38 @@ class InspectionPresentationMapperTest {
         lastModifiedEpochMillis = null,
         sha256Hex = "00".repeat(32),
     )
+
+    @Test
+    fun savedLocationFormattingAndIdentityJoinExposeOnlyDisplayFacts() {
+        val cases = buildList {
+            add(LiveMercLocation.Sector(9, 1, 0) to "A9")
+            add(LiveMercLocation.Sector(9, 1, 1) to "A9-1")
+            for (x in listOf(1, 16)) for (y in listOf(1, 16)) for (z in 0..3) {
+                add(LiveMercLocation.Sector(x, y, z) to
+                    "${if (y == 1) 'A' else 'P'}$x${if (z == 0) "" else "-$z"}")
+            }
+            add(LiveMercLocation.InTransit to "In transit")
+            add(LiveMercLocation.Prisoner to "POW — location unknown")
+            add(LiveMercLocation.Dead to "Dead")
+            add(LiveMercLocation.InVehicle to "In vehicle")
+            add(LiveMercLocation.Unavailable to "Unavailable")
+        }
+        val result = inspectionSuccess(successResult().format, listOf(42, 7))
+        for ((location, label) in cases) {
+            val state = assertIs<InspectionScreenState.Success>(InspectionPresentationMapper.map(
+                source, result, inventorySuccess(result.format, listOf(
+                    inventoryEntry(7, location = LiveMercLocation.Unavailable),
+                    inventoryEntry(42, location = location),
+                )),
+            ))
+            assertEquals(label, state.roster.first { it.profileIndex == 42 }.location)
+            assertEquals("Unavailable", state.roster.first { it.profileIndex == 7 }.location)
+        }
+        assertEquals(setOf("profileIndex", "name", "nickname", "stats", "inventory", "location"),
+            MercPresentation::class.java.declaredFields.filterNot {
+                java.lang.reflect.Modifier.isStatic(it.modifiers)
+            }.map { it.name }.toSet())
+    }
 
     @Test
     fun v102PresentationKeepsTheDistinctLayoutAndVersion() {

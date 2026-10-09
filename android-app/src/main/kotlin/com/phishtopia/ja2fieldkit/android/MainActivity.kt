@@ -379,6 +379,7 @@ class MainActivity : ComponentActivity() {
 
     private fun LinearLayout.addMerc(merc: MercPresentation) {
         addHeading(merc.displayName(), 19f)
+        addBody("Location: ${merc.location}")
         val editable = model.editMerc(merc.profileIndex)
         if (editable != null) {
             addView(Button(this@MainActivity).apply {

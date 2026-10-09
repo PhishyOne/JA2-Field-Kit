@@ -4,6 +4,7 @@ import com.phishtopia.ja2fieldkit.core.io.LittleEndianReader
 import com.phishtopia.ja2fieldkit.core.model.InventorySlot
 import com.phishtopia.ja2fieldkit.core.model.InventorySlotRole
 import com.phishtopia.ja2fieldkit.core.model.LiveInventorySlot
+import com.phishtopia.ja2fieldkit.core.model.LiveMercLocation
 import com.phishtopia.ja2fieldkit.core.model.LiveMercState
 import com.phishtopia.ja2fieldkit.core.model.LiveMercStats
 import com.phishtopia.ja2fieldkit.core.model.MercInventoryEntry
@@ -68,7 +69,7 @@ class RosterMembershipException(
  * Shared validated traversal of the first 20 normal SOLDIERTYPE slots.
  *
  * Roster and live inventory use identical membership, checksum, and tail-framing authority.
- * Only existing checksum stat facts are presented; assignments, sectors, paths, and keys remain uninterpreted.
+ * Location is derived conservatively; location fields are not soldier-checksum-covered.
  */
 object NormalNonLinuxRosterDecoder {
     fun decodeBuild041202(saveBytes: ByteArray): List<MercRosterEntry> =
@@ -100,13 +101,15 @@ object NormalNonLinuxRosterDecoder {
                 soldier.inventorySlots().map { slot ->
                     LiveInventorySlot(slot.role, slot.objectRecord.itemId, slot.objectRecord.objectCount)
                 },
+                soldier.location,
             )
         })
 
-    /** Only stat facts and a narrow private inventory snapshot survive validation. */
+    /** Only location/stat facts and a narrow private inventory snapshot survive validation. */
     private class ValidatedPlayer(
         val rosterEntry: MercRosterEntry,
         val stats: LiveMercStats,
+        val location: LiveMercLocation,
         inventory: ByteArray,
     ) {
         private val inventory = inventory.copyOf()
@@ -181,6 +184,7 @@ object NormalNonLinuxRosterDecoder {
                 players += ValidatedPlayer(
                     context.profiles[profileIds.last()].toRosterEntry(),
                     liveStats(LittleEndianReader(decrypted)),
+                    liveLocation(LittleEndianReader(decrypted)),
                     decrypted.copyOfRange(
                         INVENTORY_START_OFFSET,
                         INVENTORY_START_OFFSET + INVENTORY_SLOT_COUNT * INVENTORY_RECORD_SIZE,
@@ -325,6 +329,27 @@ object NormalNonLinuxRosterDecoder {
             )
         }
         profileIds += profileId
+    }
+
+    private fun liveLocation(reader: LittleEndianReader): LiveMercLocation {
+        val life = reader.i8(LIFE_OFFSET).toInt()
+        val assignment = reader.i8(1917).toInt()
+        val flags = reader.u32(STATUS_FLAGS_OFFSET)
+        val between = reader.u8(754)
+        if (life == 0 || assignment == 30 || flags and 0x00000080L != 0L) return LiveMercLocation.Dead
+        if (assignment == 32) return LiveMercLocation.Prisoner
+        val ordinary = assignment in 0..19 || assignment in 21..22 || assignment in 25..29 || assignment == 33
+        if (life < 0 || between !in 0..1 || !(ordinary || assignment in 23..24)) {
+            return LiveMercLocation.Unavailable
+        }
+        if (assignment == 24 || between == 1) return LiveMercLocation.InTransit
+        if (assignment == 23 || flags and (0x08000000L or 0x10000000L) != 0L) return LiveMercLocation.InVehicle
+        if (flags and 0x02000000L != 0L) return LiveMercLocation.Unavailable
+        val x = reader.i16(1922).toInt()
+        val y = reader.i16(1924).toInt()
+        val z = reader.i8(1926).toInt()
+        return if (x in 1..16 && y in 1..16 && z in 0..3) LiveMercLocation.Sector(x, y, z)
+        else LiveMercLocation.Unavailable
     }
 
     private fun liveStats(reader: LittleEndianReader): LiveMercStats = LiveMercStats(

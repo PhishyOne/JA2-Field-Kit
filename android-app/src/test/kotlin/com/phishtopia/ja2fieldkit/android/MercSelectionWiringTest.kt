@@ -14,6 +14,14 @@ class MercSelectionWiringTest {
     private val activity = File(sourceDir, "MainActivity.kt").readText()
 
     @Test
+    fun selectedMercShowsOneLocationRowBeforeStats() {
+        val detail = activity.substringAfter("private fun LinearLayout.addMerc(merc:")
+        val row = "addBody(\"Location: ${'$'}{merc.location}\")"
+        assertEquals(1, detail.split(row).size - 1)
+        assertTrue(detail.indexOf(row) < detail.indexOf("addHeading(\"Stats\""))
+    }
+
+    @Test
     fun selectActionAcceptsOnlyAnIdAndCannotImportOrInspect() {
         val action = model.substringAfter("fun selectMerc(").substringBefore("private fun")
         assertTrue(action.startsWith("profileIndex: Int)"))

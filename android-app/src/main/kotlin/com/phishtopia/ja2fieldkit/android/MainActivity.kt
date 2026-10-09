@@ -256,6 +256,12 @@ class MainActivity : ComponentActivity() {
             addHeading(title, 17f)
             addBody(facts.joinToString("\n") { "${it.label}: ${it.value}" })
         }
+        addBody("Standard profile category: ${person.standardCategory}")
+        if (person.economics.isNotEmpty()) {
+            addHeading("Profile economics", 17f)
+            addBody("Recorded profile values. Hiring and current contract details depend on other game state.")
+            addBody(person.economics.joinToString("\n") { "${it.label}: ${it.value}" })
+        }
         section("Attributes", person.attributes)
         section("Traits", person.traits)
         section("Personality", person.personality)

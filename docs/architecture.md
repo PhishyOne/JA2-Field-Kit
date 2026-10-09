@@ -6,6 +6,13 @@ The parser/editor is the product core. Android is a presentation and file-access
 
 For v0.1, `core` must remain a plain Kotlin/Java JVM module with no Android SDK dependency. That keeps parsing testable on CI and reusable by future desktop/CLI tooling if useful.
 
+Personnel dossiers retain display facts from the admitted profile table and validated
+roster. Immutable `ProfileEconomicsFacts` preserves nine serialized values for every
+profile; Android applies agency-specific labels and visibility. `StandardProfileCategory`
+is a pinned default metadata classification computed from profile ID, not save bytes or
+live employment. See [economics evidence](profile-economics-evidence.md). No raw bytes or
+new persistence cross this presentation boundary.
+
 ## Read-only data flow
 
 ```text

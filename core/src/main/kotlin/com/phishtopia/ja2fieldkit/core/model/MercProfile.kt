@@ -30,6 +30,7 @@ data class MercProfile(
     val attitude: AttitudeId = AttitudeId(0),
     val career: ProfileCareerRecord = ProfileCareerRecord(),
     val relationships: ProfileRelationships = ProfileRelationships(),
+    val economics: ProfileEconomicsFacts = ProfileEconomicsFacts(),
 )
 
 /** Unsigned serialized profile facts; interpretation never grants write authority. */

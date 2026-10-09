@@ -80,6 +80,17 @@ object NormalMercProfileParser {
                 skillTrait2 = SkillTraitId(reader.i8(340).toInt()),
                 personalityTrait = PersonalityTraitId(reader.i8(336).toInt()),
                 attitude = AttitudeId(reader.i8(549).toInt()),
+                economics = ProfileEconomicsFacts(
+                    availabilityDelayCounter = reader.u32(292),
+                    dailySalary = reader.i16(332).toInt(),
+                    weeklySalary = reader.u32(540),
+                    biWeeklySalary = reader.u32(544),
+                    medicalDeposit = reader.i8(548).toInt(),
+                    medicalDepositAmount = reader.u16(552),
+                    optionalGearCost = reader.u16(574),
+                    mercStatus = reader.i8(652).toInt(),
+                    mercBillingDays = reader.i32(704),
+                ),
                 career = ProfileCareerRecord(
                     kills = reader.u16(310), assists = reader.u16(312),
                     shotsFired = reader.u16(314), shotsHit = reader.u16(316),

@@ -36,6 +36,8 @@ class Ja2SaveInspectorV01Test {
             assertEquals(version, result.format.saveVersion)
             assertEquals((0..169).toList(), result.profiles.map { it.profileId })
             val p = result.profiles[7]
+            assertEquals(com.phishtopia.ja2fieldkit.core.model.ProfileEconomicsFacts(
+                0xffff_ffffL, -32768, 0x8000_0000L, 0xfedc_ba98L, -128, 65535, 32768, -3, Int.MIN_VALUE), p.economics)
             assertEquals(15, p.skillTrait1.raw)
             assertEquals(4, p.skillTrait2.raw)
             assertEquals(7, p.personalityTrait.raw)
@@ -359,6 +361,15 @@ class Ja2SaveInspectorV01Test {
             listOf(310, 312, 314, 316, 318, 320, 322).forEachIndexed { i, offset ->
                 bytes.putU16Le(start + offset, 32768 + i)
             }
+            bytes.putU32Le(start + 292, 0xffff_ffffL)
+            bytes.putU16Le(start + 332, 32768)
+            bytes.putU32Le(start + 540, 0x8000_0000L)
+            bytes.putU32Le(start + 544, 0xfedc_ba98L)
+            bytes[start + 548] = -128
+            bytes.putU16Le(start + 552, 65535)
+            bytes.putU16Le(start + 574, 32768)
+            bytes[start + 652] = -3
+            bytes.putU32Le(start + 704, 0x8000_0000L)
             bytes.putU32Le(start + 708, 0xffff_ffffL)
             bytes[start + 342] = 42; bytes[start + 347] = -1
         }

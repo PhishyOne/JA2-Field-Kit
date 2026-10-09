@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Audit pinned public git objects, never saves. Usage: check_personnel_offsets.py UPSTREAM"""
+import json
 import re
 import subprocess
 import sys
 
 REVISION = "743f38a6ca86c81893376c2576277db660320170"
 EXPECTED = {
+    "uiDayBecomesAvailable": (292, "U32", 1), "sSalary": (332, "I16", 1),
+    "uiWeeklySalary": (540, "U32", 1), "uiBiWeeklySalary": (544, "U32", 1),
+    "bMedicalDeposit": (548, "I8", 1), "sMedicalDepositAmount": (552, "U16", 1),
+    "usOptionalGearCost": (574, "U16", 1), "bMercStatus": (652, "I8", 1),
+    "iMercMercContractLength": (704, "I32", 1),
     "usKills": (310, "U16", 1), "usAssists": (312, "U16", 1),
     "usShotsFired": (314, "U16", 1), "usShotsHit": (316, "U16", 1),
     "usBattlesFought": (318, "U16", 1), "usTimesWounded": (320, "U16", 1),
@@ -22,6 +28,58 @@ ENUMS = {
     "PersonalityTrait": "NO_PERSONALITYTRAIT HEAT_INTOLERANT NERVOUS CLAUSTROPHOBIC NONSWIMMER FEAR_OF_INSECTS FORGETFUL PSYCHO",
     "Attitudes": "ATT_NORMAL ATT_FRIENDLY ATT_LONER ATT_OPTIMIST ATT_PESSIMIST ATT_AGGRESSIVE ATT_ARROGANT ATT_BIG_SHOT ATT_ASSHOLE ATT_COWARD NUM_ATTITUDES",
 }
+
+
+STATUS = {
+    "MERC_OK": 0, "MERC_HAS_NO_TEXT_FILE": -1,
+    "MERC_ANNOYED_BUT_CAN_STILL_CONTACT": -2, "MERC_ANNOYED_WONT_CONTACT": -3,
+    "MERC_HIRED_BUT_NOT_ARRIVED_YET": -4, "MERC_IS_DEAD": -5,
+    "MERC_RETURNING_HOME": -6, "MERC_WORKING_ELSEWHERE": -7, "MERC_FIRED_AS_A_POW": -8,
+}
+CATEGORY_RANGES = [(0, 39, "AIM"), (40, 50, "MERC"), (51, 56, "IMP"),
+                   (57, 74, "RPC"), (75, 159, "NPC"), (160, 163, "VEHICLE"),
+                   (164, 169, "NOT_USED")]
+
+
+def check_categories(metadata, enum_header, predicates, manager):
+    # Remove comments while preserving JSON strings (including any slash characters).
+    clean = re.sub(r'"(?:\\.|[^"\\])*"|/\*.*?\*/|//[^\n]*',
+                   lambda m: m[0] if m[0].startswith('"') else '', metadata, flags=re.S)
+    entries = json.loads(clean)
+    assert len(entries) == 170
+    actual = {entry["profileID"]: entry["type"] for entry in entries}
+    expected = {i: category for lo, hi, category in CATEGORY_RANGES for i in range(lo, hi + 1)}
+    assert len(actual) == 170 and actual == expected
+    body = re.search(r"enum class MercType : int8_t\s*\{(.*?)\}", enum_header, re.S)[1]
+    # Implicit C++ enum values are exactly 0..6; these are metadata, not save encodings.
+    assert body.replace(",", " ").split() == "NOT_USED AIM MERC IMP RPC NPC VEHICLE".split()
+    for method, category in [("isAIMMerc", "AIM"), ("isMERCMerc", "MERC"),
+                             ("isIMPMerc", "IMP"), ("isRPC", "RPC"),
+                             ("isNPC", "NPC"), ("isVehicle", "VEHICLE")]:
+        body = re.search(r"bool MercProfile::" + method + r"\(\) const\s*\{(.*?)\}", predicates, re.S)[1]
+        assert body.strip() == f"return getInfo().mercType == MercType::{category};"
+    assert "return *(MercProfileInfo::load(m_profileID));" in predicates
+    assert 'readJsonDataFileWithSchema("mercs-profile-info.json")' in manager
+    assert "MercProfileInfo::load = [this](uint8_t p) { return this->getMercProfileInfo(p); };" in manager
+    assert "MercProfileInfo::deserialize(charProperties)" in manager
+    assert "m_mercProfileInfo[profileID] = profileInfo;" in manager
+
+
+def negative_layout_probes(extract, header):
+    probes = [("EXTR_SKIP(S, 28)", "EXTR_SKIP(S, 29)")]
+    for name, (_, kind, _) in EXPECTED.items():
+        if name in {"sSalary", "bMercStatus", "bMedicalDeposit", "iMercMercContractLength",
+                    "uiDayBecomesAvailable", "uiWeeklySalary", "uiBiWeeklySalary",
+                    "sMedicalDepositAmount", "usOptionalGearCost"}:
+            opposite = ("U" if kind.startswith("I") else "I") + kind[1:]
+            probes.append((f"EXTR_{kind}(S, p.{name})", f"EXTR_{opposite}(S, p.{name})"))
+    for old, new in probes:
+        assert old in extract, old
+        try:
+            layout(extract.replace(old, new, 1), "EXTR", header)
+        except AssertionError:
+            continue
+        raise AssertionError(f"Negative layout probe accepted: {old}")
 
 
 def read(tree, path):
@@ -93,6 +151,15 @@ def audit(tree):
     helpers = read(tree, "src/game/Tactical/Soldier_Profile.cc")
     read(tree, "src/game/Tactical/Soldier_Profile.h")
     strategic = read(tree, "src/game/Strategic/Strategic_Merc_Handler.cc")
+    check_categories(read(tree, "assets/externalized/mercs-profile-info.json"),
+                     read(tree, "src/externalized/mercs/MercProfileInfo.h"),
+                     read(tree, "src/externalized/mercs/MercProfile.cc"),
+                     read(tree, "src/externalized/DefaultContentManager.cc"))
+    for name, value in STATUS.items():
+        assert re.search(r"^#define\s+" + name + r"\s+" + str(value) + r"\s*$", header, re.M), name
+    assert re.search(r"if \(version < 77\)\s*\{\s*UpdateMercMercContractInfo\(\);\s*\}", loader)
+    assert loader.count("UpdateMercMercContractInfo();") == 1
+    assert "--p.uiDayBecomesAvailable" in strategic
     for name, value in [("NAME_LENGTH", 30), ("NICKNAME_LENGTH", 10), ("NUM_PROFILES", 170)]:
         assert re.search(r"#define\s+" + name + r"\s+" + str(value) + r"\b", header)
     assert re.search(r"#define\s+PaletteRepID_LENGTH\s+30", palette)
@@ -104,6 +171,7 @@ def audit(tree):
     inject = serializer.split("void InjectMercProfile(", 1)[1].split("INJ_SKIP(D, 28)", 1)[1].split("Assert(D.getConsumed()", 1)[0]
     extract = serializer.split("void ExtractMercProfile(", 1)[1].split("EXTR_SKIP(S, 28)", 1)[1].split("if(stracLinuxFormat)", 1)[0]
     assert layout("INJ_SKIP(D, 28)" + inject, "INJ", header) == layout("EXTR_SKIP(S, 28)" + extract, "EXTR", header)
+    negative_layout_probes("EXTR_SKIP(S, 28)" + extract, header)
     # Exactly one version decision: both 102 and 103 take the >=87 encrypted-reader path.
     body = loader.split("static void LoadSavedMercProfiles(HWFILE const f,", 1)[1].split("static void SaveSoldierStructure", 1)[0]
     assert body.count("savegame_version") == 2
@@ -124,7 +192,7 @@ def audit(tree):
     assert "bLoop < NUM_BUDDY_SLOTS" in helpers and "bLoop < NUM_HATED_SLOTS" in helpers
     assert "p.bBuddy[LEARNED_TO_LIKE_SLOT] = p.bLearnToLike;" in strategic
     assert "p.bHated[LEARNED_TO_HATE_SLOT] = p.bLearnToHate;" in strategic
-    print("PASS: complete 716-byte extract/inject parity; 17 field offsets/widths; enums; v102/v103 common load path; relationship slots/sentinels")
+    print("PASS: complete 716-byte extract/inject parity; 26 field offsets/types; enums/status; all 170 default categories and external dependency; v102/v103 common load path; pre-v77/pre-v83 thresholds; signedness/padding negative probes; relationship slots/sentinels")
 
 
 if __name__ == "__main__":

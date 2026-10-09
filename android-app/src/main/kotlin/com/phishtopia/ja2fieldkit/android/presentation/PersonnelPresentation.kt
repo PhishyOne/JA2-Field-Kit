@@ -3,6 +3,7 @@ package com.phishtopia.ja2fieldkit.android.presentation
 import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
 import com.phishtopia.ja2fieldkit.core.model.ProfileRelationshipId
+import com.phishtopia.ja2fieldkit.core.model.StandardProfileCategory
 import java.util.Collections
 import java.util.Locale
 
@@ -11,6 +12,8 @@ data class PersonnelPresentation(
     val profileId: Int,
     val name: String,
     val currentSquad: Boolean,
+    val standardCategory: String,
+    val economics: List<StatPresentation>,
     val attributes: List<StatPresentation>,
     val traits: List<StatPresentation>,
     val personality: List<StatPresentation>,
@@ -38,6 +41,8 @@ object PersonnelPresentationMapper {
                 profileId = profile.profileId,
                 name = name,
                 currentSquad = profile.profileId in squad,
+                standardCategory = categoryLabel(StandardProfileCategory.fromProfileId(profile.profileId)),
+                economics = economics(profile),
                 attributes = immutable(listOf(
                     StatPresentation("Health (profile current / max)", "${profile.life} / ${profile.lifeMax}"),
                     StatPresentation("Agility", profile.agility.toString()),
@@ -81,6 +86,57 @@ object PersonnelPresentationMapper {
                 )),
             )
         })
+    }
+
+    private fun categoryLabel(category: StandardProfileCategory): String = when (category) {
+        StandardProfileCategory.AIM -> "A.I.M. profile"
+        StandardProfileCategory.MERC -> "M.E.R.C. profile"
+        StandardProfileCategory.IMP -> "I.M.P. profile"
+        StandardProfileCategory.RPC -> "RPC profile"
+        StandardProfileCategory.NPC -> "NPC profile"
+        StandardProfileCategory.VEHICLE -> "Vehicle profile"
+        StandardProfileCategory.NOT_USED -> "Reserved profile"
+    }
+
+    private fun economics(profile: MercProfile): List<StatPresentation> {
+        val category = StandardProfileCategory.fromProfileId(profile.profileId)
+        if (category != StandardProfileCategory.AIM && category != StandardProfileCategory.MERC) return emptyList()
+        val facts = profile.economics
+        return immutable(buildList {
+            add(StatPresentation("Recorded profile status", recordedStatus(facts.mercStatus, category)))
+            add(StatPresentation("Availability delay counter (days, profile)", facts.availabilityDelayCounter.toString()))
+            add(StatPresentation("Daily salary (profile)", nonnegativeOrRaw(facts.dailySalary)))
+            if (category == StandardProfileCategory.AIM) {
+                add(StatPresentation("Weekly salary (7-day package)", facts.weeklySalary.toString()))
+                add(StatPresentation("Two-week salary (14-day package)", facts.biWeeklySalary.toString()))
+                add(StatPresentation("Medical deposit required", when (facts.medicalDeposit) {
+                    0 -> "No"
+                    1 -> "Yes"
+                    else -> "Unknown (raw: ${facts.medicalDeposit})"
+                }))
+                add(StatPresentation("Medical deposit amount (profile)", facts.medicalDepositAmount.toString()))
+                add(StatPresentation("Optional gear cost (profile)", facts.optionalGearCost.toString()))
+            } else {
+                add(StatPresentation("M.E.R.C. billing days since payment (profile)", nonnegativeOrRaw(facts.mercBillingDays)))
+            }
+        })
+    }
+
+    private fun nonnegativeOrRaw(value: Int): String =
+        if (value < 0) "Uninterpreted (raw: $value)" else value.toString()
+
+    private fun recordedStatus(raw: Int, category: StandardProfileCategory): String = when (raw) {
+        0 -> "Ready status recorded"
+        -1 -> "Missing dialogue text"
+        -2 -> if (category == StandardProfileCategory.AIM) "Annoyed; contact still permitted" else "Unknown (raw: $raw)"
+        -3 -> if (category == StandardProfileCategory.AIM) "Annoyed; contact refused" else "Unknown (raw: $raw)"
+        -4 -> "Hired, awaiting arrival status"
+        -5 -> "Dead status"
+        -6 -> "Returning home status"
+        -7 -> "Working elsewhere status"
+        -8 -> "Fired while POW"
+        in 1..127 -> "Positive profile status ($raw)"
+        else -> "Unknown (raw: $raw)"
     }
 
     private fun displayName(profile: MercProfile): String? {

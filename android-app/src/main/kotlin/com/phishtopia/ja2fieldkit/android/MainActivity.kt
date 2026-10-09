@@ -11,6 +11,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.text.InputType
+import android.widget.EditText
+import android.widget.CheckBox
+import androidx.core.widget.doAfterTextChanged
+import com.phishtopia.ja2fieldkit.android.presentation.PersonnelFilter
+import com.phishtopia.ja2fieldkit.android.presentation.PersonnelCategoryFilter
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -44,6 +50,12 @@ class MainActivity : ComponentActivity() {
     private var displayedCatalog: CatalogNames? = null
     private var mercSelector: Spinner? = null
     private var selectedMercDetail: LinearLayout? = null
+    private var personnelState: InspectionScreenState.Success? = null
+    private var personnelResults: LinearLayout? = null
+    private var personnelQuery: EditText? = null
+    private var personnelCategory: Spinner? = null
+    private var personnelCurrent: CheckBox? = null
+    private var updatingPersonnel = false
     private val personnelBack = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = model.closePersonnel()
     }
@@ -133,7 +145,13 @@ class MainActivity : ComponentActivity() {
 
     private fun render(screenState: InspectionScreenState) {
         personnelBack.isEnabled = (screenState as? InspectionScreenState.Success)?.personnelVisible == true
+        if (updatePersonnelFilters(screenState)) return
         if (updateMercSelection(screenState)) return
+        personnelState = null
+        personnelResults = null
+        personnelQuery = null
+        personnelCategory = null
+        personnelCurrent = null
 
         // A full render replaces the view tree, including after Activity recreation.
         displayedCatalog = (screenState as? InspectionScreenState.Success)?.catalog?.active
@@ -237,15 +255,106 @@ class MainActivity : ComponentActivity() {
             addDossier(dossier)
         } else {
             addHeading("Personnel")
-            addBody("${state.personnel.size} named profiles")
-            if (state.personnel.isEmpty()) addBody("No named profiles found.")
-            state.personnel.forEach { person ->
-                addView(Button(this@MainActivity).apply {
-                    text = person.listLabel
-                    isAllCaps = false
-                    setOnClickListener { model.openPersonnel(person.profileId) }
-                }, matchWidth())
+            personnelState = state
+            personnelQuery = EditText(this@MainActivity).apply {
+                hint = "Search name, nickname, or profile ID"
+                contentDescription = hint
+                isSaveEnabled = false
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                setSingleLine(true)
+                setText(state.personnelFilter.query)
+                doAfterTextChanged {
+                    if (!updatingPersonnel) {
+                        val safe = PersonnelFilter.safeQuery(it.toString())
+                        if (it.toString() != safe) {
+                            val cursor = selectionStart.coerceIn(0, safe.length)
+                            updatingPersonnel = true
+                            try {
+                                setText(safe)
+                                setSelection(cursor)
+                            } finally { updatingPersonnel = false }
+                        }
+                        model.setPersonnelQuery(safe)
+                    }
+                }
+            }.also { addView(it, matchWidth()) }
+            personnelCategory = Spinner(this@MainActivity).apply {
+                id = View.generateViewId()
+                contentDescription = "Standard profile category"
+                isSaveEnabled = false
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item,
+                    PersonnelCategoryFilter.entries.map { it.label }).apply {
+                    setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                }
+                setSelection(state.personnelFilter.category.ordinal)
+                onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                        if (personnelCategory !== parent) return
+                        if (!updatingPersonnel) PersonnelCategoryFilter.entries.getOrNull(position)?.let {
+                            model.setPersonnelCategory(it)
+                        }
+                    }
+                    override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                }
+            }.also { selector ->
+                addView(textView("Standard profile category", 16f).apply { labelFor = selector.id })
+                addView(selector, matchWidth())
             }
+            personnelCurrent = CheckBox(this@MainActivity).apply {
+                text = "Current squad only"
+                isSaveEnabled = false
+                isChecked = state.personnelFilter.currentSquadOnly
+                setOnCheckedChangeListener { _, checked ->
+                    if (!updatingPersonnel) model.setPersonnelCurrentSquadOnly(checked)
+                }
+            }.also { addView(it, matchWidth()) }
+            addView(Button(this@MainActivity).apply {
+                text = "Clear filters"
+                setOnClickListener { model.clearPersonnelFilters() }
+            }, matchWidth())
+            personnelResults = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addPersonnelResults(state)
+            }.also { addView(it, matchWidth()) }
+        }
+    }
+
+    /** Keep the search field and its keyboard/focus while only filter choices change. */
+    private fun updatePersonnelFilters(next: InspectionScreenState): Boolean {
+        val previous = personnelState ?: return false
+        if (next !is InspectionScreenState.Success || previous.personnelFilter == next.personnelFilter ||
+            previous.copy(personnelFilter = next.personnelFilter) != next) return false
+        personnelState = next
+        updatingPersonnel = true
+        try {
+            personnelQuery?.let { field ->
+                if (field.text.toString() != next.personnelFilter.query) {
+                    val cursor = field.selectionStart.coerceIn(0, next.personnelFilter.query.length)
+                    field.setText(next.personnelFilter.query)
+                    field.setSelection(cursor)
+                }
+            }
+            personnelCategory?.setSelection(next.personnelFilter.category.ordinal)
+            personnelCurrent?.isChecked = next.personnelFilter.currentSquadOnly
+        } finally { updatingPersonnel = false }
+        personnelResults?.apply {
+            removeAllViews()
+            addPersonnelResults(next)
+        }
+        return true
+    }
+
+    private fun LinearLayout.addPersonnelResults(state: InspectionScreenState.Success) {
+        val results = state.personnelFilter.results(state.personnel)
+        addBody("${results.size} of ${state.personnel.size} named profiles")
+        if (results.isEmpty()) addBody("No profiles match these filters.")
+        results.forEach { person ->
+            addView(Button(this@MainActivity).apply {
+                text = person.listLabel
+                isAllCaps = false
+                setOnClickListener { model.openPersonnel(person.profileId) }
+            }, matchWidth())
         }
     }
 

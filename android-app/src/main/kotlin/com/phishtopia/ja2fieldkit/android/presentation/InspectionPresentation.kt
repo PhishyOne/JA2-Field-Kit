@@ -33,6 +33,7 @@ sealed interface InspectionScreenState {
         val catalog: CatalogPresentation = CatalogPresentation(),
         val personnel: List<PersonnelPresentation> = emptyList(),
         val personnelVisible: Boolean = false,
+        val personnelFilter: PersonnelFilter = PersonnelFilter(),
         val dossierProfileId: Int? = null,
     ) : InspectionScreenState {
         val selectedMerc: MercPresentation?

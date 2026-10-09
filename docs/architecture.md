@@ -212,3 +212,10 @@ test factory and debug placement gate separately authorize this narrow slice.
 - general persistence/database/networking (only the bounded debug placement receipt exists)
 
 These remain outside the inspector and narrow debug create-new slice.
+
+Personnel browsing derives ordered results only from retained immutable `PersonnelPresentation` facts.
+`PersonnelFilter` holds a sanitized query (at most 120 code points), a closed category choice,
+and a squad-only boolean in the success screen state. Matching trims query edges; filter changes
+are idempotent and never invoke import, inspection, or byte access. New import results default
+the filters; ViewModel retention preserves them across Activity recreation and dossier navigation.
+There is no query history or durable filter storage. The list updates in place to preserve search focus.

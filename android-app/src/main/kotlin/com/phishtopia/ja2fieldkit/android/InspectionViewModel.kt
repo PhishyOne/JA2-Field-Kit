@@ -26,6 +26,11 @@ import com.phishtopia.ja2fieldkit.android.presentation.InspectionPresentationMap
 import com.phishtopia.ja2fieldkit.android.presentation.InspectionScreenState
 import com.phishtopia.ja2fieldkit.android.presentation.SourceFailureKind
 import com.phishtopia.ja2fieldkit.android.presentation.withCompatibilityReportPreview
+import com.phishtopia.ja2fieldkit.android.presentation.PersonnelCategoryFilter
+import com.phishtopia.ja2fieldkit.android.presentation.withPersonnelQuery
+import com.phishtopia.ja2fieldkit.android.presentation.withPersonnelCategory
+import com.phishtopia.ja2fieldkit.android.presentation.withPersonnelCurrentSquadOnly
+import com.phishtopia.ja2fieldkit.android.presentation.clearPersonnelFilters
 import com.phishtopia.ja2fieldkit.android.presentation.openPersonnel
 import com.phishtopia.ja2fieldkit.android.presentation.closePersonnel
 import com.phishtopia.ja2fieldkit.android.presentation.withSelectedMerc
@@ -180,6 +185,26 @@ class InspectionViewModel : ViewModel() {
 
     fun closePersonnel() {
         val next = state.closePersonnel()
+        if (next !== state) publish(next)
+    }
+
+    fun setPersonnelQuery(query: String) {
+        val next = state.withPersonnelQuery(query)
+        if (next !== state) publish(next)
+    }
+
+    fun setPersonnelCategory(category: PersonnelCategoryFilter) {
+        val next = state.withPersonnelCategory(category)
+        if (next !== state) publish(next)
+    }
+
+    fun setPersonnelCurrentSquadOnly(enabled: Boolean) {
+        val next = state.withPersonnelCurrentSquadOnly(enabled)
+        if (next !== state) publish(next)
+    }
+
+    fun clearPersonnelFilters() {
+        val next = state.clearPersonnelFilters()
         if (next !== state) publish(next)
     }
 

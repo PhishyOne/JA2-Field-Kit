@@ -36,6 +36,8 @@ copy, or share a versioned privacy-bounded compatibility report; save
 contribution remains unimplemented.
 
 The success screen also opens **Personnel**, a read-only database of named profiles.
+Search by name/nickname or exact profile ID, filter by standard category or current squad,
+and clear filters. Choices survive dossier navigation and Activity recreation; a new save resets them.
 Dossiers show profile attributes, both skill slots, personality, attitude, career counters,
 derived shooting accuracy, and established relationships. Current squad markers come from
 the validated roster. See the [pinned field evidence](docs/personnel-dossier-evidence.md).

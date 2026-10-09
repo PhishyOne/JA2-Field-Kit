@@ -1,7 +1,7 @@
 package com.phishtopia.ja2fieldkit.core.format
 
 import com.phishtopia.ja2fieldkit.core.io.LittleEndianReader
-import com.phishtopia.ja2fieldkit.core.model.MercProfile
+import com.phishtopia.ja2fieldkit.core.model.*
 import com.phishtopia.ja2fieldkit.core.model.ProfileInventorySlot
 import java.util.Collections
 
@@ -76,6 +76,35 @@ object NormalMercProfileParser {
                     ProfileInventorySlot(reader.u16(416 + 2 * slot), reader.u8(377 + slot), reader.u8(358 + slot))
                 }),
                 inventoryUndroppable = reader.u8(412),
+                skillTrait1 = SkillTraitId(reader.i8(337).toInt()),
+                skillTrait2 = SkillTraitId(reader.i8(340).toInt()),
+                personalityTrait = PersonalityTraitId(reader.i8(336).toInt()),
+                attitude = AttitudeId(reader.i8(549).toInt()),
+                economics = ProfileEconomicsFacts(
+                    availabilityDelayCounter = reader.u32(292),
+                    dailySalary = reader.i16(332).toInt(),
+                    weeklySalary = reader.u32(540),
+                    biWeeklySalary = reader.u32(544),
+                    medicalDeposit = reader.i8(548).toInt(),
+                    medicalDepositAmount = reader.u16(552),
+                    optionalGearCost = reader.u16(574),
+                    mercStatus = reader.i8(652).toInt(),
+                    mercBillingDays = reader.i32(704),
+                ),
+                career = ProfileCareerRecord(
+                    kills = reader.u16(310), assists = reader.u16(312),
+                    shotsFired = reader.u16(314), shotsHit = reader.u16(316),
+                    battlesFought = reader.u16(318), timesWounded = reader.u16(320),
+                    totalDaysServed = reader.u16(322), totalCostPaid = reader.u32(708),
+                ),
+                relationships = ProfileRelationships(
+                    friend1 = ProfileRelationshipId(reader.i8(342).toInt()),
+                    friend2 = ProfileRelationshipId(reader.i8(343).toInt()),
+                    learnedFriend = ProfileRelationshipId(reader.i8(344).toInt()),
+                    enemy1 = ProfileRelationshipId(reader.i8(347).toInt()),
+                    enemy2 = ProfileRelationshipId(reader.i8(348).toInt()),
+                    learnedEnemy = ProfileRelationshipId(reader.i8(349).toInt()),
+                ),
             )
         }
         return Collections.unmodifiableList(profiles)

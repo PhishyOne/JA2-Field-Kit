@@ -29,6 +29,50 @@ class Ja2SaveInspectorV01Test {
     private val encryptedProfiles = encryptRecords(profilePlaintext, PROFILE_RECORD_SIZE)
 
     @Test
+    fun personnelDatabaseIsIdenticalInBothAdmittedVersionsAndDetachedFromInput() {
+        val results = listOf(102, 103).map { version ->
+            val save = syntheticSave(listOf(7, 42)).also { it.putU32Le(0, version) }
+            val result = assertIs<SaveInspectionV01Result.Success>(admittedInspector().inspectV01(save))
+            assertEquals(version, result.format.saveVersion)
+            assertEquals((0..169).toList(), result.profiles.map { it.profileId })
+            val p = result.profiles[7]
+            assertEquals(com.phishtopia.ja2fieldkit.core.model.ProfileEconomicsFacts(
+                0xffff_ffffL, -32768, 0x8000_0000L, 0xfedc_ba98L, -128, 65535, 32768, -3, Int.MIN_VALUE), p.economics)
+            assertEquals(19, p.inventory.size)
+            p.inventory.forEachIndexed { i, slot ->
+                assertEquals(if (i == 0) 0 else 60000 + i, slot.itemId)
+                assertEquals(listOf(0, 8, 9, 255)[i % 4], slot.count)
+                assertEquals(listOf(0, 100, 101, 128, 255)[i % 5], slot.status)
+            }
+            assertEquals(15, p.skillTrait1.raw)
+            assertEquals(4, p.skillTrait2.raw)
+            assertEquals(7, p.personalityTrait.raw)
+            assertEquals(9, p.attitude.raw)
+            assertEquals(listOf(32768, 32769, 32770, 32771, 32772, 32773, 32774), p.career.run {
+                listOf(kills, assists, shotsFired, shotsHit, battlesFought, timesWounded, totalDaysServed)
+            })
+            assertEquals(0xffff_ffffL, p.career.totalCostPaid)
+            assertEquals(42, p.relationships.friend1.profileId)
+            assertTrue(p.relationships.enemy1.isAbsent)
+            assertEquals(result.roster[0].name, p.name)
+            save.fill(0)
+            assertFailsWith<UnsupportedOperationException> { (result.profiles as MutableList).clear() }
+            assertFailsWith<UnsupportedOperationException> { (p.inventory as MutableList).clear() }
+            result.profiles
+        }
+        assertEquals(results[0], results[1])
+    }
+
+    @Test
+    fun personnelNeverEscapesFailedRosterIdentityValidation() {
+        for (version in listOf(102, 103)) for (ids in listOf(listOf(7, 7), listOf(7, 170), listOf(7, 255))) {
+            val bytes = syntheticSave(ids).also { it.putU32Le(0, version) }
+            val result = assertIs<SaveInspectionV01Result.Failure>(admittedInspector().inspectV01(bytes))
+            assertEquals(SaveInspectionDiagnostic.CONTENT_CORRUPT, result.failure.diagnostic)
+        }
+    }
+
+    @Test
     fun completeFacadeIsDeterministicUsesOneDetectionAndDoesNotMutateInput() {
         val save = syntheticSave(listOf(7, 42))
         val original = save.copyOf()
@@ -317,6 +361,36 @@ class Ja2SaveInspectorV01Test {
         repeat(170) { profile ->
             bytes.putUtf16Le(profile * PROFILE_RECORD_SIZE, 30, "Synthetic $profile")
             bytes.putUtf16Le(profile * PROFILE_RECORD_SIZE + 60, 10, "P$profile")
+            val start = profile * PROFILE_RECORD_SIZE
+            // Inventory IDs/counts participate in the profile checksum; statuses do not.
+            var inventoryDelta = 0L
+            repeat(19) { i ->
+                inventoryDelta -= bytes.u16Le(start + 416 + i * 2) + (bytes[start + 377 + i].toInt() and 255)
+                inventoryDelta += (if (i == 0) 0 else 60000 + i) + listOf(0, 8, 9, 255)[i % 4]
+                bytes.putU16Le(start + 416 + i * 2, if (i == 0) 0 else 60000 + i)
+                bytes[start + 377 + i] = listOf(0, 8, 9, 255)[i % 4].toByte()
+                bytes[start + 358 + i] = listOf(0, 100, 101, 128, 255)[i % 5].toByte()
+            }
+            val checksum = (0..3).fold(0L) { acc, i ->
+                acc or ((bytes[start + 696 + i].toLong() and 255) shl (i * 8))
+            }
+            bytes.putU32Le(start + 696, (checksum + inventoryDelta) and 0xffff_ffffL)
+            bytes[start + 336] = 7; bytes[start + 337] = 15
+            bytes[start + 340] = 4; bytes[start + 549] = 9
+            listOf(310, 312, 314, 316, 318, 320, 322).forEachIndexed { i, offset ->
+                bytes.putU16Le(start + offset, 32768 + i)
+            }
+            bytes.putU32Le(start + 292, 0xffff_ffffL)
+            bytes.putU16Le(start + 332, 32768)
+            bytes.putU32Le(start + 540, 0x8000_0000L)
+            bytes.putU32Le(start + 544, 0xfedc_ba98L)
+            bytes[start + 548] = -128
+            bytes.putU16Le(start + 552, 65535)
+            bytes.putU16Le(start + 574, 32768)
+            bytes[start + 652] = -3
+            bytes.putU32Le(start + 704, 0x8000_0000L)
+            bytes.putU32Le(start + 708, 0xffff_ffffL)
+            bytes[start + 342] = 42; bytes[start + 347] = -1
         }
     }
 

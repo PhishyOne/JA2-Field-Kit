@@ -6,6 +6,18 @@ The parser/editor is the product core. Android is a presentation and file-access
 
 For v0.1, `core` must remain a plain Kotlin/Java JVM module with no Android SDK dependency. That keeps parsing testable on CI and reusable by future desktop/CLI tooling if useful.
 
+Personnel dossiers retain display facts from the admitted profile table and validated
+roster. Immutable `ProfileEconomicsFacts` preserves nine serialized values for every
+profile; Android applies agency-specific labels and visibility. `StandardProfileCategory`
+is a pinned default metadata classification computed from profile ID, not save bytes or
+live employment. See [economics evidence](profile-economics-evidence.md). No raw bytes or
+new persistence cross this presentation boundary.
+
+Profile inventory dossiers retain immutable numeric slot facts only, using the shared
+canonical role labels. Exactly 19 source slots are required; current-squad dossiers
+suppress profile rows. Catalog names resolve at rendering time through the retained
+catalog session, without save reparse. See [evidence](profile-inventory-dossier-evidence.md).
+
 ## Read-only data flow
 
 ```text
@@ -200,3 +212,10 @@ test factory and debug placement gate separately authorize this narrow slice.
 - general persistence/database/networking (only the bounded debug placement receipt exists)
 
 These remain outside the inspector and narrow debug create-new slice.
+
+Personnel browsing derives ordered results only from retained immutable `PersonnelPresentation` facts.
+`PersonnelFilter` holds a sanitized query (at most 120 code points), a closed category choice,
+and a squad-only boolean in the success screen state. Matching trims query edges; filter changes
+are idempotent and never invoke import, inspection, or byte access. New import results default
+the filters; ViewModel retention preserves them across Activity recreation and dossier navigation.
+There is no query history or durable filter storage. The list updates in place to preserve search focus.

@@ -460,7 +460,7 @@ class SaveEditTransactionTest {
             assertFalse(verify(changedRoster = SaveInspectionV01Result.Success.create(after.format, after.campaign,
                 after.roster.map { it.copy(stats = it.stats.withStat(case.stat, -99)) })))
             assertFalse(verify(changedLive = LiveMercStateInspectionResult.Success(newLive.format,
-                newLive.mercs.map { LiveMercState(it.profileIndex, it.stats.withStat(case.stat, -99), it.slots) })))
+                newLive.mercs.map { LiveMercState(it.profileIndex, it.stats.withStat(case.stat, -99), it.slots, it.location) })))
         }
         assertFalse(verify(changedRoster = SaveInspectionV01Result.Success.create(after.format, after.campaign, after.roster.reversed())))
         assertFalse(verify(changedLive = LiveMercStateInspectionResult.Success(newLive.format, newLive.mercs.reversed())))

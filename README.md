@@ -35,6 +35,19 @@ For a completed import that fails inspection, the user can explicitly preview,
 copy, or share a versioned privacy-bounded compatibility report; save
 contribution remains unimplemented.
 
+The success screen also opens **Personnel**, a read-only database of named profiles.
+Search by name/nickname or exact profile ID, filter by standard category or current squad,
+and clear filters. Choices survive dossier navigation and Activity recreation; a new save resets them.
+Dossiers show profile attributes, both skill slots, personality, attitude, career counters,
+derived shooting accuracy, and established relationships. Current squad markers come from
+the validated roster. See the [pinned field evidence](docs/personnel-dossier-evidence.md).
+Non-current dossiers also show recorded profile inventory with raw counts/statuses and
+optional Base catalog names; current-squad dossiers refer to live roster detail.
+See [profile inventory evidence](docs/profile-inventory-dossier-evidence.md).
+Each dossier shows its standard default profile category. A.I.M./M.E.R.C. dossiers also
+show recorded **Profile economics**, without inferring hireability or live contracts;
+see [economics evidence and category caveat](docs/profile-economics-evidence.md).
+
 The success screen offers **Load item names** / **Replace item names** through a
 separate explicit document picker for a user-owned `Binarydata.slf`. The only
 admitted catalog is **GOG English v1.12 (Build 04.12.02)**: exactly 2,047,959 bytes,
@@ -56,7 +69,7 @@ storage permission, and is not available through Open With or Share To.
 The core v0.1 presentation facade is
 `Ja2SaveInspector.inspectV01(ByteArray)`. It returns a sealed, sanitized result
 covering format/version/layout compatibility, the minimal campaign summary, and
-the verified roster/core stats. Inputs are copied before inspection; no raw
+the verified roster/core stats plus an immutable profile database. Inputs are copied before inspection; no raw
 offset, rotation, digest, key, or encryption details cross this facade.
 
 The [Issue #72 candidate transaction](docs/save-edit-transactions.md) adds a

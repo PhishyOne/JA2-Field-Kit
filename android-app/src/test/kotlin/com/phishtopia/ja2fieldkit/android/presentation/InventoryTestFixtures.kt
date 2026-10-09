@@ -46,17 +46,24 @@ internal fun inspectionSuccess(
             MercStats(80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90),
         )
     },
+    profileIndices.distinct().map { personnelProfile(it) },
+)
+
+internal fun personnelProfile(id: Int, name: String = "Person $id", nickname: String = "") = MercProfile(
+    id, name, nickname, 70, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 5,
 )
 
 internal fun inventoryEntry(
     profileIndex: Int,
     slots: List<LiveInventorySlot> = InventorySlotRole.entries.map { inventorySlot(it, 0, 0) },
     stats: LiveMercStats = LiveMercStats(profileIndex, 99, -128, -2, 127, -3, -4, -5, -6, -7, 0, 0),
+    location: LiveMercLocation = LiveMercLocation.Unavailable,
 ): LiveMercState = construct(
     LiveMercState::class.java,
     profileIndex,
     stats,
     slots,
+    location,
 )
 
 internal fun inventorySlot(role: InventorySlotRole, itemId: Int, objectCount: Int): LiveInventorySlot =

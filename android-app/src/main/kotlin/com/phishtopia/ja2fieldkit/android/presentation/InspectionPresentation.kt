@@ -31,6 +31,10 @@ sealed interface InspectionScreenState {
         val roster: List<MercPresentation>,
         val selectedProfileIndex: Int? = roster.firstOrNull()?.profileIndex,
         val catalog: CatalogPresentation = CatalogPresentation(),
+        val personnel: List<PersonnelPresentation> = emptyList(),
+        val personnelVisible: Boolean = false,
+        val personnelFilter: PersonnelFilter = PersonnelFilter(),
+        val dossierProfileId: Int? = null,
     ) : InspectionScreenState {
         val selectedMerc: MercPresentation?
             get() = roster.firstOrNull { it.profileIndex == selectedProfileIndex } ?: roster.firstOrNull()
@@ -68,6 +72,7 @@ data class MercPresentation(
     val nickname: String?,
     val stats: List<StatPresentation>,
     val inventory: List<InventorySlotPresentation>,
+    val location: String,
 ) {
     val statsLegend: String?
         get() = if (stats.any { it.kind == StatValueKind.LIVE_BASE }) {
@@ -126,6 +131,8 @@ object InspectionPresentationMapper {
             }
         if (!coherent) return coherenceFailure(source, result.format)
 
+        val personnel = PersonnelPresentationMapper.map(result.profiles, result.roster)
+            ?: return coherenceFailure(source, result.format)
         val liveByProfile = liveResult.mercs.associateBy { it.profileIndex }
         return InspectionScreenState.Success(
             source = source,
@@ -138,6 +145,7 @@ object InspectionPresentationMapper {
                     "(${result.campaign.playerMercCount} recorded)",
                 balance = result.campaign.balance.toString(),
             ),
+            personnel = personnel,
             roster = result.roster.map { merc ->
                 mapMerc(merc, liveByProfile.getValue(merc.profileIndex))
             },
@@ -240,6 +248,7 @@ object InspectionPresentationMapper {
         live: LiveMercState,
     ): MercPresentation = MercPresentation(
         profileIndex = merc.profileIndex,
+        location = live.location.displayLocation(),
         name = PresentationTextSanitizer.sanitize(merc.name)
             .takeUnless(String::isBlank)
             ?: "Unknown merc",
@@ -290,28 +299,6 @@ object InspectionPresentationMapper {
     }
 
     private fun Int?.display(): String = this?.toString() ?: "Unknown"
-
-    private fun InventorySlotRole.displayLabel(): String = when (this) {
-        InventorySlotRole.HELMET -> "Helmet"
-        InventorySlotRole.VEST -> "Vest"
-        InventorySlotRole.LEGS -> "Legs"
-        InventorySlotRole.HEAD_1 -> "Head 1"
-        InventorySlotRole.HEAD_2 -> "Head 2"
-        InventorySlotRole.MAIN_HAND -> "Main hand"
-        InventorySlotRole.OFF_HAND -> "Off hand"
-        InventorySlotRole.BIG_POCKET_1 -> "Big pocket 1"
-        InventorySlotRole.BIG_POCKET_2 -> "Big pocket 2"
-        InventorySlotRole.BIG_POCKET_3 -> "Big pocket 3"
-        InventorySlotRole.BIG_POCKET_4 -> "Big pocket 4"
-        InventorySlotRole.SMALL_POCKET_1 -> "Small pocket 1"
-        InventorySlotRole.SMALL_POCKET_2 -> "Small pocket 2"
-        InventorySlotRole.SMALL_POCKET_3 -> "Small pocket 3"
-        InventorySlotRole.SMALL_POCKET_4 -> "Small pocket 4"
-        InventorySlotRole.SMALL_POCKET_5 -> "Small pocket 5"
-        InventorySlotRole.SMALL_POCKET_6 -> "Small pocket 6"
-        InventorySlotRole.SMALL_POCKET_7 -> "Small pocket 7"
-        InventorySlotRole.SMALL_POCKET_8 -> "Small pocket 8"
-    }
 }
 
 /** Selection consumes only retained safe presentation facts, never save bytes or an inspector. */

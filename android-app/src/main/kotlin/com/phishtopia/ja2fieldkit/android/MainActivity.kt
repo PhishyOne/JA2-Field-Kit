@@ -15,6 +15,7 @@ import android.text.InputType
 import android.widget.EditText
 import android.widget.CheckBox
 import androidx.core.widget.doAfterTextChanged
+import com.phishtopia.ja2fieldkit.android.presentation.STANDARD_MAP_PLACE_NOTE
 import com.phishtopia.ja2fieldkit.android.presentation.PersonnelFilter
 import com.phishtopia.ja2fieldkit.android.presentation.PersonnelCategoryFilter
 import android.widget.Button
@@ -193,6 +194,7 @@ class MainActivity : ComponentActivity() {
                     setOnClickListener { model.openPersonnel() }
                 }, matchWidth())
                 content.addHeading("Roster")
+                content.addBody(STANDARD_MAP_PLACE_NOTE)
                 if (screenState.roster.isEmpty()) content.addBody("No roster members found.")
                 else content.addMercSelector(screenState)
                 content.addBody(screenState.catalog.status)
@@ -367,7 +369,10 @@ class MainActivity : ComponentActivity() {
             addBody(facts.joinToString("\n") { "${it.label}: ${it.value}" })
         }
         addBody("Standard profile category: ${person.standardCategory}")
-        person.location?.let { addBody("${it.label}: ${it.value}") }
+        person.location?.let {
+            addBody("${it.label}: ${it.value}")
+            addBody(STANDARD_MAP_PLACE_NOTE)
+        }
         person.locationNote?.let { addBody(it) }
         if (person.economics.isNotEmpty()) {
             addHeading("Profile economics", 17f)

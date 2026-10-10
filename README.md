@@ -51,6 +51,10 @@ Each dossier shows its standard default profile category. A.I.M./M.E.R.C. dossie
 show recorded **Profile economics**, without inferring hireability or live contracts;
 see [economics evidence and category caveat](docs/profile-economics-evidence.md).
 
+Strategic sector labels retain authoritative coordinates and add 33 pinned standard-map
+proper names at surface depth only. Live and recorded-profile authority remain separate;
+place names do not authenticate imported campaigns. See [strategic place-label evidence](docs/strategic-place-label-evidence.md).
+
 The success screen offers **Load item names** / **Replace item names** through a
 separate explicit document picker for a user-owned `Binarydata.slf`. The only
 admitted catalog is **GOG English v1.12 (Build 04.12.02)**: exactly 2,047,959 bytes,

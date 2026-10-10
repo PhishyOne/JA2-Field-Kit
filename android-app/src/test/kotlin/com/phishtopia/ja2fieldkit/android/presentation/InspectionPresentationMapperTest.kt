@@ -39,7 +39,7 @@ class InspectionPresentationMapperTest {
     @Test
     fun savedLocationFormattingAndIdentityJoinExposeOnlyDisplayFacts() {
         val cases = buildList {
-            add(LiveMercLocation.Sector(9, 1, 0) to "A9")
+            add(LiveMercLocation.Sector(9, 1, 0) to "A9 — Omerta")
             add(LiveMercLocation.Sector(9, 1, 1) to "A9-1")
             for (x in listOf(1, 16)) for (y in listOf(1, 16)) for (z in 0..3) {
                 add(LiveMercLocation.Sector(x, y, z) to

@@ -41,7 +41,7 @@ class RecordedProfileLocationPresentationTest {
         }
     }
     @Test fun nonCurrentKeepsRecordedWordingEvenIfSoldierExistsElsewhere() {
-        for ((location, label) in listOf(RecordedProfileLocation.Sector(9,1,0) to "A9",
+        for ((location, label) in listOf(RecordedProfileLocation.Sector(9,1,0) to "A9 — Omerta",
             RecordedProfileLocation.Unavailable to "Unavailable")) {
             val row = assertNotNull(PersonnelPresentationMapper.map(listOf(personnelProfile(75).copy(
                 recordedProfileLocation = location)), emptyList(), mapOf(75 to LiveMercLocation.Sector(16,16,3)))).single()

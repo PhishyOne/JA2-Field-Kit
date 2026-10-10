@@ -39,6 +39,7 @@ class SuccessRenderOrderTest {
                 "content.addCampaign(screenState.campaign)",
                 "content.addView(Button(this)",
                 "content.addHeading(\"Roster\")",
+                "content.addBody(STANDARD_MAP_PLACE_NOTE)",
                 "content.addBody(\"No roster members found.\")",
                 "content.addMercSelector(screenState)",
                 "content.addBody(screenState.catalog.status)",

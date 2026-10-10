@@ -57,8 +57,7 @@ object PersonnelPresentationMapper {
                     profile.profileId in squad -> StatPresentation("Location",
                         (liveLocations[profile.profileId] ?: LiveMercLocation.Unavailable).displayLocation())
                     recorded -> StatPresentation("Recorded profile location", when (val location = profile.recordedProfileLocation) {
-                        is RecordedProfileLocation.Sector -> "${'A' + location.y - 1}${location.x}" +
-                            if (location.z == 0) "" else "-${location.z}"
+                        is RecordedProfileLocation.Sector -> decoratedSector(location.x, location.y, location.z)
                         RecordedProfileLocation.Unavailable -> "Unavailable"
                     })
                     else -> null

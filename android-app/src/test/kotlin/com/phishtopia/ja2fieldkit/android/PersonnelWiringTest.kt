@@ -22,7 +22,10 @@ class PersonnelWiringTest {
         }
         assertTrue(dossier.contains("Standard profile category: ${'$'}{person.standardCategory}"))
         assertTrue(dossier.contains("if (person.economics.isNotEmpty()) {"))
-        assertTrue(dossier.contains("person.location?.let { addBody("))
+        val location = dossier.substringAfter("person.location?.let {").substringBefore("person.locationNote?.let")
+        assertTrue(location.contains("addBody(\"${'$'}{it.label}: ${'$'}{it.value}\")"))
+        assertEquals(1, Regex("addBody\\(STANDARD_MAP_PLACE_NOTE\\)").findAll(location).count())
+        assertEquals(1, Regex("addBody\\(STANDARD_MAP_PLACE_NOTE\\)").findAll(dossier).count())
         assertTrue(dossier.contains("person.locationNote?.let { addBody(it) }"))
         val economics = dossier.substringAfter("if (person.economics.isNotEmpty()) {").substringBefore("section(\"Attributes\"")
         assertTrue(economics.contains("addHeading(\"Profile economics\", 17f)"))

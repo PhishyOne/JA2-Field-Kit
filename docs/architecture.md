@@ -219,3 +219,7 @@ and a squad-only boolean in the success screen state. Matching trims query edges
 are idempotent and never invoke import, inspection, or byte access. New import results default
 the filters; ViewModel retention preserves them across Activity recreation and dossier navigation.
 There is no query history or durable filter storage. The list updates in place to preserve search focus.
+
+Strategic sector labels retain authoritative coordinates and add 33 pinned standard-map
+proper names at surface depth only. Live and recorded-profile authority remain separate;
+place names do not authenticate imported campaigns. See [strategic place-label evidence](strategic-place-label-evidence.md).

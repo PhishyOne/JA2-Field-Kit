@@ -131,7 +131,8 @@ object InspectionPresentationMapper {
             }
         if (!coherent) return coherenceFailure(source, result.format)
 
-        val personnel = PersonnelPresentationMapper.map(result.profiles, result.roster)
+        val personnel = PersonnelPresentationMapper.map(result.profiles, result.roster,
+            liveResult.mercs.associate { it.profileIndex to it.location })
             ?: return coherenceFailure(source, result.format)
         val liveByProfile = liveResult.mercs.associateBy { it.profileIndex }
         return InspectionScreenState.Success(

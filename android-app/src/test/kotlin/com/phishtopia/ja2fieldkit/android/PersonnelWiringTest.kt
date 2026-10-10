@@ -22,6 +22,8 @@ class PersonnelWiringTest {
         }
         assertTrue(dossier.contains("Standard profile category: ${'$'}{person.standardCategory}"))
         assertTrue(dossier.contains("if (person.economics.isNotEmpty()) {"))
+        assertTrue(dossier.contains("person.location?.let { addBody("))
+        assertTrue(dossier.contains("person.locationNote?.let { addBody(it) }"))
         val economics = dossier.substringAfter("if (person.economics.isNotEmpty()) {").substringBefore("section(\"Attributes\"")
         assertTrue(economics.contains("addHeading(\"Profile economics\", 17f)"))
         assertTrue(economics.contains("Recorded profile values. Hiring and current contract details depend on other game state."))

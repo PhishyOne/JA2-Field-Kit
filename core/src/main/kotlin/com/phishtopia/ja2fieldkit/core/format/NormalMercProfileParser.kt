@@ -80,6 +80,7 @@ object NormalMercProfileParser {
                 skillTrait2 = SkillTraitId(reader.i8(340).toInt()),
                 personalityTrait = PersonalityTraitId(reader.i8(336).toInt()),
                 attitude = AttitudeId(reader.i8(549).toInt()),
+                recordedProfileLocation = recordedLocation(reader),
                 economics = ProfileEconomicsFacts(
                     availabilityDelayCounter = reader.u32(292),
                     dailySalary = reader.i16(332).toInt(),
@@ -108,6 +109,18 @@ object NormalMercProfileParser {
             )
         }
         return Collections.unmodifiableList(profiles)
+    }
+
+    private fun recordedLocation(reader: LittleEndianReader): RecordedProfileLocation {
+        val x = reader.u16(288)
+        val y = reader.u16(290)
+        val z = reader.i8(669).toInt()
+        val miscFlags2 = reader.u8(231)
+        val miscFlags = reader.u8(233)
+        return if (x !in 1..16 || y !in 1..16 || z !in 0..3 ||
+            reader.i8(334).toInt() <= 0 || reader.i8(652).toInt() == -5 ||
+            miscFlags and (0x01 or 0x40) != 0 || miscFlags2 and (0x01 or 0x02) != 0
+        ) RecordedProfileLocation.Unavailable else RecordedProfileLocation.Sector(x, y, z)
     }
 
     private fun readUtf16Le(

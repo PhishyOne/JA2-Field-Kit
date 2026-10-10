@@ -60,6 +60,10 @@ class PersonnelPresentationTest {
             com.phishtopia.ja2fieldkit.android.importing.SourceProvenance.DOCUMENT_PICKER, null, bytes.size.toLong(), null, "00".repeat(32))
         val initial = assertIs<InspectionScreenState.Success>(InspectionPresentationMapper.map(source,
             inspector.inspectV01(bytes), inspector.inspectLiveMercState(bytes)))
+        for (person in initial.personnel.filter { it.currentSquad }) {
+            assertEquals(initial.roster.single { it.profileIndex == person.profileId }.location, person.location?.value)
+            assertEquals("Location", person.location?.label)
+        }
         bytes.fill(0)
         assertTrue(initial.personnel.isNotEmpty())
         val database = assertIs<InspectionScreenState.Success>(initial.openPersonnel())

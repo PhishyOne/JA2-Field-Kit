@@ -40,7 +40,10 @@ Search by name/nickname or exact profile ID, filter by standard category or curr
 and clear filters. Choices survive dossier navigation and Activity recreation; a new save resets them.
 Dossiers show profile attributes, both skill slots, personality, attitude, career counters,
 derived shooting accuracy, and established relationships. Current squad markers come from
-the validated roster. See the [pinned field evidence](docs/personnel-dossier-evidence.md).
+the validated roster. Current-squad dossiers show live saved-state location only.
+Non-current RPC/NPC dossiers show **Recorded profile location**, with a note that it may
+differ from the character’s saved soldier location; other non-current categories omit it.
+See the [pinned field evidence](docs/personnel-dossier-evidence.md).
 Non-current dossiers also show recorded profile inventory with raw counts/statuses and
 optional Base catalog names; current-squad dossiers refer to live roster detail.
 See [profile inventory evidence](docs/profile-inventory-dossier-evidence.md).

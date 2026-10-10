@@ -64,6 +64,32 @@ class Ja2SaveInspectorV01Test {
     }
 
     @Test
+    fun recordedLocationMutationIsReadInBothVersionsWithoutChecksumAuthentication() {
+        for (version in listOf(102, 103)) {
+            val plain = profilePlaintext.copyOf()
+            val start = 57 * PROFILE_RECORD_SIZE
+            plain.putU16Le(start + 288, 9); plain.putU16Le(start + 290, 1)
+            plain[start + 669] = 2; plain[start + 231] = 0; plain[start + 233] = 0
+            plain[start + 652] = 0
+            // Deliberately leave the stored checksum unchanged: none of these fields is covered.
+            assertContentEquals(profilePlaintext.copyOfRange(start + 696, start + 700),
+                plain.copyOfRange(start + 696, start + 700))
+            val save = syntheticSave(listOf(7, 42)).also { it.putU32Le(0, version) }
+            encryptRecords(plain, PROFILE_RECORD_SIZE).copyInto(save, PROFILE_START)
+            val result = assertIs<SaveInspectionV01Result.Success>(admittedInspector().inspectV01(save))
+            assertEquals(com.phishtopia.ja2fieldkit.core.model.RecordedProfileLocation.Sector(9, 1, 2),
+                result.profiles[57].recordedProfileLocation)
+            assertEquals(listOf(7, 42), result.roster.map { it.profileIndex })
+            // A second mutation changes only profile location; the checksum still does not detect it.
+            plain.putU16Le(start + 288, 16)
+            encryptRecords(plain, PROFILE_RECORD_SIZE).copyInto(save, PROFILE_START)
+            val moved = assertIs<SaveInspectionV01Result.Success>(admittedInspector().inspectV01(save))
+            assertEquals(com.phishtopia.ja2fieldkit.core.model.RecordedProfileLocation.Sector(16, 1, 2),
+                moved.profiles[57].recordedProfileLocation)
+        }
+    }
+
+    @Test
     fun personnelNeverEscapesFailedRosterIdentityValidation() {
         for (version in listOf(102, 103)) for (ids in listOf(listOf(7, 7), listOf(7, 170), listOf(7, 255))) {
             val bytes = syntheticSave(ids).also { it.putU32Le(0, version) }

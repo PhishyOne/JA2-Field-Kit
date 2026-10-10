@@ -4,6 +4,8 @@ import com.phishtopia.ja2fieldkit.core.model.MercProfile
 import com.phishtopia.ja2fieldkit.core.model.MercRosterEntry
 import com.phishtopia.ja2fieldkit.core.model.ProfileRelationshipId
 import com.phishtopia.ja2fieldkit.core.model.StandardProfileCategory
+import com.phishtopia.ja2fieldkit.core.model.LiveMercLocation
+import com.phishtopia.ja2fieldkit.core.model.RecordedProfileLocation
 import java.util.Collections
 import java.util.Locale
 
@@ -19,6 +21,8 @@ data class PersonnelPresentation(
     val personality: List<StatPresentation>,
     val record: List<StatPresentation>,
     val relationships: List<StatPresentation>,
+    val location: StatPresentation? = null,
+    val locationNote: String? = null,
     val profileInventory: List<ProfileInventoryPresentation>? = null,
 ) {
     val listLabel: String get() = "$name · Profile #$profileId" + if (currentSquad) " · Current squad" else ""
@@ -26,7 +30,9 @@ data class PersonnelPresentation(
 
 object PersonnelPresentationMapper {
     /** Null means identity coherence failed; no partial database or guessed squad membership. */
-    fun map(profiles: List<MercProfile>, roster: List<MercRosterEntry>): List<PersonnelPresentation>? {
+    fun map(profiles: List<MercProfile>, roster: List<MercRosterEntry>,
+        liveLocations: Map<Int, LiveMercLocation> = emptyMap(),
+    ): List<PersonnelPresentation>? {
         val ids = profiles.map { it.profileId }
         val rosterIds = roster.map { it.profileIndex }
         if (ids.any { it !in 0..169 } || ids.size != ids.toSet().size ||
@@ -38,12 +44,28 @@ object PersonnelPresentationMapper {
             val name = names[profile.profileId] ?: return@mapNotNull null
             val career = profile.career
             val relationships = profile.relationships
+            val category = StandardProfileCategory.fromProfileId(profile.profileId)
+            val recorded = profile.profileId !in squad &&
+                (category == StandardProfileCategory.RPC || category == StandardProfileCategory.NPC)
             PersonnelPresentation(
                 profileId = profile.profileId,
                 name = name,
                 currentSquad = profile.profileId in squad,
                 standardCategory = categoryLabel(StandardProfileCategory.fromProfileId(profile.profileId)),
                 economics = economics(profile),
+                location = when {
+                    profile.profileId in squad -> StatPresentation("Location",
+                        (liveLocations[profile.profileId] ?: LiveMercLocation.Unavailable).displayLocation())
+                    recorded -> StatPresentation("Recorded profile location", when (val location = profile.recordedProfileLocation) {
+                        is RecordedProfileLocation.Sector -> "${'A' + location.y - 1}${location.x}" +
+                            if (location.z == 0) "" else "-${location.z}"
+                        RecordedProfileLocation.Unavailable -> "Unavailable"
+                    })
+                    else -> null
+                },
+                locationNote = if (recorded)
+                    "Profile sector recorded in the save; may differ from the character’s saved soldier location."
+                    else null,
                 profileInventory = if (profile.profileId in squad) null else profileInventory(profile.inventory),
                 attributes = immutable(listOf(
                     StatPresentation("Health (profile current / max)", "${profile.life} / ${profile.lifeMax}"),

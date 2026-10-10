@@ -185,3 +185,82 @@ fixture sandbox tests ran with their own bwrap namespaces. Early runs found and 
 two test-fixture issues (a roster-count-dependent selector and a Kotlin Int/Long argument).
 No production write safety was relaxed. These are local construction results, not device
 qualification or immutable publication-head qualification. No construction blocker remains.
+
+## Recorded profile location — issue #80
+
+Construction starts at `3ee7a72f95c4176fc79d954c82280cc7ff8a7a55` on Draft #76.
+The pinned upstream commit and serializer/header blob identities above remain authority.
+The independent personnel audit now checks 31 field offsets/types, including:
+
+| Field | Offset | Encoding |
+|---|---:|---|
+| `ubMiscFlags2` | 231 | U8 |
+| `ubMiscFlags` | 233 | U8 |
+| `sSector.x` | 288 | U16 LE |
+| `sSector.y` | 290 | U16 LE |
+| `sSector.z` | 669 | I8 |
+
+These are persistent profile-sector facts shared by the admitted normal v102/v103
+serializer path, not live/current presence. Profile sector can lag or lead a saved
+SOLDIERTYPE. `RecordedProfileLocation` is immutable and distinct from `LiveMercLocation`.
+The parser yields `Unavailable` for x/y outside 1–16, z outside 0–3, life <= 0,
+status `MERC_IS_DEAD` (-5), `RECRUITED` (0x01) or `EPCACTIVE` (0x40) in misc flags,
+or `DONT_ADD_TO_SECTOR` (0x01) or `LEFT_COUNTRY` (0x02) in misc flags2. These facts
+never reject an otherwise readable profile. U16 high-bit values remain unsigned
+32768–65535 during decoding and fail canonical bounds; no negative sentinel coercion.
+No raw location masks or bytes reach presentation.
+
+Current squad dossiers join the existing validated live state by profile ID and show
+`Location` using issue #65 semantics, including transit, dead, POW, vehicle and unavailable.
+There is no second scan or profile-coordinate fallback. Membership still comes exclusively
+from the validated roster identity. Non-current RPC/NPC dossiers show `Recorded profile
+location` (A9, A9-2, or Unavailable) with the mandatory note:
+
+> Profile sector recorded in the save; may differ from the character’s saved soldier location.
+
+Non-current AIM/MERC/IMP/VEHICLE/NOT_USED profiles have no location row. These categories
+are pinned default external metadata, not serialized save facts; modded mappings are not
+inferred. The slice makes no town, insertion, home/base, last-known, current-presence or
+NPC-availability claim, even when a non-current profile has a soldier elsewhere.
+
+The pinned `SoldierProfileChecksum` reads exactly life/max, agility, dexterity, strength,
+marksmanship, medical, mechanical, explosives, experience, inventory IDs and counts.
+Profile sector, status and misc flags are **not checksum-covered**. The audit enumerates
+checksum field references independently, and encrypted synthetic v102/v103 read tests
+change these facts while retaining the original checksum. Life itself remains covered.
+No checksum, editor, write admission or privacy policy is changed.
+
+Issue #80 files: core `RecordedProfileLocation.kt`, `MercProfile.kt`,
+`NormalMercProfileParser.kt`, `RecordedProfileLocationTest.kt`, `Ja2SaveInspectorV01Test.kt`;
+Android `PersonnelPresentation.kt`, `InspectionPresentation.kt`, `MainActivity.kt`,
+`RecordedProfileLocationPresentationTest.kt`, `PersonnelPresentationTest.kt`,
+`PersonnelWiringTest.kt`; `tools/check_personnel_offsets.py`, `README.md`, and this document.
+
+### Issue #80 local construction validation — 2026-10-10
+
+- Focused core: 12 passed (`RecordedProfileLocationTest`, `Ja2SaveInspectorV01Test`).
+- Focused Android: 11 passed (`RecordedProfileLocationPresentationTest`,
+  `PersonnelPresentationTest`, `PersonnelWiringTest`).
+- Complete `:core:test`: 223 passed, including 75 unchanged editor transaction tests.
+- Complete `:android-app:testDebugUnitTest`: 209 passed.
+- All test counts above have zero failures, errors or skips.
+- Fixture/privacy/workflow Python suite: 69 passed; worktree fixture validation passed
+  with `check_local_files=False`. Private saves were not accessed.
+- Personnel audit: 31 offsets/types, 716-byte parity, all 170 default category mappings,
+  masks, high-bit U16 interpretation, checksum exclusion, v102/v103 and negative probes passed.
+- Live-location audit passed; hired-stat audit passed (34 profile, 20 soldier offsets);
+  inventory audit passed (5 profile, 11 object offsets, 36-byte object extent and item metadata).
+
+Build environment: JDK 21 and Gradle 9.5.0 from `/tmp/field-kit-location-tools`, its Android
+SDK, existing populated Gradle cache, and `FIXTURE_VALIDATOR_PYTHON` pointing to the installed
+fixture-validation environment. Initial launches needed environment corrections (lock socket,
+cache selection and validator dependency selection); no product repair or policy relaxation.
+
+- `:android-app:lintDebug`: passed, zero errors and 13 warnings (2 InlinedApi,
+  UseRequiresApi, DataExtractionRules, ObsoleteSdkInt, IconLauncherShape, UseKtx,
+  6 SetTextI18n).
+- `:android-app:assembleDebug`: passed, local build only.
+- `git diff --check`: passed.
+
+No construction blocker before push was found. Push, Ready status, merge, device/APK
+publication and private-save qualification are outside this run.

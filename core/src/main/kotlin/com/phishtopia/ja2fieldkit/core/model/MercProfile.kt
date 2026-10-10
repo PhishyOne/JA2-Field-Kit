@@ -30,6 +30,7 @@ data class MercProfile(
     val attitude: AttitudeId = AttitudeId(0),
     val career: ProfileCareerRecord = ProfileCareerRecord(),
     val relationships: ProfileRelationships = ProfileRelationships(),
+    val recordedProfileLocation: RecordedProfileLocation = RecordedProfileLocation.Unavailable,
     val economics: ProfileEconomicsFacts = ProfileEconomicsFacts(),
 )
 

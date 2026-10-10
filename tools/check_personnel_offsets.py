@@ -3,10 +3,14 @@
 import json
 import re
 import subprocess
+import struct
 import sys
 
 REVISION = "743f38a6ca86c81893376c2576277db660320170"
 EXPECTED = {
+    "ubMiscFlags2": (231, "U8", 1), "ubMiscFlags": (233, "U8", 1),
+    "sSector.x": (288, "U16", 1), "sSector.y": (290, "U16", 1),
+    "sSector.z": (669, "I8", 1),
     "uiDayBecomesAvailable": (292, "U32", 1), "sSalary": (332, "I16", 1),
     "uiWeeklySalary": (540, "U32", 1), "uiBiWeeklySalary": (544, "U32", 1),
     "bMedicalDeposit": (548, "I8", 1), "sMedicalDepositAmount": (552, "U16", 1),
@@ -70,7 +74,8 @@ def negative_layout_probes(extract, header):
     for name, (_, kind, _) in EXPECTED.items():
         if name in {"sSalary", "bMercStatus", "bMedicalDeposit", "iMercMercContractLength",
                     "uiDayBecomesAvailable", "uiWeeklySalary", "uiBiWeeklySalary",
-                    "sMedicalDepositAmount", "usOptionalGearCost"}:
+                    "sMedicalDepositAmount", "usOptionalGearCost", "ubMiscFlags2", "ubMiscFlags",
+                    "sSector.x", "sSector.y", "sSector.z"}:
             opposite = ("U" if kind.startswith("I") else "I") + kind[1:]
             probes.append((f"EXTR_{kind}(S, p.{name})", f"EXTR_{opposite}(S, p.{name})"))
     for old, new in probes:
@@ -136,10 +141,26 @@ def audit(tree):
     header = read(tree, "src/game/Tactical/Soldier_Profile_Type.h")
     serializer = read(tree, "src/game/Tactical/LoadSaveMercProfile.cc")
     loader = read(tree, "src/game/SaveLoadGame.cc")
+    for name, value in {"PROFILE_MISC_FLAG_RECRUITED": 1, "PROFILE_MISC_FLAG_EPCACTIVE": 64,
+                        "PROFILE_MISC_FLAG2_DONT_ADD_TO_SECTOR": 1,
+                        "PROFILE_MISC_FLAG2_LEFT_COUNTRY": 2}.items():
+        match = re.search(r"^#define\s+" + name + r"\s+(0x[0-9a-fA-F]+)\b", header, re.M)
+        assert match and int(match[1], 16) == value, name
+    checksum = serializer.split("UINT32 SoldierProfileChecksum(", 1)[1].split("void ExtractMercProfile", 1)[0]
+    checksum_fields = set(re.findall(r"p\.(\w+)", checksum))
+    assert checksum_fields == {"bLife", "bLifeMax", "bAgility", "bDexterity", "bStrength",
+                               "bMarksmanship", "bMedical", "bMechanical", "bExplosive",
+                               "bExpLevel", "inv", "bInvNumber"}, checksum_fields
+    assert not checksum_fields.intersection({"sSector", "bMercStatus", "ubMiscFlags", "ubMiscFlags2"})
+    # Independent byte interpretation: high bits are unsigned values, never negative sentinels.
+    assert struct.unpack("<HH", bytes.fromhex("0080ffff")) == (32768, 65535)
+    assert all(not 1 <= n <= 16 for n in struct.unpack("<HH", bytes.fromhex("0080ffff")))
     data_header = read(tree, "src/sgp/LoadSaveData.h")
     data_source = read(tree, "src/sgp/LoadSaveData.cc")
     assert "return readUTF16(numChars, true, ST_DEFAULT_VALIDATION);" in data_header
     assert "skip(sizeof(char16_t) * (numChars - n));" in data_source
+    assert "#define EXTR_U16(S, D)    (D) = (S).readU16();" in data_header
+    assert "uint16_t readU16();" in data_header
     assert "(D) = (S).read<INT8>();" in data_header
     assert "return read<uint16_t>();" in data_source and "return read<uint32_t>();" in data_source
     assert "D.writeUTF16(p.zName, NAME_LENGTH);" in serializer
@@ -192,7 +213,7 @@ def audit(tree):
     assert "bLoop < NUM_BUDDY_SLOTS" in helpers and "bLoop < NUM_HATED_SLOTS" in helpers
     assert "p.bBuddy[LEARNED_TO_LIKE_SLOT] = p.bLearnToLike;" in strategic
     assert "p.bHated[LEARNED_TO_HATE_SLOT] = p.bLearnToHate;" in strategic
-    print("PASS: complete 716-byte extract/inject parity; 26 field offsets/types; enums/status; all 170 default categories and external dependency; v102/v103 common load path; pre-v77/pre-v83 thresholds; signedness/padding negative probes; relationship slots/sentinels")
+    print("PASS: complete 716-byte extract/inject parity; 31 field offsets/types; profile location masks/U16 high bits/checksum exclusion; enums/status; all 170 default categories and external dependency; v102/v103 common load path; pre-v77/pre-v83 thresholds; signedness/padding negative probes; relationship slots/sentinels")
 
 
 if __name__ == "__main__":

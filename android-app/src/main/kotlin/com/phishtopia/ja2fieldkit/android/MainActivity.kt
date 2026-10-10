@@ -367,6 +367,8 @@ class MainActivity : ComponentActivity() {
             addBody(facts.joinToString("\n") { "${it.label}: ${it.value}" })
         }
         addBody("Standard profile category: ${person.standardCategory}")
+        person.location?.let { addBody("${it.label}: ${it.value}") }
+        person.locationNote?.let { addBody(it) }
         if (person.economics.isNotEmpty()) {
             addHeading("Profile economics", 17f)
             addBody("Recorded profile values. Hiring and current contract details depend on other game state.")

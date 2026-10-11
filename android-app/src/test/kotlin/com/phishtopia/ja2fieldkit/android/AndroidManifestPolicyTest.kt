@@ -2,6 +2,7 @@ package com.phishtopia.ja2fieldkit.android
 
 import java.io.File
 import java.security.MessageDigest
+import javax.imageio.ImageIO
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,10 +31,13 @@ class AndroidManifestPolicyTest {
 
         val icon = File(manifest.parentFile, "res/mipmap-xxxhdpi/ic_launcher.png")
         assertTrue(icon.isFile, "Approved launcher artwork must be present")
+        val bitmap = ImageIO.read(icon)
+        assertEquals(192, bitmap.width, "xxxhdpi launcher artwork must be 192 px wide")
+        assertEquals(192, bitmap.height, "xxxhdpi launcher artwork must be 192 px high")
         val sha256 = MessageDigest.getInstance("SHA-256").digest(icon.readBytes())
             .joinToString("") { "%02x".format(it) }
         assertEquals(
-            "c904f0689899066552c0c697e79a7b3a39bbf935a3275ebb298137e7198d9c56",
+            "80f90c2efbdfdad0b0bbcc6d4467c591f59d03e86a33de1a10f4c02119a7c9ca",
             sha256,
             "Approved launcher artwork must remain byte-for-byte unchanged",
         )

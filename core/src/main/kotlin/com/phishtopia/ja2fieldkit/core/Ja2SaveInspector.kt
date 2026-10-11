@@ -71,7 +71,7 @@ class Ja2SaveInspector private constructor(
         failure = SaveInspectionV01Result::Failure,
     ) { snapshot, format ->
         val header = SaveHeaderParser.parseBuild041202(snapshot)
-        val roster = NormalNonLinuxRosterDecoder.decodeBuild041202(snapshot)
+        val personnel = NormalNonLinuxRosterDecoder.decodePersonnelBuild041202(snapshot)
         SaveInspectionV01Result.Success.create(
             format = format,
             campaign = CampaignSummaryV01(
@@ -86,7 +86,8 @@ class Ja2SaveInspector private constructor(
                 playerMercCount = header.playerMercCount,
                 balance = header.balance,
             ),
-            roster = roster,
+            roster = personnel.roster,
+            profiles = personnel.profiles,
         )
     }
 

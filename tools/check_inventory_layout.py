@@ -43,7 +43,31 @@ def layout(lines, arrays):
     return offset, fields
 
 
+def audit_shared_slots(tree):
+    control = read(tree, "src/game/Tactical/Soldier_Control.h")
+    body = control.split("enum InvSlotPos", 1)[1].split("};", 1)[0]
+    body = re.sub(r"//[^\n]*", "", body)
+    slots = re.findall(r"\b[A-Z][A-Z0-9_]+\b", body)
+    assert slots == ["HELMETPOS", "VESTPOS", "LEGPOS", "HEAD1POS", "HEAD2POS",
+                     "HANDPOS", "SECONDHANDPOS"] + [f"BIGPOCK{i}POS" for i in range(1, 5)] + [
+                         f"SMALLPOCK{i}POS" for i in range(1, 9)] + ["NUM_INV_SLOTS"]
+    assert re.findall(r"=\s*(\d+)", body) == ["0"]
+    assert re.search(r"OBJECTTYPE\s+inv\[\s*NUM_INV_SLOTS\s*\]", control)
+    assert "(soldier).inv, * const iter##__end = endof((soldier).inv)" in control
+    profile = read(tree, "src/game/Tactical/Soldier_Profile_Type.h")
+    for kind, field in [("UINT16", "inv"), ("UINT8", "bInvNumber"), ("UINT8", "bInvStatus")]:
+        assert re.search(rf"{kind}\s+{field}\[19\]", profile)
+    creation = read(tree, "src/game/Tactical/Soldier_Create.cc").split(
+        "static void CopyProfileItems(SOLDIERTYPE& s, SOLDIERCREATE_STRUCT const& c)", 1)[1]
+    assert "for (UINT32 i = 0; i != NUM_INV_SLOTS; ++i)" in creation
+    for pattern in [r"item\s*= p\.inv\[i\]", r"slot\s*= &s\.inv\[i\]",
+                    r"count\s*= p\.bInvNumber\[i\]", r"CreateItems\(item, p\.bInvStatus\[i\], count, slot\)"]:
+        assert re.search(pattern, creation)
+    print("PASS: shared 19-slot InvSlotPos order, profile U16/U8/U8 arrays, same-index profile-to-live creation")
+
+
 def main(tree):
+    audit_shared_slots(tree)
     # Reuse cumulative counting through the profile inventory start, including padding.
     EXPECTED["MercProfile"] = {"bInvStatus": 358, "bInvNumber": 377,
                                "ubInvUndroppable": 412, "inv": 416}
@@ -80,7 +104,8 @@ def main(tree):
         assert not item.get("bDefaultUndroppable", False) and not item.get("bAttachment", False)
         assert min(255, max(1, weight * 100)) == 255
     print("PASS: 5 profile offsets, live inventory [12,696), 11 object offsets / 36-byte extent, 3 item definitions")
-    for path in ("src/game/Tactical/Items.cc", "src/game/Tactical/Item_Types.h",
+    for path in ("src/game/Tactical/Soldier_Control.h", "src/game/Tactical/Soldier_Profile_Type.h",
+                 "src/game/Tactical/Items.cc", "src/game/Tactical/Item_Types.h",
                  "src/game/Tactical/LoadSaveObjectType.cc", "src/game/Tactical/Soldier_Create.cc",
                  "src/externalized/ItemModel.cc", "src/externalized/DefaultContentManager.cc",
                  "src/sgp/LoadSaveData.cc", "assets/externalized/items.json"):

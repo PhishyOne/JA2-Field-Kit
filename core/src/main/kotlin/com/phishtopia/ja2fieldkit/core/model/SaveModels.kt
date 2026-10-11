@@ -108,19 +108,24 @@ sealed interface SaveInspectionV01Result {
         override val format: SaveInspectionFormat,
         val campaign: CampaignSummaryV01,
         roster: Collection<MercRosterEntry>,
+        profiles: Collection<MercProfile>,
     ) : SaveInspectionV01Result {
         val roster: List<MercRosterEntry> =
             Collections.unmodifiableList(ArrayList(roster))
+
+        val profiles: List<MercProfile> = Collections.unmodifiableList(profiles.map { profile ->
+            profile.copy(inventory = Collections.unmodifiableList(ArrayList(profile.inventory)))
+        })
 
         override fun equals(other: Any?): Boolean =
             this === other ||
                 other is Success &&
                 format == other.format &&
                 campaign == other.campaign &&
-                roster == other.roster
+                roster == other.roster && profiles == other.profiles
 
         override fun hashCode(): Int =
-            31 * (31 * format.hashCode() + campaign.hashCode()) + roster.hashCode()
+            31 * (31 * (31 * format.hashCode() + campaign.hashCode()) + roster.hashCode()) + profiles.hashCode()
 
         override fun toString(): String =
             "Success(format=$format, campaign=$campaign, roster=$roster)"
@@ -130,10 +135,12 @@ sealed interface SaveInspectionV01Result {
                 format: SaveInspectionFormat,
                 campaign: CampaignSummaryV01,
                 roster: Collection<MercRosterEntry>,
+                profiles: Collection<MercProfile> = emptyList(),
             ): Success = Success(
                 format = format,
                 campaign = campaign,
                 roster = roster,
+                profiles = profiles,
             )
         }
     }

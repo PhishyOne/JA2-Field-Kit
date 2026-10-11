@@ -12,7 +12,8 @@ class LiveInventoryPresentationTest {
     @Test
     fun combinedSurfaceContainsOnlyAllowlistedFactsAndSnapshotsCollections() {
         val allowed = mapOf(
-            LiveMercState::class.java to setOf("profileIndex", "stats", "slots"),
+            LiveMercState::class.java to setOf("profileIndex", "stats", "slots", "location"),
+            LiveMercLocation.Sector::class.java to setOf("x", "y", "z"),
             LiveMercStats::class.java to setOf("life", "lifeMax", "agility", "dexterity", "strength",
                 "experienceLevel", "marksmanship", "mechanical", "explosives", "medical", "leadership", "wisdom"),
             LiveInventorySlot::class.java to setOf("role", "itemId", "objectCount"),
@@ -26,7 +27,7 @@ class LiveInventoryPresentationTest {
             assertTrue(fields.none { it.type == ByteArray::class.java || it.type == InventoryObject::class.java })
         }
         val slots = mutableListOf(LiveInventorySlot(InventorySlotRole.HELMET, 0, 0))
-        val merc = LiveMercState(7, LiveMercStats(-128, 127, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0), slots)
+        val merc = LiveMercState(7, LiveMercStats(-128, 127, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0), slots, LiveMercLocation.Unavailable)
         val mercs = mutableListOf(merc)
         val result = LiveMercStateInspectionResult.Success(
             SaveInspectionFormat(SaveLayout.NORMAL_V103_BUILD_041202_NON_LINUX,

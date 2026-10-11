@@ -20,6 +20,85 @@ class NormalNonLinuxRosterDecoderTest {
     private val encryptedProfiles = encryptRecords(profilePlaintext, 716)
 
     @Test
+    fun savedLocationsRespectOrderedSemanticsAcrossBothReadLayoutsAndSparseIdentities() {
+        data class Case(val expected: LiveMercLocation, val assignment: Int = 0,
+            val between: Int = 0, val life: Int = 1, val flags: Long = 8,
+            val x: Int = 9, val y: Int = 1, val z: Int = 0)
+        val cases = buildList {
+            for (x in listOf(1, 16)) for (y in listOf(1, 16)) for (z in 0..3) {
+                add(Case(LiveMercLocation.Sector(x, y, z), x = x, y = y, z = z))
+            }
+            for (assignment in (0..19) + listOf(21, 22, 25, 26, 27, 28, 29, 33)) {
+                add(Case(LiveMercLocation.Sector(9, 1, 0), assignment = assignment))
+            }
+            add(Case(LiveMercLocation.Sector(9, 1, 1), z = 1))
+            add(Case(LiveMercLocation.InTransit, between = 1))
+            add(Case(LiveMercLocation.InTransit, assignment = 24))
+            add(Case(LiveMercLocation.InTransit, assignment = 23, between = 1, flags = 0x02000008))
+            add(Case(LiveMercLocation.Prisoner, assignment = 32, between = 255, life = -1))
+            add(Case(LiveMercLocation.Dead, life = 0, assignment = 32, between = 255))
+            add(Case(LiveMercLocation.Dead, assignment = 30, life = -1, between = 255))
+            add(Case(LiveMercLocation.Dead, flags = 0x88, assignment = 32))
+            add(Case(LiveMercLocation.InVehicle, assignment = 23))
+            add(Case(LiveMercLocation.InVehicle, flags = 0x0a000008))
+            add(Case(LiveMercLocation.InVehicle, flags = 0x10000008))
+            for (between in listOf(2, 127, 128, 255)) {
+                add(Case(LiveMercLocation.Unavailable, between = between, assignment = 24))
+            }
+            add(Case(LiveMercLocation.Unavailable, flags = 0x02000008))
+            for (assignment in listOf(20, 31, 34, 35, 127, -1, -128)) {
+                add(Case(LiveMercLocation.Unavailable, assignment = assignment, between = 1, flags = 0x08000008))
+            }
+            add(Case(LiveMercLocation.Unavailable, life = -1, assignment = 24))
+            for (bad in listOf(-32768, -1, 0, 17, 32767)) {
+                add(Case(LiveMercLocation.Unavailable, x = bad))
+                add(Case(LiveMercLocation.Unavailable, y = bad))
+            }
+            for (bad in listOf(-128, -1, 4, 127)) add(Case(LiveMercLocation.Unavailable, z = bad))
+        }
+        for (version in listOf(102, 103)) for (case in cases) {
+            val save = syntheticSave(mapOf(
+                5 to SoldierSpec(42, pathNodeCount = 2, hasKeyring = true, beforeChecksum = { bytes ->
+                    bytes[705] = 0 // bInSector false must not suppress a strategic sector.
+                    bytes[754] = case.between.toByte()
+                    bytes[868] = case.life.toByte()
+                    bytes[1917] = case.assignment.toByte()
+                    bytes.putU32Le(8, case.flags)
+                    bytes.putU16Le(1922, case.x)
+                    bytes.putU16Le(1924, case.y)
+                    bytes[1926] = case.z.toByte()
+                }),
+                19 to SoldierSpec(7),
+            ), 2).also { it.putU32Le(0, version) }
+            val result = assertIs<LiveMercStateInspectionResult.Success>(admittedInspector().inspectLiveMercState(save))
+            assertEquals(listOf(42, 7), result.mercs.map { it.profileIndex })
+            assertEquals(case.expected, result.mercs[0].location, "v$version $case")
+            assertEquals(LiveMercLocation.Unavailable, result.mercs[1].location)
+            assertEquals(case.life, result.mercs[0].stats.life)
+            assertEquals(305, result.mercs[0].slots.first().itemId)
+        }
+    }
+
+    @Test
+    fun locationOnlyMutationIsChecksumValidButNotAuthenticated() {
+        val save = syntheticSave(mapOf(0 to SoldierSpec(42), 19 to SoldierSpec(7)), 2)
+        val recordStart = profileEnd() + 1
+        val plain = soldierRecord(0, SoldierSpec(42))
+        val stored = plain.copyOfRange(2208, 2212)
+        plain[754] = 1
+        plain[1917] = 24
+        plain.putU16Le(1922, 9)
+        plain.putU16Le(1924, 1)
+        plain[1926] = 1
+        plain.putU32Le(8, 0x02000008)
+        assertContentEquals(stored, plain.copyOfRange(2208, 2212))
+        assertContentEquals(stored, u32Le(soldierChecksum(plain)))
+        encryptRecords(plain, 2328).copyInto(save, recordStart)
+        val result = assertIs<LiveMercStateInspectionResult.Success>(admittedInspector().inspectLiveMercState(save))
+        assertEquals(LiveMercLocation.InTransit, result.mercs.first().location)
+    }
+
+    @Test
     fun v102ReadsSharedProfileRosterStatsAndInventoryOffsetsWithoutRelabeling() {
         val v103 = syntheticSave(mapOf(
             0 to SoldierSpec(7, pathNodeCount = 2, hasKeyring = true),
@@ -34,6 +113,7 @@ class NormalNonLinuxRosterDecoderTest {
         assertEquals(102, result.format.saveVersion)
         baseline.mercs.zip(result.mercs).forEach { (expected, actual) ->
             assertEquals(expected.profileIndex, actual.profileIndex)
+            assertEquals(expected.location, actual.location)
             assertEquals(expected.stats, actual.stats)
             assertEquals(expected.slots, actual.slots)
         }

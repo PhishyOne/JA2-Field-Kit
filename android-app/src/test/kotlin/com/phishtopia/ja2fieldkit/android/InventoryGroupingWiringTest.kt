@@ -23,8 +23,12 @@ class InventoryGroupingWiringTest {
         assertTrue(render.contains("textView(slot.visibleText(displayedCatalog), 16f)"))
         assertTrue(render.contains("LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)"))
         assertTrue(activity.contains("setTextIsSelectable(true)"))
-        listOf("HorizontalScrollView", "RecyclerView", "setSingleLine", "ellipsize", "setHorizontallyScrolling")
+        listOf("HorizontalScrollView", "RecyclerView")
             .forEach { assertFalse(activity.contains(it), it) }
+        // Search is intentionally single-line; inventory cells and their shared text helper must wrap.
+        val inventoryText = render + activity.substringAfter("private fun textView(").substringBefore("private fun dp(")
+        listOf("setSingleLine", "ellipsize", "setHorizontallyScrolling")
+            .forEach { assertFalse(inventoryText.contains(it), it) }
     }
 
     @Test

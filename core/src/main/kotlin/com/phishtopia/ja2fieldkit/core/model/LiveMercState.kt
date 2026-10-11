@@ -25,6 +25,7 @@ class LiveMercState internal constructor(
     val profileIndex: Int,
     val stats: LiveMercStats,
     slots: List<LiveInventorySlot>,
+    val location: LiveMercLocation,
 ) {
     val slots: List<LiveInventorySlot> = Collections.unmodifiableList(ArrayList(slots))
 }
